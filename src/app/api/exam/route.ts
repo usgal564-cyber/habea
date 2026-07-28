@@ -2,7 +2,52 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { verifyToken, getTokenFromHeader } from "@/lib/auth";
 
-// POST: Verify exam code and get questions
+// GET: Get exam questions after verifying code (user must be logged in)
+export async function GET(request: NextRequest) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const examId = searchParams.get("examId");
+
+    if (!examId) {
+      return NextResponse.json({ error: "Exam ID шаардлагатай" }, { status: 400 });
+    }
+
+    const token = getTokenFromHeader(request);
+    if (!token) {
+      return NextResponse.json({ error: "Нэвтрээгүй байна" }, { status: 401 });
+    }
+    const payload = verifyToken(token);
+    if (!payload) {
+      return NextResponse.json({ error: "Токен хүчингүй" }, { status: 401 });
+    }
+
+    const exam = await db.exam.findUnique({ where: { id: examId } });
+    if (!exam) return NextResponse.json({ error: "Шалгалт олдсонгүй" }, { status: 404 });
+    if (!exam.isActive) return NextResponse.json({ error: "Шалгалт идэвхгүй байна" }, { status: 403 });
+
+    const questions = JSON.parse(exam.questions);
+
+    // Return questions without correct answers
+    const questionsWithoutAnswers = questions.map((q: Record<string, unknown>, idx: number) => ({
+      id: `q_${idx}`,
+      questionText: q.questionText,
+      optionA: q.optionA,
+      optionB: q.optionB,
+      optionC: q.optionC,
+      optionD: q.optionD,
+    }));
+
+    return NextResponse.json({
+      questions: questionsWithoutAnswers,
+      title: exam.title,
+      timeLimit: exam.timeLimit,
+    });
+  } catch {
+    return NextResponse.json({ error: "Алдаа гарлаа" }, { status: 500 });
+  }
+}
+
+// POST: Verify exam code or submit answers
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
