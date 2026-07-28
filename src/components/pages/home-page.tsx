@@ -208,21 +208,21 @@ export default function HomePage({ onNavigate }: HomePageProps) {
             </Button>
             <Button
               size="lg"
-              variant="outline"
               onClick={() => onNavigate("quiz")}
-              className="border-white/30 text-white hover:bg-white/10 hover:text-white font-semibold h-12 px-8 text-base rounded-xl backdrop-blur-sm transition-all"
+              className="bg-white text-brand-900 hover:bg-brand-50 font-semibold h-12 px-8 text-base rounded-xl shadow-lg shadow-black/10 hover:shadow-xl transition-all"
             >
               <Brain className="w-5 h-5 mr-2" />
               Мэдлэг сорих
+              <ArrowRight className="w-4 h-4 ml-1" />
             </Button>
             <Button
               size="lg"
-              variant="outline"
               onClick={() => onNavigate("exam")}
-              className="border-white/30 text-white hover:bg-white/10 hover:text-white font-semibold h-12 px-8 text-base rounded-xl backdrop-blur-sm transition-all"
+              className="bg-white text-brand-900 hover:bg-brand-50 font-semibold h-12 px-8 text-base rounded-xl shadow-lg shadow-black/10 hover:shadow-xl transition-all"
             >
               <ClipboardCheck className="w-5 h-5 mr-2" />
               Шалгалт
+              <ArrowRight className="w-4 h-4 ml-1" />
             </Button>
           </motion.div>
         </div>
@@ -494,11 +494,11 @@ export default function HomePage({ onNavigate }: HomePageProps) {
                 </Button>
                 <Button
                   size="lg"
-                  variant="outline"
                   onClick={() => onNavigate("consulting")}
-                  className="border-white/30 text-white hover:bg-white/10 hover:text-white font-semibold h-12 px-8 text-base rounded-xl transition-all"
+                  className="bg-white text-brand-900 hover:bg-brand-50 font-semibold h-12 px-8 text-base rounded-xl shadow-lg transition-all"
                 >
                   Зөвлөгөө авах
+                  <ArrowRight className="w-4 h-4 ml-1" />
                 </Button>
               </motion.div>
             </div>
