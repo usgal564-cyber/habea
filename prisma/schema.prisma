@@ -1,0 +1,64 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model ContactForm {
+  id        String   @id @default(cuid())
+  name      String
+  email     String
+  phone     String?
+  company   String?
+  message   String
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+model Feedback {
+  id        String   @id @default(cuid())
+  name      String
+  email     String?
+  phone     String?
+  category   String
+  message   String
+  createdAt DateTime @default(now())
+}
+
+model SurveyResponse {
+  id        String   @id @default(cuid())
+  name      String
+  email     String?
+  phone     String?
+  company   String?
+  responses String
+  createdAt DateTime @default(now())
+}
+
+model QuizAttempt {
+  id        String   @id @default(cuid())
+  quizType  String
+  name      String
+  email     String?
+  phone     String?
+  answers   String
+  score     Int
+  total     Int
+  passed    Boolean
+  createdAt DateTime @default(now())
+}
+
+model ServiceOrder {
+  id          String   @id @default(cuid())
+  name        String
+  email       String
+  phone       String
+  company     String?
+  serviceType String
+  description String?
+  status      String   @default("pending")
+  createdAt   DateTime @default(now())
+}
