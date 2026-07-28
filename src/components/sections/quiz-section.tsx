@@ -1,6 +1,5 @@
 "use client";
 
-import { motion } from "framer-motion";
 import {
   Brain,
   CheckCircle2,
@@ -160,11 +159,8 @@ export default function QuizSection() {
     <section id="quiz" className="py-20 lg:py-28 bg-background">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Section Header */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          className="text-center mb-16"
+        <div
+          className="text-center mb-16 animate-in fade-in slide-in-from-bottom duration-500"
         >
           <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-brand-50 border border-brand-200 mb-4">
             <Brain className="w-4 h-4 text-brand-600" />
@@ -178,18 +174,16 @@ export default function QuizSection() {
           <p className="text-muted-foreground max-w-2xl mx-auto text-lg">
             Сургалтанд хамрагдсан эрдмийнхээ мэдлэгийг шалгах сорилууд
           </p>
-        </motion.div>
+        </div>
 
         {/* Quiz Selection */}
         {!selectedQuiz && (
           <div className="grid sm:grid-cols-2 gap-6 max-w-4xl mx-auto">
             {quizTypes.map((quiz, index) => (
-              <motion.div
+              <div
                 key={quiz.id}
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ delay: index * 0.1 }}
+                className="animate-in fade-in slide-in-from-bottom duration-500"
+                style={{ animationDelay: `${index * 0.1}s`, animationFillMode: "both" }}
               >
                 <button
                   onClick={() => loadQuiz(quiz.id)}
@@ -227,7 +221,7 @@ export default function QuizSection() {
                     </CardContent>
                   </Card>
                 </button>
-              </motion.div>
+              </div>
             ))}
           </div>
         )}
@@ -246,10 +240,9 @@ export default function QuizSection() {
                 </span>
               </div>
               <div className="w-full h-2 bg-brand-100 rounded-full overflow-hidden">
-                <motion.div
-                  className="h-full bg-brand-500 rounded-full"
-                  animate={{ width: `${progress}%` }}
-                  transition={{ duration: 0.3 }}
+                <div
+                  className="h-full bg-brand-500 rounded-full transition-all duration-300"
+                  style={{ width: `${progress}%` }}
                 />
               </div>
             </div>
@@ -392,10 +385,8 @@ export default function QuizSection() {
         {/* Result */}
         {isSubmitted && (
           <div className="max-w-2xl mx-auto text-center">
-            <motion.div
-              initial={{ scale: 0.8, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              transition={{ duration: 0.5, type: "spring" }}
+            <div
+              className="animate-in fade-in zoom-in-95 duration-500"
             >
               <Card
                 className={cn(
@@ -461,7 +452,7 @@ export default function QuizSection() {
                   </Button>
                 </CardContent>
               </Card>
-            </motion.div>
+            </div>
           </div>
         )}
       </div>

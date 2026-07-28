@@ -1,6 +1,5 @@
 "use client";
 
-import { motion } from "framer-motion";
 import {
   BarChart3,
   Send,
@@ -135,11 +134,7 @@ export default function SurveySection() {
     return (
       <section id="survey" className="py-20 lg:py-28 bg-background">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <motion.div
-            initial={{ scale: 0.8, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            className="max-w-lg mx-auto text-center"
-          >
+          <div className="max-w-lg mx-auto text-center animate-in fade-in zoom-in-95 duration-500">
             <div className="w-24 h-24 mx-auto mb-6 rounded-full bg-brand-100 flex items-center justify-center">
               <ThumbsUp className="w-12 h-12 text-brand-600" />
             </div>
@@ -157,7 +152,7 @@ export default function SurveySection() {
             >
               Дахин судалгаа өгөх
             </Button>
-          </motion.div>
+          </div>
         </div>
       </section>
     );
@@ -167,12 +162,7 @@ export default function SurveySection() {
     <section id="survey" className="py-20 lg:py-28 bg-background">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Section Header */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          className="text-center mb-16"
-        >
+        <div className="text-center mb-16 animate-in fade-in slide-in-from-bottom duration-500">
           <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-brand-50 border border-brand-200 mb-4">
             <BarChart3 className="w-4 h-4 text-brand-600" />
             <span className="text-sm font-medium text-brand-700">
@@ -186,7 +176,7 @@ export default function SurveySection() {
             Манай үйлчилгээний талаарх таны сэтгэл ханамжийг мэдэхийн хүсвэл
             доорх судалгааг бөглөнө үү
           </p>
-        </motion.div>
+        </div>
 
         <div className="grid lg:grid-cols-3 gap-8 max-w-5xl mx-auto">
           {/* Survey Questions */}
@@ -198,21 +188,18 @@ export default function SurveySection() {
                 <span>{Math.round(progressPercent)}%</span>
               </div>
               <div className="w-full h-2 bg-brand-100 rounded-full overflow-hidden">
-                <motion.div
-                  className="h-full bg-brand-500 rounded-full"
-                  animate={{ width: `${progressPercent}%` }}
-                  transition={{ duration: 0.3 }}
+                <div
+                  className="h-full bg-brand-500 rounded-full transition-all duration-300"
+                  style={{ width: `${progressPercent}%` }}
                 />
               </div>
             </div>
 
             {surveyQuestions.map((q, index) => (
-              <motion.div
+              <div
                 key={q.id}
-                initial={{ opacity: 0, y: 10 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ delay: index * 0.05 }}
+                className="animate-in fade-in slide-in-from-bottom duration-500"
+                style={{ animationDelay: `${index * 0.05}s`, animationFillMode: "both" }}
               >
                 <Card
                   className={cn(
@@ -306,17 +293,12 @@ export default function SurveySection() {
                     )}
                   </CardContent>
                 </Card>
-              </motion.div>
+              </div>
             ))}
           </div>
 
           {/* User Info & Submit */}
-          <motion.div
-            initial={{ opacity: 0, x: 20 }}
-            whileInView={{ opacity: 1, x: 0 }}
-            viewport={{ once: true }}
-            className="lg:col-span-1"
-          >
+          <div className="lg:col-span-1 animate-in fade-in slide-in-from-right duration-500">
             <div className="sticky top-24">
               <Card className="border-brand-100 bg-gradient-to-br from-white to-brand-50/30">
                 <CardHeader>
@@ -382,7 +364,7 @@ export default function SurveySection() {
                 </CardContent>
               </Card>
             </div>
-          </motion.div>
+          </div>
         </div>
       </div>
     </section>

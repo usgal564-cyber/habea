@@ -1,6 +1,5 @@
 "use client";
 
-import { motion } from "framer-motion";
 import {
   ClipboardList,
   Shield,
@@ -160,11 +159,8 @@ export default function ServiceSection() {
     <section id="service" className="py-20 lg:py-28 bg-background">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Section Header */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          className="text-center mb-16"
+        <div
+          className="text-center mb-16 animate-in fade-in slide-in-from-bottom duration-500"
         >
           <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-brand-50 border border-brand-200 mb-4">
             <ClipboardList className="w-4 h-4 text-brand-600" />
@@ -178,17 +174,15 @@ export default function ServiceSection() {
           <p className="text-muted-foreground max-w-2xl mx-auto text-lg">
             Байгууллагын ХАБЭА-ийн бүх төрлийн үйлчилгээг захиалгаар үзүүлнэ
           </p>
-        </motion.div>
+        </div>
 
         {/* Service Types Grid */}
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6 mb-16">
           {serviceTypes.map((service, index) => (
-            <motion.div
+            <div
               key={service.id}
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ delay: index * 0.05 }}
+              className="animate-in fade-in slide-in-from-bottom duration-500"
+              style={{ animationDelay: `${index * 0.05}s`, animationFillMode: "both" }}
             >
               <Card
                 className={cn(
@@ -225,15 +219,13 @@ export default function ServiceSection() {
                   </div>
                 </CardContent>
               </Card>
-            </motion.div>
+            </div>
           ))}
         </div>
 
         {/* Order Form */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
+        <div
+          className="animate-in fade-in slide-in-from-bottom duration-500"
         >
           <Card className="max-w-3xl mx-auto border-brand-100 bg-gradient-to-br from-white to-brand-50/30">
             <CardHeader className="text-center pb-8">
@@ -334,7 +326,7 @@ export default function ServiceSection() {
               </form>
             </CardContent>
           </Card>
-        </motion.div>
+        </div>
       </div>
     </section>
   );

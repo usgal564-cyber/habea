@@ -1,6 +1,5 @@
 "use client";
 
-import { motion } from "framer-motion";
 import {
   Handshake,
   Globe,
@@ -98,11 +97,8 @@ export default function AboutSection() {
     <section id="about" className="py-20 lg:py-28 bg-background">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Section Header */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          className="text-center mb-16"
+        <div
+          className="text-center mb-16 animate-in fade-in slide-in-from-bottom duration-500"
         >
           <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-brand-50 border border-brand-200 mb-4">
             <Building2 className="w-4 h-4 text-brand-600" />
@@ -115,17 +111,15 @@ export default function AboutSection() {
             Ажлын байраны аюулгүй байдал, эрүүл мэнд, байгаль орчны талаар
             сургалт, зөвлөгөө, үйлчилгээ үзүүлдэг мэргэжлийн байгууллага
           </p>
-        </motion.div>
+        </div>
 
         {/* Goals */}
         <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-20">
           {goals.map((goal, index) => (
-            <motion.div
+            <div
               key={goal.title}
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ delay: index * 0.1 }}
+              className="animate-in fade-in slide-in-from-bottom duration-500"
+              style={{ animationDelay: `${index * 0.1}s`, animationFillMode: "both" }}
             >
               <Card className="h-full hover:shadow-lg hover:border-brand-200 transition-all duration-300 group">
                 <CardContent className="p-6 text-center">
@@ -140,16 +134,14 @@ export default function AboutSection() {
                   </p>
                 </CardContent>
               </Card>
-            </motion.div>
+            </div>
           ))}
         </div>
 
         {/* Relationships & Partners */}
         <div className="grid lg:grid-cols-2 gap-8 mb-20">
-          <motion.div
-            initial={{ opacity: 0, x: -20 }}
-            whileInView={{ opacity: 1, x: 0 }}
-            viewport={{ once: true }}
+          <div
+            className="animate-in fade-in slide-in-from-left duration-500"
           >
             <Card className="h-full">
               <CardHeader>
@@ -171,12 +163,10 @@ export default function AboutSection() {
                 </ul>
               </CardContent>
             </Card>
-          </motion.div>
+          </div>
 
-          <motion.div
-            initial={{ opacity: 0, x: 20 }}
-            whileInView={{ opacity: 1, x: 0 }}
-            viewport={{ once: true }}
+          <div
+            className="animate-in fade-in slide-in-from-right duration-500"
           >
             <Card className="h-full">
               <CardHeader>
@@ -210,15 +200,13 @@ export default function AboutSection() {
                 </div>
               </CardContent>
             </Card>
-          </motion.div>
+          </div>
         </div>
 
         {/* Contact Form */}
-        <motion.div
+        <div
           id="contact"
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
+          className="animate-in fade-in slide-in-from-bottom duration-500"
         >
           <Card className="border-brand-100 bg-gradient-to-br from-white to-brand-50/30">
             <CardHeader className="text-center pb-8">
@@ -343,7 +331,7 @@ export default function AboutSection() {
               </div>
             </CardContent>
           </Card>
-        </motion.div>
+        </div>
       </div>
     </section>
   );

@@ -1,6 +1,5 @@
 "use client";
 
-import { motion } from "framer-motion";
 import {
   MessageSquare,
   Send,
@@ -99,11 +98,8 @@ export default function FeedbackSection() {
     <section id="feedback" className="py-20 lg:py-28 bg-brand-50/30">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Section Header */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          className="text-center mb-16"
+        <div
+          className="text-center mb-16 animate-in fade-in slide-in-from-bottom duration-500"
         >
           <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-brand-100 border border-brand-200 mb-4">
             <MessageSquare className="w-4 h-4 text-brand-700" />
@@ -118,26 +114,20 @@ export default function FeedbackSection() {
             Таны санал хүсэлт бидэнд маш чухал. Үйлчилгээгээ сайжруулахад
             туслах болно.
           </p>
-        </motion.div>
+        </div>
 
         <div className="grid lg:grid-cols-2 gap-8">
           {/* Existing Feedback */}
-          <motion.div
-            initial={{ opacity: 0, x: -20 }}
-            whileInView={{ opacity: 1, x: 0 }}
-            viewport={{ once: true }}
-          >
+          <div className="animate-in fade-in slide-in-from-left duration-500">
             <h3 className="text-xl font-semibold text-foreground mb-6">
               Бусдын санал хүсэлт
             </h3>
             <div className="space-y-4 max-h-[600px] overflow-y-auto scrollbar-thin pr-2">
               {existingFeedback.map((fb, i) => (
-                <motion.div
+                <div
                   key={i}
-                  initial={{ opacity: 0, y: 10 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  viewport={{ once: true }}
-                  transition={{ delay: i * 0.1 }}
+                  className="animate-in fade-in slide-in-from-bottom duration-500"
+                  style={{ animationDelay: `${i * 0.1}s`, animationFillMode: "both" }}
                 >
                   <Card className="hover:shadow-md transition-shadow">
                     <CardContent className="p-5">
@@ -181,17 +171,13 @@ export default function FeedbackSection() {
                       </p>
                     </CardContent>
                   </Card>
-                </motion.div>
+                </div>
               ))}
             </div>
-          </motion.div>
+          </div>
 
           {/* Feedback Form */}
-          <motion.div
-            initial={{ opacity: 0, x: 20 }}
-            whileInView={{ opacity: 1, x: 0 }}
-            viewport={{ once: true }}
-          >
+          <div className="animate-in fade-in slide-in-from-right duration-500">
             <Card className="border-brand-100 bg-gradient-to-br from-white to-brand-50/30">
               <CardHeader>
                 <CardTitle className="text-xl">
@@ -324,7 +310,7 @@ export default function FeedbackSection() {
                 </form>
               </CardContent>
             </Card>
-          </motion.div>
+          </div>
         </div>
       </div>
     </section>

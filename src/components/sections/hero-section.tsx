@@ -1,6 +1,5 @@
 "use client";
 
-import { motion } from "framer-motion";
 import {
   Shield,
   Users,
@@ -55,43 +54,31 @@ export default function HeroSection({ onNavigate }: HeroSectionProps) {
       id="home"
       className="relative min-h-screen flex items-center overflow-hidden"
     >
-      {/* Background */}
+      {/* Background - CSS gradient only (no heavy image) */}
       <div className="absolute inset-0 bg-gradient-to-br from-brand-950 via-brand-900 to-brand-800" />
-      <div className="absolute inset-0 opacity-20">
-        <img
-          src="/hero-bg.png"
-          alt="Hero background"
-          className="w-full h-full object-cover"
-        />
-      </div>
-      <div className="absolute inset-0 bg-gradient-to-t from-brand-950/90 via-brand-950/40 to-brand-950/60" />
 
       {/* Decorative Elements */}
       <div className="absolute top-20 right-10 w-72 h-72 bg-brand-400/10 rounded-full blur-3xl" />
       <div className="absolute bottom-20 left-10 w-96 h-96 bg-brand-500/10 rounded-full blur-3xl" />
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-brand-600/5 rounded-full blur-3xl" />
 
       {/* Content */}
       <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-24 pb-16 w-full">
         <div className="grid lg:grid-cols-2 gap-12 lg:gap-16 items-center">
           {/* Left: Text Content */}
-          <motion.div
-            initial={{ opacity: 0, y: 40 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8, ease: "easeOut" }}
-            className="space-y-8"
+          <div
+            className="space-y-8 animate-in fade-in slide-in-from-bottom duration-800"
           >
             <div className="space-y-4">
-              <motion.div
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: 0.2 }}
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-brand-800/50 border border-brand-700/30 backdrop-blur-sm"
+              <div
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-brand-800/50 border border-brand-700/30 backdrop-blur-sm animate-in fade-in slide-in-from-left duration-500"
+                style={{ animationDelay: "0.2s", animationFillMode: "both" }}
               >
                 <Shield className="w-4 h-4 text-brand-400" />
                 <span className="text-sm font-medium text-brand-200">
                   ХАБЭА Бага Дунд Аж Ахуйн Нэгж
                 </span>
-              </motion.div>
+              </div>
 
               <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-white leading-tight">
                 Ажлын байраны{" "}
@@ -127,21 +114,18 @@ export default function HeroSection({ onNavigate }: HeroSectionProps) {
                 Бидний тухай
               </Button>
             </div>
-          </motion.div>
+          </div>
 
           {/* Right: Feature Cards */}
-          <motion.div
-            initial={{ opacity: 0, y: 40 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8, delay: 0.3 }}
-            className="hidden lg:grid grid-cols-2 gap-4"
+          <div
+            className="hidden lg:grid grid-cols-2 gap-4 animate-in fade-in slide-in-from-bottom duration-800"
+            style={{ animationDelay: "0.3s", animationFillMode: "both" }}
           >
             {features.map((feature, index) => (
-              <motion.div
+              <div
                 key={feature.title}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.4 + index * 0.1 }}
+                className="animate-in fade-in slide-in-from-bottom duration-500"
+                style={{ animationDelay: `${0.4 + index * 0.1}s`, animationFillMode: "both" }}
               >
                 <Card className="bg-brand-900/40 backdrop-blur-md border-brand-700/20 hover:bg-brand-900/60 transition-all duration-300 hover:border-brand-600/40 hover:-translate-y-1 group h-full">
                   <CardContent className="p-6">
@@ -156,26 +140,22 @@ export default function HeroSection({ onNavigate }: HeroSectionProps) {
                     </p>
                   </CardContent>
                 </Card>
-              </motion.div>
+              </div>
             ))}
-          </motion.div>
+          </div>
         </div>
 
         {/* Stats */}
-        <motion.div
-          initial={{ opacity: 0, y: 30 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.8, delay: 0.6 }}
-          className="mt-16 lg:mt-24"
+        <div
+          className="mt-16 lg:mt-24 animate-in fade-in slide-in-from-bottom duration-800"
+          style={{ animationDelay: "0.6s", animationFillMode: "both" }}
         >
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             {stats.map((stat, index) => (
-              <motion.div
+              <div
                 key={stat.label}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.7 + index * 0.1 }}
-                className="bg-brand-900/30 backdrop-blur-sm border border-brand-700/20 rounded-2xl p-4 lg:p-6 text-center hover:bg-brand-900/50 transition-all duration-300"
+                className="bg-brand-900/30 backdrop-blur-sm border border-brand-700/20 rounded-2xl p-4 lg:p-6 text-center hover:bg-brand-900/50 transition-all duration-300 animate-in fade-in slide-in-from-bottom duration-500"
+                style={{ animationDelay: `${0.7 + index * 0.1}s`, animationFillMode: "both" }}
               >
                 <div className="w-10 h-10 mx-auto mb-3 rounded-xl bg-brand-800/40 flex items-center justify-center">
                   <stat.icon className="w-5 h-5 text-brand-400" />
@@ -186,10 +166,10 @@ export default function HeroSection({ onNavigate }: HeroSectionProps) {
                 <div className="text-sm text-brand-300/70 mt-1">
                   {stat.label}
                 </div>
-              </motion.div>
+              </div>
             ))}
           </div>
-        </motion.div>
+        </div>
       </div>
     </section>
   );

@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { motion, AnimatePresence } from "framer-motion";
 import {
   Menu,
   X,
@@ -47,12 +46,9 @@ export default function Navbar({ activeSection, onNavigate }: NavbarProps) {
 
   return (
     <>
-      <motion.header
-        initial={{ y: -100 }}
-        animate={{ y: 0 }}
-        transition={{ duration: 0.5, ease: "easeOut" }}
+      <header
         className={cn(
-          "fixed top-0 left-0 right-0 z-50 transition-all duration-300",
+          "fixed top-0 left-0 right-0 z-50 transition-all duration-300 animate-in slide-in-from-top duration-500",
           isScrolled
             ? "bg-brand-950/95 backdrop-blur-md shadow-lg border-b border-brand-800/50"
             : "bg-transparent"
@@ -95,15 +91,7 @@ export default function Navbar({ activeSection, onNavigate }: NavbarProps) {
                   >
                     {item.label}
                     {isActive && (
-                      <motion.div
-                        layoutId="activeTab"
-                        className="absolute bottom-0 left-2 right-2 h-0.5 bg-brand-400 rounded-full"
-                        transition={{
-                          type: "spring",
-                          stiffness: 300,
-                          damping: 30,
-                        }}
-                      />
+                      <div className="absolute bottom-0 left-2 right-2 h-0.5 bg-brand-400 rounded-full transition-all duration-300" />
                     )}
                   </button>
                 );
@@ -133,38 +121,24 @@ export default function Navbar({ activeSection, onNavigate }: NavbarProps) {
             </div>
           </div>
         </div>
-      </motion.header>
+      </header>
 
       {/* Mobile Menu */}
-      <AnimatePresence>
-        {isMobileMenuOpen && (
-          <motion.div
-            initial={{ opacity: 0, y: -20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            transition={{ duration: 0.2 }}
-            className="fixed inset-0 z-40 xl:hidden"
-          >
+      {isMobileMenuOpen && (
+          <div className="fixed inset-0 z-40 xl:hidden animate-in fade-in duration-200">
             <div
               className="absolute inset-0 bg-black/50 backdrop-blur-sm"
               onClick={() => setIsMobileMenuOpen(false)}
             />
-            <motion.nav
-              initial={{ x: "100%" }}
-              animate={{ x: 0 }}
-              exit={{ x: "100%" }}
-              transition={{ type: "spring", stiffness: 300, damping: 30 }}
-              className="absolute right-0 top-0 bottom-0 w-72 bg-brand-950/98 backdrop-blur-lg border-l border-brand-800/50 pt-20 px-4"
+            <nav
+              className="absolute right-0 top-0 bottom-0 w-72 bg-brand-950/98 backdrop-blur-lg border-l border-brand-800/50 pt-20 px-4 transition-transform duration-300"
             >
               <div className="flex flex-col gap-1">
                 {navItems.map((item, index) => {
                   const isActive = activeSection === item.id;
                   return (
-                    <motion.button
+                    <button
                       key={item.id}
-                      initial={{ opacity: 0, x: 20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: index * 0.05 }}
                       onClick={() => handleNavClick(item.id)}
                       className={cn(
                         "flex items-center gap-3 px-4 py-3 rounded-xl text-left transition-all duration-200",
@@ -172,6 +146,7 @@ export default function Navbar({ activeSection, onNavigate }: NavbarProps) {
                           ? "bg-brand-700/50 text-white border border-brand-600/30"
                           : "text-brand-200 hover:bg-brand-800/40 hover:text-white"
                       )}
+                      style={{ animationDelay: `${index * 0.05}s`, animationFillMode: "both" }}
                     >
                       <div
                         className={cn(
@@ -189,14 +164,13 @@ export default function Navbar({ activeSection, onNavigate }: NavbarProps) {
                       {isActive && (
                         <ChevronDown className="w-4 h-4 ml-auto text-brand-400" />
                       )}
-                    </motion.button>
+                    </button>
                   );
                 })}
               </div>
-            </motion.nav>
-          </motion.div>
+            </nav>
+          </div>
         )}
-      </AnimatePresence>
     </>
   );
 }

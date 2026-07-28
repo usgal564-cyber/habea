@@ -102,7 +102,7 @@ export default function Footer({ onNavigate }: FooterProps) {
         {/* Bottom Bar */}
         <div className="mt-12 pt-8 border-t border-brand-800/50 flex flex-col sm:flex-row justify-between items-center gap-4">
           <p className="text-brand-400/60 text-sm">
-            © {new Date().getFullYear()} ХАБЭА Бага Дунд Аж Ахуйн Нэгж. Бүх
+            © 2025 ХАБЭА Бага Дунд Аж Ахуйн Нэгж. Бүх
             эрх хуулиар хамгаалагдсан.
           </p>
           <Button

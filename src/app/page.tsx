@@ -26,7 +26,6 @@ const sectionIds = [
 
 export default function Home() {
   const [activeSection, setActiveSection] = useState("home");
-  const [mounted, setMounted] = useState(false);
 
   const handleNavigate = useCallback((sectionId: string) => {
     const element = document.getElementById(sectionId);
@@ -36,7 +35,6 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    setMounted(true);
     const observer = new IntersectionObserver(
       (entries) => {
         entries.forEach((entry) => {
@@ -55,8 +53,6 @@ export default function Home() {
 
     return () => observer.disconnect();
   }, []);
-
-  if (!mounted) return null;
 
   return (
     <div className="min-h-screen flex flex-col">

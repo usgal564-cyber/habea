@@ -1,6 +1,5 @@
 "use client";
 
-import { motion } from "framer-motion";
 import {
   FileText,
   Download,
@@ -98,11 +97,8 @@ export default function ExamSection() {
     <section id="exam" className="py-20 lg:py-28 bg-brand-50/30">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Section Header */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          className="text-center mb-16"
+        <div
+          className="text-center mb-16 animate-in fade-in slide-in-from-bottom duration-500"
         >
           <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-brand-100 border border-brand-200 mb-4">
             <FileText className="w-4 h-4 text-brand-700" />
@@ -114,17 +110,15 @@ export default function ExamSection() {
           <p className="text-muted-foreground max-w-2xl mx-auto text-lg">
             Шалгалт өгөхөд хэрэгтэй бүх материал, заавар, дүрмүүд
           </p>
-        </motion.div>
+        </div>
 
         {/* Material Categories */}
         <div className="space-y-8 max-w-4xl mx-auto">
           {examMaterials.map((cat, catIdx) => (
-            <motion.div
+            <div
               key={cat.category}
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ delay: catIdx * 0.1 }}
+              className="animate-in fade-in slide-in-from-bottom duration-500"
+              style={{ animationDelay: `${catIdx * 0.1}s`, animationFillMode: "both" }}
             >
               <div className="flex items-center gap-3 mb-4">
                 <div className="w-10 h-10 rounded-xl bg-brand-100 flex items-center justify-center">
@@ -136,12 +130,10 @@ export default function ExamSection() {
               </div>
               <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 {cat.materials.map((material, matIdx) => (
-                  <motion.div
+                  <div
                     key={material.title}
-                    initial={{ opacity: 0, y: 10 }}
-                    whileInView={{ opacity: 1, y: 0 }}
-                    viewport={{ once: true }}
-                    transition={{ delay: catIdx * 0.1 + matIdx * 0.05 }}
+                    className="animate-in fade-in slide-in-from-bottom duration-500"
+                    style={{ animationDelay: `${catIdx * 0.1 + matIdx * 0.05}s`, animationFillMode: "both" }}
                   >
                     <Card className="hover:shadow-lg hover:border-brand-200 transition-all duration-300 group h-full">
                       <CardContent className="p-5">
@@ -170,19 +162,16 @@ export default function ExamSection() {
                         </Button>
                       </CardContent>
                     </Card>
-                  </motion.div>
+                  </div>
                 ))}
               </div>
-            </motion.div>
+            </div>
           ))}
         </div>
 
         {/* Info Note */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          className="mt-12 max-w-4xl mx-auto"
+        <div
+          className="mt-12 max-w-4xl mx-auto animate-in fade-in slide-in-from-bottom duration-500"
         >
           <div className="flex items-start gap-4 p-6 rounded-2xl bg-brand-100/50 border border-brand-200">
             <div className="w-10 h-10 rounded-xl bg-brand-200 flex items-center justify-center shrink-0">
@@ -199,7 +188,7 @@ export default function ExamSection() {
               </p>
             </div>
           </div>
-        </motion.div>
+        </div>
       </div>
     </section>
   );

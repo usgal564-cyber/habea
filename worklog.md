@@ -32,3 +32,45 @@ Stage Summary:
 - Database stores all form submissions, quiz attempts, and survey responses
 - Responsive design with smooth scrolling, animations, and mobile menu
 - All code passes ESLint
+
+---
+Task ID: 11
+Agent: general-purpose
+Task: Remove ALL framer-motion (motion) usage from section components and replace with CSS-only transitions/animations to fix Next.js SSR crash.
+
+Work Log:
+- Removed `import { motion } from "framer-motion"` from all 8 section components
+- Removed `import { motion, AnimatePresence } from "framer-motion"` from navbar.tsx
+- Replaced all `<motion.div>`, `<motion.header>`, `<motion.nav>`, `<motion.button>` with regular HTML elements
+- Removed `AnimatePresence` wrapper from mobile menu in navbar
+- Replaced `initial`, `animate`, `whileInView`, `viewport`, `transition` props with CSS classes:
+  - `animate-in fade-in slide-in-from-bottom duration-500` for section headers and cards
+  - `animate-in fade-in slide-in-from-left duration-500` for left-sliding elements
+  - `animate-in fade-in slide-in-from-right duration-500` for right-sliding elements
+  - `animate-in slide-in-from-top duration-500` for navbar header
+  - `animate-in fade-in zoom-in-95 duration-500` for quiz result and survey completion
+- Added `style={{ animationDelay: ... animationFillMode: "both" }}` for staggered animations
+- Replaced animated progress bars (`<motion.div animate={{ width: ... }}>`) with `transition-all duration-300` + inline width style
+- Replaced `layoutId` active tab indicator with a static div + `transition-all duration-300`
+- Replaced AnimatePresence mobile menu with conditional render + `animate-in fade-in` overlay
+- Verified zero remaining framer-motion imports in src/components/sections/ and navbar.tsx
+- Build passes successfully with no errors
+
+Files modified (9 total):
+1. src/components/navbar.tsx
+2. src/components/sections/hero-section.tsx
+3. src/components/sections/about-section.tsx
+4. src/components/sections/training-section.tsx
+5. src/components/sections/quiz-section.tsx
+6. src/components/sections/exam-section.tsx
+7. src/components/sections/service-section.tsx
+8. src/components/sections/feedback-section.tsx
+9. src/components/sections/survey-section.tsx
+
+Stage Summary:
+- Completely eliminated framer-motion dependency from all section components and navbar
+- All entrance animations replaced with tw-animate-css classes (animate-in, fade-in, slide-in-from-*)
+- Staggered animations preserved via inline animationDelay + animationFillMode: "both"
+- Interactive animations (progress bars, scroll effects) use CSS transitions
+- No functionality, logic, state management, or form handling was changed
+- Next.js build succeeds cleanly - SSR crash issue resolved

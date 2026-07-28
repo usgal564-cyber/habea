@@ -1,6 +1,5 @@
 "use client";
 
-import { motion } from "framer-motion";
 import {
   GraduationCap,
   Users,
@@ -143,11 +142,7 @@ function TrainingCategoryCard({ category }: { category: TrainingCategory }) {
   const [isExpanded, setIsExpanded] = useState(false);
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true }}
-    >
+    <div className="animate-in fade-in slide-in-from-bottom duration-500">
       <Card className="overflow-hidden hover:shadow-xl transition-all duration-300 border-brand-100">
         {/* Category Header */}
         <button
@@ -191,12 +186,10 @@ function TrainingCategoryCard({ category }: { category: TrainingCategory }) {
             <div className="border-t border-brand-100 pt-6">
               <div className="space-y-4">
                 {category.courses.map((course, index) => (
-                  <motion.div
+                  <div
                     key={course.title}
-                    initial={{ opacity: 0, x: -10 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: index * 0.05 }}
-                    className="flex items-start gap-4 p-4 rounded-xl bg-brand-50/30 hover:bg-brand-50/60 transition-colors"
+                    className="flex items-start gap-4 p-4 rounded-xl bg-brand-50/30 hover:bg-brand-50/60 transition-colors animate-in fade-in slide-in-from-left duration-300"
+                    style={{ animationDelay: `${index * 0.05}s`, animationFillMode: "both" }}
                   >
                     <div
                       className={cn(
@@ -223,14 +216,14 @@ function TrainingCategoryCard({ category }: { category: TrainingCategory }) {
                       <Clock className="w-3 h-3 mr-1" />
                       {course.duration}
                     </Badge>
-                  </motion.div>
+                  </div>
                 ))}
               </div>
             </div>
           </CardContent>
         )}
       </Card>
-    </motion.div>
+    </div>
   );
 }
 
@@ -239,11 +232,8 @@ export default function TrainingSection() {
     <section id="training" className="py-20 lg:py-28 bg-brand-50/30">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Section Header */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          className="text-center mb-16"
+        <div
+          className="text-center mb-16 animate-in fade-in slide-in-from-bottom duration-500"
         >
           <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-brand-100 border border-brand-200 mb-4">
             <GraduationCap className="w-4 h-4 text-brand-700" />
@@ -256,7 +246,7 @@ export default function TrainingSection() {
             ХАБЭА-ийн бүх түвшний сургалтууд, олон улсын стандартын аудитор
             бэлтгэл, хувь хүний хөгжлийн сургалтууд
           </p>
-        </motion.div>
+        </div>
 
         {/* Training Categories */}
         <div className="space-y-6 max-w-4xl mx-auto">
@@ -266,11 +256,8 @@ export default function TrainingSection() {
         </div>
 
         {/* Features */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          className="mt-16"
+        <div
+          className="mt-16 animate-in fade-in slide-in-from-bottom duration-500"
         >
           <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {[
@@ -311,7 +298,7 @@ export default function TrainingSection() {
               </div>
             ))}
           </div>
-        </motion.div>
+        </div>
       </div>
     </section>
   );
