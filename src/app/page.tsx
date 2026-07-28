@@ -17,8 +17,9 @@ import ConsultingPage from "@/components/pages/consulting-page";
 import FeedbackPage from "@/components/pages/feedback-page";
 import SurveyPage from "@/components/pages/survey-page";
 import AdminPage from "@/components/pages/admin-page";
+import ProfilePage from "@/components/pages/profile-page";
 
-export type PageId = "home" | "about" | "training" | "quiz" | "exam" | "consulting" | "feedback" | "survey" | "admin";
+export type PageId = "home" | "about" | "training" | "quiz" | "exam" | "consulting" | "feedback" | "survey" | "admin" | "profile";
 
 const pageConfig: Record<PageId, string> = {
   home: "Нүүр",
@@ -30,6 +31,7 @@ const pageConfig: Record<PageId, string> = {
   feedback: "Санал хүсэлт",
   survey: "Сэтгэл ханамж",
   admin: "Админ",
+  profile: "Профайл",
 };
 
 export function getPages() {
@@ -42,7 +44,6 @@ export default function Home() {
   const { user, setAuth, token } = useAuthStore();
 
   useEffect(() => {
-    // Verify token on mount
     if (token) {
       fetch("/api/auth/me", {
         headers: { Authorization: `Bearer ${token}` },
@@ -70,6 +71,7 @@ export default function Home() {
       case "feedback": return <FeedbackPage />;
       case "survey": return <SurveyPage />;
       case "admin": return <AdminPage />;
+      case "profile": return <ProfilePage />;
       default: return <HomePage onNavigate={handleNavigate} />;
     }
   };

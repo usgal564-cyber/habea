@@ -21,7 +21,7 @@ interface NavbarProps {
   onLogout: () => void;
 }
 
-const navItems: { id: PageId; label: string; adminOnly?: boolean }[] = [
+const navItems: { id: PageId; label: string; adminOnly?: boolean; authOnly?: boolean }[] = [
   { id: "home", label: "Нүүр" },
   { id: "about", label: "Бидний тухай" },
   { id: "training", label: "Сургалт" },
@@ -30,6 +30,7 @@ const navItems: { id: PageId; label: string; adminOnly?: boolean }[] = [
   { id: "consulting", label: "Зөвлөх үйлчилгээ" },
   { id: "feedback", label: "Санал хүсэлт" },
   { id: "survey", label: "Сэтгэл ханамж" },
+  { id: "profile", label: "Профайл", authOnly: true },
   { id: "admin", label: "Админ", adminOnly: true },
 ];
 
@@ -47,6 +48,7 @@ export function Navbar({ currentPage, onNavigate, onAuthClick, user, onLogout }:
 
   const visibleItems = navItems.filter((item) => {
     if (item.adminOnly && (!user || user.role !== "ADMIN")) return false;
+    if (item.authOnly && !user) return false;
     return true;
   });
 
@@ -82,6 +84,7 @@ export function Navbar({ currentPage, onNavigate, onAuthClick, user, onLogout }:
             <nav className="hidden lg:flex items-center gap-1">
               {visibleItems.map((item) => {
                 const isActive = currentPage === item.id;
+                const isProfile = item.id === "profile";
                 return (
                   <button
                     key={item.id}
@@ -90,10 +93,18 @@ export function Navbar({ currentPage, onNavigate, onAuthClick, user, onLogout }:
                       "px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 relative",
                       isActive
                         ? "text-white bg-brand-700/50"
-                        : "text-brand-100 hover:text-white hover:bg-brand-800/40"
+                        : "text-brand-100 hover:text-white hover:bg-brand-800/40",
+                      isProfile && "text-amber-200 hover:text-amber-100"
                     )}
                   >
-                    {item.label}
+                    {isProfile ? (
+                      <span className="flex items-center gap-1.5">
+                        <User className="w-4 h-4" />
+                        {user?.email?.split("@")[0] || "Профайл"}
+                      </span>
+                    ) : (
+                      item.label
+                    )}
                     {isActive && (
                       <div className="absolute bottom-0 left-2 right-2 h-0.5 bg-brand-400 rounded-full" />
                     )}
@@ -152,6 +163,7 @@ export function Navbar({ currentPage, onNavigate, onAuthClick, user, onLogout }:
             <div className="flex flex-col gap-1">
               {visibleItems.map((item) => {
                 const isActive = currentPage === item.id;
+                const isProfile = item.id === "profile";
                 return (
                   <button
                     key={item.id}
@@ -165,11 +177,13 @@ export function Navbar({ currentPage, onNavigate, onAuthClick, user, onLogout }:
                   >
                     <div className={cn(
                       "w-8 h-8 rounded-lg flex items-center justify-center",
-                      isActive ? "bg-brand-500 text-white" : "bg-brand-800/50 text-brand-300"
+                      isProfile ? "bg-amber-700/30 text-amber-300" : isActive ? "bg-brand-500 text-white" : "bg-brand-800/50 text-brand-300"
                     )}>
-                      <Shield className="w-4 h-4" />
+                      {isProfile ? <User className="w-4 h-4" /> : <Shield className="w-4 h-4" />}
                     </div>
-                    <span className="font-medium text-sm">{item.label}</span>
+                    <span className="font-medium text-sm">
+                      {isProfile ? (user?.email?.split("@")[0] || "Профайл") : item.label}
+                    </span>
                   </button>
                 );
               })}

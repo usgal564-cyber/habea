@@ -13,7 +13,7 @@ export async function POST(request: NextRequest) {
     const { code } = adminLoginSchema.parse(body);
 
     // Check admin code from environment or use default
-    const adminCode = process.env.ADMIN_CODE || "HABEA2025ADMIN";
+    const adminCode = process.env.ADMIN_CODE || "Admin6996";
 
     if (code !== adminCode) {
       return NextResponse.json(
