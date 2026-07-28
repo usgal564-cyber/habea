@@ -500,7 +500,7 @@ export default function AdminPage() {
             </div>
             <div>
               <h1 className="text-2xl font-bold text-white">
-                Админ хяналтын самбар
+                Админ хэсэг
               </h1>
               <p className="text-brand-300 text-sm">
                 ХАБЭА - Шалгалт, сорил, сургалт удирдлага

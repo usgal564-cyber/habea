@@ -445,23 +445,35 @@ function EnrollmentDialog({
           </div>
 
           {/* Step indicator */}
-          <div className="flex items-center gap-2 mt-4">
-            {stepLabels.map((s, i) => (
-              <div key={s.id} className="flex items-center gap-2 flex-1">
-                <div
-                  className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium transition-all ${
-                    i <= currentStepIdx
-                      ? "bg-white text-brand-700"
-                      : "bg-white/20 text-white/60"
-                  }`}
-                >
-                  {s.icon}
+          <div className="mt-5">
+            <div className="flex items-center justify-between relative">
+              {/* Background line */}
+              <div className="absolute top-[18px] left-[45px] right-[45px] h-[2px] bg-white/20" />
+              {/* Active line */}
+              <div
+                className="absolute top-[18px] left-[45px] h-[2px] bg-white transition-all duration-500"
+                style={{ width: currentStepIdx > 0 ? `calc(${currentStepIdx * 100}% / 3 + ${currentStepIdx * 20}px / 3)` : "0%" }}
+              />
+              {/* Steps */}
+              {stepLabels.map((s, i) => (
+                <div key={s.id} className="flex flex-col items-center gap-1.5 relative z-10">
+                  <div
+                    className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-medium transition-all ${
+                      i <= currentStepIdx
+                        ? "bg-white text-brand-700 shadow-sm"
+                        : "bg-white/20 text-white/60"
+                    }`}
+                  >
+                    {s.icon}
+                  </div>
+                  <span className={`text-[10px] font-medium transition-colors ${
+                    i <= currentStepIdx ? "text-white/90" : "text-white/40"
+                  }`}>
+                    {s.label}
+                  </span>
                 </div>
-                {i < stepLabels.length - 1 && (
-                  <div className={`flex-1 h-0.5 ${i < currentStepIdx ? "bg-white" : "bg-white/20"}`} />
-                )}
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
         </div>
 

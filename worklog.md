@@ -32,3 +32,24 @@ Stage Summary:
 - Quiz payment: 5,000₮ per quiz with payment dialog ✅
 - Training enrollment: 4-step flow (info → anket → payment → confirmed + schedule) ✅
 - All verified via agent-browser - no runtime errors
+
+---
+Task ID: 3
+Agent: Main Agent
+Task: 4 UI fixes from user screenshots - remove navbar email/logout, rename admin, fix profile button, fix training step indicator
+
+Work Log:
+- Removed email display and logout button from navbar desktop right side (navbar.tsx lines 116-131)
+- Changed navbar "Админ" label to "Админ хэсэг" (navbar.tsx line 34)
+- Changed admin page title from "Админ хяналтын самбар" to "Админ хэсэг" (admin-page.tsx line 503)
+- Updated pageConfig in page.tsx to use "Админ хэсэг"
+- Removed "Гарах" logout button from profile page header (profile-page.tsx)
+- Added subtle "Системээс гарах" logout button at bottom of profile page with red styling
+- Rewrote training enrollment dialog step indicator with clean layout: separate circles, connecting lines, and step labels (Мэдээлэл, Анкет, Төлбөр, Баталгаа)
+- Verified all changes via agent browser
+
+Stage Summary:
+- Navbar: Clean - only shows "Нэвтрэх" when not logged in, no email/logout when logged in
+- Admin page: Title now reads "Админ хэсэг", no logout button
+- Profile page: Logout button moved from header to bottom with subtle red styling
+- Training dialog: Step indicator fixed - circles clearly separated with labels and connecting progress line

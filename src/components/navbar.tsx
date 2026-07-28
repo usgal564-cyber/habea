@@ -31,7 +31,7 @@ const navItems: { id: PageId; label: string; adminOnly?: boolean; authOnly?: boo
   { id: "feedback", label: "Санал хүсэлт" },
   { id: "survey", label: "Сэтгэл ханамж" },
   { id: "profile", label: "Профайл", authOnly: true },
-  { id: "admin", label: "Админ", adminOnly: true },
+  { id: "admin", label: "Админ хэсэг", adminOnly: true },
 ];
 
 export function Navbar({ currentPage, onNavigate, onAuthClick, user, onLogout }: NavbarProps) {
@@ -115,21 +115,7 @@ export function Navbar({ currentPage, onNavigate, onAuthClick, user, onLogout }:
 
             {/* Auth button */}
             <div className="flex items-center gap-2">
-              {user ? (
-                <div className="hidden lg:flex items-center gap-2">
-                  <span className="text-sm text-brand-200">
-                    {user.role === "ADMIN" ? "Админ" : user.email}
-                  </span>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={onLogout}
-                    className="text-brand-200 hover:text-white hover:bg-brand-800/40"
-                  >
-                    <LogOut className="w-4 h-4" />
-                  </Button>
-                </div>
-              ) : (
+              {!user && (
                 <Button
                   variant="ghost"
                   size="sm"

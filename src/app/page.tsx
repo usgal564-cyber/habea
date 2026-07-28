@@ -30,7 +30,7 @@ const pageConfig: Record<PageId, string> = {
   consulting: "Зөвлөх үйлчилгээ",
   feedback: "Санал хүсэлт",
   survey: "Сэтгэл ханамж",
-  admin: "Админ",
+  admin: "Админ хэсэг",
   profile: "Профайл",
 };
 

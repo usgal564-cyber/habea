@@ -173,17 +173,6 @@ export default function ProfilePage() {
                 </Badge>
               )}
             </div>
-            <Button
-              onClick={() => {
-                logout();
-                toast.success("Амжилттай гарлаа");
-              }}
-              variant="outline"
-              className="border-white/30 text-white hover:bg-white/10 hover:text-white"
-            >
-              <LogOut className="w-4 h-4 mr-2" />
-              Гарах
-            </Button>
           </motion.div>
         </div>
       </div>
@@ -518,6 +507,21 @@ export default function ProfilePage() {
             )}
           </motion.div>
         )}
+
+        {/* Logout Button - subtle, at the bottom */}
+        <motion.div variants={itemVariants} className="pt-4 flex justify-center">
+          <Button
+            onClick={() => {
+              logout();
+              toast.success("Амжилттай гарлаа");
+            }}
+            variant="outline"
+            className="border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700 hover:border-red-300"
+          >
+            <LogOut className="w-4 h-4 mr-2" />
+            Системээс гарах
+          </Button>
+        </motion.div>
       </div>
     </section>
   );
