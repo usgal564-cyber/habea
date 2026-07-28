@@ -5,31 +5,37 @@ import {
   Menu,
   X,
   Shield,
-  ChevronDown,
+  LogIn,
+  LogOut,
+  User,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import type { PageId } from "@/app/page";
 
 interface NavbarProps {
-  activeSection: string;
-  onNavigate: (sectionId: string) => void;
+  currentPage: PageId;
+  onNavigate: (pageId: PageId) => void;
+  onAuthClick: () => void;
+  user: { userId: string; email: string; role: string } | null;
+  onLogout: () => void;
 }
 
-const navItems = [
-  { id: "home", label: "Нүүр", icon: Shield },
-  { id: "about", label: "Бидний тухай", icon: null },
-  { id: "training", label: "Сургалт", icon: null },
-  { id: "quiz", label: "Мэдлэг сорих", icon: null },
-  { id: "exam", label: "Шалгалт", icon: null },
-  { id: "service", label: "Захиалгын үйлчилгээ", icon: null },
-  { id: "feedback", label: "Санал хүсэлт", icon: null },
-  { id: "survey", label: "Сэтгэл ханамж", icon: null },
+const navItems: { id: PageId; label: string; adminOnly?: boolean }[] = [
+  { id: "home", label: "Нүүр" },
+  { id: "about", label: "Бидний тухай" },
+  { id: "training", label: "Сургалт" },
+  { id: "quiz", label: "Мэдлэг сорих" },
+  { id: "exam", label: "Шалгалт" },
+  { id: "consulting", label: "Зөвлөх үйлчилгээ" },
+  { id: "feedback", label: "Санал хүсэлт" },
+  { id: "survey", label: "Сэтгэл ханамж" },
+  { id: "admin", label: "Админ", adminOnly: true },
 ];
 
-export default function Navbar({ activeSection, onNavigate }: NavbarProps) {
+export function Navbar({ currentPage, onNavigate, onAuthClick, user, onLogout }: NavbarProps) {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const currentLabel = navItems.find((n) => n.id === activeSection)?.label || "Нүүр";
 
   useEffect(() => {
     const handleScroll = () => {
@@ -39,8 +45,13 @@ export default function Navbar({ activeSection, onNavigate }: NavbarProps) {
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
-  const handleNavClick = (sectionId: string) => {
-    onNavigate(sectionId);
+  const visibleItems = navItems.filter((item) => {
+    if (item.adminOnly && (!user || user.role !== "ADMIN")) return false;
+    return true;
+  });
+
+  const handleNavClick = (pageId: PageId) => {
+    onNavigate(pageId);
     setIsMobileMenuOpen(false);
   };
 
@@ -48,36 +59,29 @@ export default function Navbar({ activeSection, onNavigate }: NavbarProps) {
     <>
       <header
         className={cn(
-          "fixed top-0 left-0 right-0 z-50 transition-all duration-300 animate-in slide-in-from-top duration-500",
+          "fixed top-0 left-0 right-0 z-50 transition-all duration-300",
           isScrolled
             ? "bg-brand-950/95 backdrop-blur-md shadow-lg border-b border-brand-800/50"
-            : "bg-transparent"
+            : "bg-brand-950/90 backdrop-blur-sm"
         )}
       >
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16 lg:h-20">
             {/* Logo */}
-            <button
-              onClick={() => handleNavClick("home")}
-              className="flex items-center gap-3 group"
-            >
+            <button onClick={() => handleNavClick("home")} className="flex items-center gap-3 group">
               <div className="w-10 h-10 lg:w-12 lg:h-12 rounded-xl bg-gradient-to-br from-brand-400 to-brand-600 flex items-center justify-center shadow-lg group-hover:shadow-brand-500/30 transition-shadow">
                 <Shield className="w-6 h-6 lg:w-7 lg:h-7 text-white" />
               </div>
               <div className="flex flex-col">
-                <span className="text-lg lg:text-xl font-bold text-white tracking-tight">
-                  ХАБЭА
-                </span>
-                <span className="text-[10px] lg:text-xs text-brand-200 font-medium -mt-1">
-                  Бага дунд аж ахуйн нэгж
-                </span>
+                <span className="text-lg lg:text-xl font-bold text-white tracking-tight">ХАБЭА</span>
+                <span className="text-[10px] lg:text-xs text-brand-200 font-medium -mt-1">Бага дунд аж ахуйн нэгж</span>
               </div>
             </button>
 
             {/* Desktop Navigation */}
-            <nav className="hidden xl:flex items-center gap-1">
-              {navItems.map((item) => {
-                const isActive = activeSection === item.id;
+            <nav className="hidden lg:flex items-center gap-1">
+              {visibleItems.map((item) => {
+                const isActive = currentPage === item.id;
                 return (
                   <button
                     key={item.id}
@@ -91,33 +95,50 @@ export default function Navbar({ activeSection, onNavigate }: NavbarProps) {
                   >
                     {item.label}
                     {isActive && (
-                      <div className="absolute bottom-0 left-2 right-2 h-0.5 bg-brand-400 rounded-full transition-all duration-300" />
+                      <div className="absolute bottom-0 left-2 right-2 h-0.5 bg-brand-400 rounded-full" />
                     )}
                   </button>
                 );
               })}
             </nav>
 
-            {/* Mobile Menu Button */}
-            <div className="xl:hidden">
-              {/* Current section indicator */}
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-brand-200 font-medium hidden sm:block">
-                  {currentLabel}
-                </span>
+            {/* Auth button */}
+            <div className="flex items-center gap-2">
+              {user ? (
+                <div className="hidden lg:flex items-center gap-2">
+                  <span className="text-sm text-brand-200">
+                    {user.role === "ADMIN" ? "Админ" : user.email}
+                  </span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={onLogout}
+                    className="text-brand-200 hover:text-white hover:bg-brand-800/40"
+                  >
+                    <LogOut className="w-4 h-4" />
+                  </Button>
+                </div>
+              ) : (
                 <Button
                   variant="ghost"
-                  size="icon"
-                  onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-                  className="text-white hover:bg-brand-800/50"
+                  size="sm"
+                  onClick={onAuthClick}
+                  className="hidden lg:flex text-brand-200 hover:text-white hover:bg-brand-800/40"
                 >
-                  {isMobileMenuOpen ? (
-                    <X className="w-6 h-6" />
-                  ) : (
-                    <Menu className="w-6 h-6" />
-                  )}
+                  <LogIn className="w-4 h-4 mr-2" />
+                  Нэвтрэх
                 </Button>
-              </div>
+              )}
+
+              {/* Mobile menu button */}
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+                className="lg:hidden text-white hover:bg-brand-800/50"
+              >
+                {isMobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+              </Button>
             </div>
           </div>
         </div>
@@ -125,52 +146,61 @@ export default function Navbar({ activeSection, onNavigate }: NavbarProps) {
 
       {/* Mobile Menu */}
       {isMobileMenuOpen && (
-          <div className="fixed inset-0 z-40 xl:hidden animate-in fade-in duration-200">
-            <div
-              className="absolute inset-0 bg-black/50 backdrop-blur-sm"
-              onClick={() => setIsMobileMenuOpen(false)}
-            />
-            <nav
-              className="absolute right-0 top-0 bottom-0 w-72 bg-brand-950/98 backdrop-blur-lg border-l border-brand-800/50 pt-20 px-4 transition-transform duration-300"
-            >
-              <div className="flex flex-col gap-1">
-                {navItems.map((item, index) => {
-                  const isActive = activeSection === item.id;
-                  return (
-                    <button
-                      key={item.id}
-                      onClick={() => handleNavClick(item.id)}
-                      className={cn(
-                        "flex items-center gap-3 px-4 py-3 rounded-xl text-left transition-all duration-200",
-                        isActive
-                          ? "bg-brand-700/50 text-white border border-brand-600/30"
-                          : "text-brand-200 hover:bg-brand-800/40 hover:text-white"
-                      )}
-                      style={{ animationDelay: `${index * 0.05}s`, animationFillMode: "both" }}
-                    >
-                      <div
-                        className={cn(
-                          "w-8 h-8 rounded-lg flex items-center justify-center transition-colors",
-                          isActive
-                            ? "bg-brand-500 text-white"
-                            : "bg-brand-800/50 text-brand-300"
-                        )}
-                      >
-                        <Shield className="w-4 h-4" />
-                      </div>
-                      <span className="font-medium text-sm">
-                        {item.label}
-                      </span>
-                      {isActive && (
-                        <ChevronDown className="w-4 h-4 ml-auto text-brand-400" />
-                      )}
-                    </button>
-                  );
-                })}
+        <div className="fixed inset-0 z-40 lg:hidden">
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setIsMobileMenuOpen(false)} />
+          <nav className="absolute right-0 top-0 bottom-0 w-72 bg-brand-950/98 backdrop-blur-lg border-l border-brand-800/50 pt-20 px-4">
+            <div className="flex flex-col gap-1">
+              {visibleItems.map((item) => {
+                const isActive = currentPage === item.id;
+                return (
+                  <button
+                    key={item.id}
+                    onClick={() => handleNavClick(item.id)}
+                    className={cn(
+                      "flex items-center gap-3 px-4 py-3 rounded-xl text-left transition-all duration-200",
+                      isActive
+                        ? "bg-brand-700/50 text-white border border-brand-600/30"
+                        : "text-brand-200 hover:bg-brand-800/40 hover:text-white"
+                    )}
+                  >
+                    <div className={cn(
+                      "w-8 h-8 rounded-lg flex items-center justify-center",
+                      isActive ? "bg-brand-500 text-white" : "bg-brand-800/50 text-brand-300"
+                    )}>
+                      <Shield className="w-4 h-4" />
+                    </div>
+                    <span className="font-medium text-sm">{item.label}</span>
+                  </button>
+                );
+              })}
+
+              <div className="mt-4 pt-4 border-t border-brand-800/50">
+                {user ? (
+                  <button
+                    onClick={() => { onLogout(); setIsMobileMenuOpen(false); }}
+                    className="flex items-center gap-3 px-4 py-3 rounded-xl text-left w-full text-brand-200 hover:bg-brand-800/40 hover:text-white transition-all"
+                  >
+                    <div className="w-8 h-8 rounded-lg bg-brand-800/50 text-brand-300 flex items-center justify-center">
+                      <LogOut className="w-4 h-4" />
+                    </div>
+                    <span className="font-medium text-sm">Гарах</span>
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => { onAuthClick(); setIsMobileMenuOpen(false); }}
+                    className="flex items-center gap-3 px-4 py-3 rounded-xl text-left w-full text-brand-200 hover:bg-brand-800/40 hover:text-white transition-all"
+                  >
+                    <div className="w-8 h-8 rounded-lg bg-brand-800/50 text-brand-300 flex items-center justify-center">
+                      <User className="w-4 h-4" />
+                    </div>
+                    <span className="font-medium text-sm">Нэвтрэх / Бүртгүүлэх</span>
+                  </button>
+                )}
               </div>
-            </nav>
-          </div>
-        )}
+            </div>
+          </nav>
+        </div>
+      )}
     </>
   );
 }

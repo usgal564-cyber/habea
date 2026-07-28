@@ -1,10 +1,18 @@
 "use client";
 
-import { Shield, Phone, Mail, MapPin, ArrowUp } from "lucide-react";
+import {
+  Shield,
+  Phone,
+  Mail,
+  MapPin,
+  ArrowUp,
+  Facebook,
+  Instagram,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 interface FooterProps {
-  onNavigate: (sectionId: string) => void;
+  onNavigate: (pageId: string) => void;
 }
 
 export default function Footer({ onNavigate }: FooterProps) {
@@ -12,8 +20,21 @@ export default function Footer({ onNavigate }: FooterProps) {
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
+  const quickLinks = [
+    { label: "Нүүр", id: "home" },
+    { label: "Сургалт", id: "training" },
+    { label: "Мэдлэг сорих", id: "quiz" },
+    { label: "Шалгалт", id: "exam" },
+  ];
+
+  const serviceLinks = [
+    { label: "Зөвлөх үйлчилгээ", id: "consulting" },
+    { label: "Санал хүсэлт", id: "feedback" },
+    { label: "Сэтгэл ханамж", id: "survey" },
+  ];
+
   return (
-    <footer className="bg-brand-950 text-brand-200">
+    <footer className="bg-brand-950 text-brand-200 mt-auto">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 lg:py-16">
         <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-8 lg:gap-12">
           {/* Brand */}
@@ -23,28 +44,28 @@ export default function Footer({ onNavigate }: FooterProps) {
                 <Shield className="w-6 h-6 text-white" />
               </div>
               <div>
-                <span className="text-lg font-bold text-white">ХАБЭА</span>
+                <span className="text-lg font-bold text-white">
+                  ХАБЭА
+                </span>
                 <span className="block text-xs text-brand-300 -mt-1">
                   Бага Дунд Аж Ахуйн Нэгж
                 </span>
               </div>
             </div>
             <p className="text-brand-300/70 text-sm leading-relaxed">
-              Ажлын байраны аюулгүй байдал, эрүүл мэнд, байгаль орчны
-              талаар сургалт, зөвлөгөө үзүүлдэг мэргэжлийн байгууллага.
+              Ажлын байраны аюулгүй байдал, эрүүл мэнд,
+              байгаль орчны талаар сургалт, зөвлөгөө
+              үзүүлдэг мэргэжлийн байгууллага.
             </p>
           </div>
 
           {/* Quick Links */}
           <div>
-            <h4 className="text-white font-semibold mb-4">Цахим холбоос</h4>
-            <ul className="space-y-2">
-              {[
-                { label: "Нүүр", id: "home" },
-                { label: "Бидний тухай", id: "about" },
-                { label: "Сургалт", id: "training" },
-                { label: "Мэдлэг сорих", id: "quiz" },
-              ].map((link) => (
+            <h4 className="text-white font-semibold mb-4">
+              Цахим холбоос
+            </h4>
+            <ul className="space-y-2.5">
+              {quickLinks.map((link) => (
                 <li key={link.id}>
                   <button
                     onClick={() => onNavigate(link.id)}
@@ -57,16 +78,11 @@ export default function Footer({ onNavigate }: FooterProps) {
             </ul>
           </div>
 
-          {/* More Links */}
+          {/* Services Links */}
           <div>
             <h4 className="text-white font-semibold mb-4">Үйлчилгээ</h4>
-            <ul className="space-y-2">
-              {[
-                { label: "Шалгалт", id: "exam" },
-                { label: "Захиалгын үйлчилгээ", id: "service" },
-                { label: "Санал хүсэлт", id: "feedback" },
-                { label: "Сэтгэл ханамж", id: "survey" },
-              ].map((link) => (
+            <ul className="space-y-2.5">
+              {serviceLinks.map((link) => (
                 <li key={link.id}>
                   <button
                     onClick={() => onNavigate(link.id)}
@@ -79,23 +95,43 @@ export default function Footer({ onNavigate }: FooterProps) {
             </ul>
           </div>
 
-          {/* Contact */}
+          {/* Contact Info */}
           <div>
             <h4 className="text-white font-semibold mb-4">Холбоо барих</h4>
             <ul className="space-y-3">
+              <li className="flex items-start gap-3 text-sm text-brand-300/70">
+                <MapPin className="w-4 h-4 text-brand-400 shrink-0 mt-0.5" />
+                <span>
+                  Улаанбаатар хот, Баянзүрх дүүрэг
+                </span>
+              </li>
               <li className="flex items-center gap-3 text-sm text-brand-300/70">
                 <Phone className="w-4 h-4 text-brand-400 shrink-0" />
-                +976 7700-1234
+                <span>+976 7700-1234</span>
               </li>
               <li className="flex items-center gap-3 text-sm text-brand-300/70">
                 <Mail className="w-4 h-4 text-brand-400 shrink-0" />
-                info@habea.mn
-              </li>
-              <li className="flex items-start gap-3 text-sm text-brand-300/70">
-                <MapPin className="w-4 h-4 text-brand-400 shrink-0 mt-0.5" />
-                Улаанбаатар хот, Баянзүрх дүүрэг
+                <span>info@habea.mn</span>
               </li>
             </ul>
+
+            {/* Social Media Icons */}
+            <div className="flex gap-3 mt-5">
+              <a
+                href="#"
+                className="w-9 h-9 rounded-lg bg-brand-800/60 flex items-center justify-center text-brand-300 hover:bg-brand-700 hover:text-white transition-all duration-200"
+                aria-label="Facebook"
+              >
+                <Facebook className="w-4 h-4" />
+              </a>
+              <a
+                href="#"
+                className="w-9 h-9 rounded-lg bg-brand-800/60 flex items-center justify-center text-brand-300 hover:bg-brand-700 hover:text-white transition-all duration-200"
+                aria-label="Instagram"
+              >
+                <Instagram className="w-4 h-4" />
+              </a>
+            </div>
           </div>
         </div>
 

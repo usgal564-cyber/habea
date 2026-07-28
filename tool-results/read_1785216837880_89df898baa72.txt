@@ -1,0 +1,846 @@
+     1→"use client";
+     2→
+     3→import { useEffect, useState, useCallback, useMemo } from "react";
+     4→import { motion, AnimatePresence } from "framer-motion";
+     5→import { toast } from "sonner";
+     6→import {
+     7→  Brain,
+     8→  ChevronLeft,
+     9→  ChevronRight,
+    10→  CheckCircle2,
+    11→  XCircle,
+    12→  RotateCcw,
+    13→  ListChecks,
+    14→  Loader2,
+    15→  HelpCircle,
+    16→  Trophy,
+    17→  ArrowLeft,
+    18→  Clock,
+    19→  Target,
+    20→} from "lucide-react";
+    21→import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+    22→import { Button } from "@/components/ui/button";
+    23→import { Badge } from "@/components/ui/badge";
+    24→import { Progress } from "@/components/ui/progress";
+    25→import { Skeleton } from "@/components/ui/skeleton";
+    26→
+    27→/* ─── Types ─────────────────────────────────────────────── */
+    28→
+    29→type QuizListItem = {
+    30→  id: string;
+    31→  title: string;
+    32→  description: string;
+    33→  slug: string;
+    34→  questionCount: number;
+    35→};
+    36→
+    37→type QuizInfo = {
+    38→  id: string;
+    39→  title: string;
+    40→  description: string;
+    41→  slug: string;
+    42→  questionCount: number;
+    43→};
+    44→
+    45→type Question = {
+    46→  id: string;
+    47→  questionText: string;
+    48→  optionA: string;
+    49→  optionB: string;
+    50→  optionC: string;
+    51→  optionD: string;
+    52→  questionOrder: number;
+    53→};
+    54→
+    55→type Pagination = {
+    56→  page: number;
+    57→  totalPages: number;
+    58→  totalQuestions: number;
+    59→  limit: number;
+    60→};
+    61→
+    62→type QuizResult = {
+    63→  attemptId: string;
+    64→  score: number;
+    65→  total: number;
+    66→  passed: boolean;
+    67→};
+    68→
+    69→/* ─── Constants ─────────────────────────────────────────── */
+    70→
+    71→const QUESTIONS_PER_PAGE = 20;
+    72→const PASS_THRESHOLD = 0.7;
+    73→const OPTION_LABELS = ["A", "B", "C", "D"];
+    74→const OPTION_KEYS: ("optionA" | "optionB" | "optionC" | "optionD")[] = [
+    75→  "optionA",
+    76→  "optionB",
+    77→  "optionC",
+    78→  "optionD",
+    79→];
+    80→
+    81→/* ─── Animation Variants ────────────────────────────────── */
+    82→
+    83→const containerVariants = {
+    84→  hidden: { opacity: 0 },
+    85→  visible: {
+    86→    opacity: 1,
+    87→    transition: { staggerChildren: 0.06 },
+    88→  },
+    89→};
+    90→
+    91→const itemVariants = {
+    92→  hidden: { opacity: 0, y: 16 },
+    93→  visible: { opacity: 1, y: 0, transition: { duration: 0.35, ease: "easeOut" } },
+    94→};
+    95→
+    96→const pageTransition = {
+    97→  initial: { opacity: 0, x: 20 },
+    98→  animate: { opacity: 1, x: 0, transition: { duration: 0.3 } },
+    99→  exit: { opacity: 0, x: -20, transition: { duration: 0.2 } },
+   100→};
+   101→
+   102→/* ─── Quiz Card Skeleton ────────────────────────────────── */
+   103→
+   104→function QuizCardSkeleton() {
+   105→  return (
+   106→    <Card className="overflow-hidden">
+   107→      <CardHeader className="pb-3">
+   108→        <Skeleton className="h-5 w-3/4" />
+   109→        <Skeleton className="mt-2 h-4 w-full" />
+   110→      </CardHeader>
+   111→      <CardContent>
+   112→        <div className="flex items-center justify-between">
+   113→          <Skeleton className="h-6 w-24 rounded-full" />
+   114→          <Skeleton className="h-9 w-28" />
+   115→        </div>
+   116→      </CardContent>
+   117→    </Card>
+   118→  );
+   119→}
+   120→
+   121→/* ─── Step 1: Quiz Selection ────────────────────────────── */
+   122→
+   123→function QuizSelection({
+   124→  onSelect,
+   125→}: {
+   126→  onSelect: (quiz: QuizListItem) => void;
+   127→}) {
+   128→  const [quizzes, setQuizzes] = useState<QuizListItem[]>([]);
+   129→  const [isLoading, setIsLoading] = useState(true);
+   130→
+   131→  useEffect(() => {
+   132→    async function fetchQuizzes() {
+   133→      try {
+   134→        const res = await fetch("/api/quiz");
+   135→        const data = await res.json();
+   136→        if (data.quizzes && data.quizzes.length > 0) {
+   137→          setQuizzes(data.quizzes);
+   138→        }
+   139→      } catch {
+   140→        toast.error("Алдаа", { description: "Сорилуудыг ачааллахад алдаа гарлаа." });
+   141→      } finally {
+   142→        setIsLoading(false);
+   143→      }
+   144→    }
+   145→    fetchQuizzes();
+   146→  }, []);
+   147→
+   148→  return (
+   149→    <motion.div
+   150→      initial={{ opacity: 0, y: -20 }}
+   151→      animate={{ opacity: 1, y: 0 }}
+   152→      transition={{ duration: 0.5 }}
+   153→    >
+   154→      {/* Header */}
+   155→      <div className="mb-8 text-center">
+   156→        <div className="mb-3 inline-flex items-center gap-2 rounded-full bg-brand-50 px-4 py-1.5 text-sm font-medium text-brand-700">
+   157→          <Brain className="size-4" />
+   158→          Мэдлэг сорих
+   159→        </div>
+   160→        <h2 className="text-3xl font-bold tracking-tight text-brand-900 sm:text-4xl">
+   161→          Сорилууд
+   162→        </h2>
+   163→        <p className="mx-auto mt-3 max-w-2xl text-muted-foreground">
+   164→          ХАБЭА-ын бүх чиглэлээр мэдлэг сорих сорилууд. Сорилоо сонгоод эхлэнэ үү.
+   165→        </p>
+   166→      </div>
+   167→
+   168→      {/* Quiz Grid */}
+   169→      {isLoading ? (
+   170→        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+   171→          {Array.from({ length: 6 }).map((_, i) => (
+   172→            <QuizCardSkeleton key={i} />
+   173→          ))}
+   174→        </div>
+   175→      ) : quizzes.length > 0 ? (
+   176→        <motion.div
+   177→          variants={containerVariants}
+   178→          initial="hidden"
+   179→          animate="visible"
+   180→          className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3"
+   181→        >
+   182→          {quizzes.map((quiz) => (
+   183→            <motion.div key={quiz.id} variants={itemVariants}>
+   184→              <Card className="group relative overflow-hidden border-brand-100 bg-white transition-all duration-300 hover:border-brand-300 hover:shadow-lg hover:shadow-brand-100/50 cursor-pointer h-full">
+   185→                <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-brand-500 to-brand-700 opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
+   186→                <CardHeader className="pb-3">
+   187→                  <div className="flex items-start justify-between gap-3">
+   188→                    <div className="flex-1">
+   189→                      <CardTitle className="text-lg leading-tight text-brand-900 group-hover:text-brand-700 transition-colors">
+   190→                        {quiz.title}
+   191→                      </CardTitle>
+   192→                      <CardDescription className="mt-1.5 line-clamp-2">
+   193→                        {quiz.description}
+   194→                      </CardDescription>
+   195→                    </div>
+   196→                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-brand-50 text-brand-600 transition-colors group-hover:bg-brand-100">
+   197→                      <HelpCircle className="size-5" />
+   198→                    </div>
+   199→                  </div>
+   200→                </CardHeader>
+   201→                <CardContent>
+   202→                  <div className="flex items-center justify-between">
+   203→                    <Badge
+   204→                      variant="secondary"
+   205→                      className="bg-brand-50 text-brand-700 hover:bg-brand-100"
+   206→                    >
+   207→                      <ListChecks className="mr-1 size-3" />
+   208→                      {quiz.questionCount} асуулт
+   209→                    </Badge>
+   210→                    <Button
+   211→                      size="sm"
+   212→                      className="bg-brand-600 text-white hover:bg-brand-700 focus-visible:ring-brand-500"
+   213→                      onClick={() => onSelect(quiz)}
+   214→                    >
+   215→                      Эхлэх
+   216→                      <ChevronRight className="size-4" />
+   217→                    </Button>
+   218→                  </div>
+   219→                </CardContent>
+   220→              </Card>
+   221→            </motion.div>
+   222→          ))}
+   223→        </motion.div>
+   224→      ) : (
+   225→        <div className="flex flex-col items-center justify-center py-20 text-center">
+   226→          <div className="mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-brand-50">
+   227→            <Brain className="size-10 text-brand-300" />
+   228→          </div>
+   229→          <h3 className="text-xl font-semibold text-brand-900">
+   230→            Сорил олдсонгүй
+   231→          </h3>
+   232→          <p className="mt-2 text-muted-foreground">
+   233→            Одоогоор идэвхтэй сорил байхгүй байна. Дараа дахин шалгана уу.
+   234→          </p>
+   235→        </div>
+   236→      )}
+   237→    </motion.div>
+   238→  );
+   239→}
+   240→
+   241→/* ─── Step 2: Quiz Taking ───────────────────────────────── */
+   242→
+   243→function QuizTaking({
+   244→  quiz,
+   245→  onFinish,
+   246→  onBack,
+   247→}: {
+   248→  quiz: QuizListItem;
+   249→  onFinish: (answers: number[]) => void;
+   250→  onBack: () => void;
+   251→}) {
+   252→  const [currentPage, setCurrentPage] = useState(1);
+   253→  const [totalPages, setTotalPages] = useState(1);
+   254→  const [questions, setQuestions] = useState<Question[]>([]);
+   255→  const [answers, setAnswers] = useState<Record<string, number>>({});
+   256→  const [isLoading, setIsLoading] = useState(true);
+   257→  const [isSubmitting, setIsSubmitting] = useState(false);
+   258→
+   259→  const fetchQuestions = useCallback(
+   260→    async (page: number) => {
+   261→      setIsLoading(true);
+   262→      try {
+   263→        const res = await fetch(
+   264→          `/api/quiz?slug=${quiz.slug}&page=${page}&limit=${QUESTIONS_PER_PAGE}`
+   265→        );
+   266→        const data = await res.json();
+   267→        if (data.quiz && data.questions) {
+   268→          setQuestions(data.questions);
+   269→          setTotalPages(data.pagination.totalPages);
+   270→        } else {
+   271→          toast.error("Алдаа", { description: "Асуултуудыг ачааллахад алдаа гарлаа." });
+   272→        }
+   273→      } catch {
+   274→        toast.error("Холболтын алдаа");
+   275→      } finally {
+   276→        setIsLoading(false);
+   277→      }
+   278→    },
+   279→    [quiz.slug]
+   280→  );
+   281→
+   282→  // Fetch first page
+   283→  useEffect(() => {
+   284→    fetchQuestions(1);
+   285→  }, [fetchQuestions]);
+   286→
+   287→  const handleSelectAnswer = (questionId: string, optionIndex: number) => {
+   288→    setAnswers((prev) => ({ ...prev, [questionId]: optionIndex }));
+   289→  };
+   290→
+   291→  const handlePageChange = (page: number) => {
+   292→    setCurrentPage(page);
+   293→    fetchQuestions(page);
+   294→    window.scrollTo({ top: 0, behavior: "smooth" });
+   295→  };
+   296→
+   297→  const handleFinish = async () => {
+   298→    setIsSubmitting(true);
+   299→    // Build answers array ordered by questionOrder across ALL pages
+   300→    // We need to fetch all questions to build the full answer array
+   301→    try {
+   302→      const allAnswers: number[] = [];
+   303→      // For each page, fetch if not already cached, then map answers
+   304→      for (let p = 1; p <= totalPages; p++) {
+   305→        const res = await fetch(
+   306→          `/api/quiz?slug=${quiz.slug}&page=${p}&limit=${QUESTIONS_PER_PAGE}`
+   307→        );
+   308→        const data = await res.json();
+   309→        if (data.questions) {
+   310→          for (const q of data.questions) {
+   311→            allAnswers.push(answers[q.id] ?? -1);
+   312→          }
+   313→        }
+   314→      }
+   315→      onFinish(allAnswers);
+   316→    } catch {
+   317→      toast.error("Алдаа", { description: "Хариултуудыг илгээхэд алдаа гарлаа." });
+   318→    } finally {
+   319→      setIsSubmitting(false);
+   320→    }
+   321→  };
+   322→
+   323→  const answeredOnPage = questions.filter((q) => answers[q.id] !== undefined).length;
+   324→  const progressPercent = totalPages > 0 ? ((currentPage - 1) / totalPages) * 100 : 0;
+   325→
+   326→  return (
+   327→    <motion.div
+   328→      initial={{ opacity: 0, y: 20 }}
+   329→      animate={{ opacity: 1, y: 0 }}
+   330→      transition={{ duration: 0.4 }}
+   331→    >
+   332→      {/* Top Bar */}
+   333→      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+   334→        <div className="flex items-center gap-3">
+   335→          <Button
+   336→            variant="ghost"
+   337→            size="icon"
+   338→            className="text-brand-600 hover:text-brand-800 hover:bg-brand-50"
+   339→            onClick={onBack}
+   340→          >
+   341→            <ArrowLeft className="size-5" />
+   342→          </Button>
+   343→          <div>
+   344→            <h2 className="text-xl font-bold text-brand-900 sm:text-2xl">
+   345→              {quiz.title}
+   346→            </h2>
+   347→            <p className="text-sm text-muted-foreground">{quiz.description}</p>
+   348→          </div>
+   349→        </div>
+   350→        <Badge className="bg-brand-50 text-brand-700 hover:bg-brand-100 w-fit">
+   351→          <ListChecks className="mr-1 size-3.5" />
+   352→          Хуудас {currentPage} / {totalPages}
+   353→        </Badge>
+   354→      </div>
+   355→
+   356→      {/* Progress Bar */}
+   357→      <div className="mb-6 space-y-2">
+   358→        <div className="flex items-center justify-between text-sm">
+   359→          <span className="text-muted-foreground">
+   360→            Хуудасны дэвсгэр: {currentPage} / {totalPages}
+   361→          </span>
+   362→          <span className="font-medium text-brand-700">
+   363→            Энэ хуудас: {answeredOnPage}/{questions.length} хариулсан
+   364→          </span>
+   365→        </div>
+   366→        <Progress value={progressPercent + (answeredOnPage / (questions.length || 1) / totalPages) * 100} className="h-2.5 bg-brand-100" />
+   367→      </div>
+   368→
+   369→      {/* Questions */}
+   370→      {isLoading ? (
+   371→        <div className="space-y-6">
+   372→          {Array.from({ length: 5 }).map((_, i) => (
+   373→            <Card key={i} className="p-6">
+   374→              <Skeleton className="h-5 w-3/4 mb-4" />
+   375→              <div className="space-y-3">
+   376→                {Array.from({ length: 4 }).map((_, j) => (
+   377→                  <Skeleton key={j} className="h-10 w-full" />
+   378→                ))}
+   379→              </div>
+   380→            </Card>
+   381→          ))}
+   382→        </div>
+   383→      ) : (
+   384→        <AnimatePresence mode="wait">
+   385→          <motion.div
+   386→            key={currentPage}
+   387→            variants={pageTransition}
+   388→            initial="initial"
+   389→            animate="animate"
+   390→            exit="exit"
+   391→            className="space-y-4"
+   392→          >
+   393→            {questions.map((question, qIdx) => {
+   394→              const globalIndex = (currentPage - 1) * QUESTIONS_PER_PAGE + qIdx + 1;
+   395→              const selectedAnswer = answers[question.id];
+   396→
+   397→              return (
+   398→                <motion.div
+   399→                  key={question.id}
+   400→                  variants={itemVariants}
+   401→                  initial="hidden"
+   402→                  animate="visible"
+   403→                >
+   404→                  <Card className="overflow-hidden border-brand-100 bg-white">
+   405→                    <CardContent className="p-5 sm:p-6">
+   406→                      {/* Question Number & Text */}
+   407→                      <div className="mb-4 flex items-start gap-3">
+   408→                        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-brand-600 text-xs font-bold text-white">
+   409→                          {globalIndex}
+   410→                        </span>
+   411→                        <p className="text-base font-medium leading-relaxed text-foreground sm:text-lg">
+   412→                          {question.questionText}
+   413→                        </p>
+   414→                      </div>
+   415→
+   416→                      {/* Options */}
+   417→                      <div className="ml-10 space-y-2.5">
+   418→                        {OPTION_KEYS.map((key, optIdx) => {
+   419→                          const isSelected = selectedAnswer === optIdx;
+   420→                          return (
+   421→                            <button
+   422→                              key={key}
+   423→                              type="button"
+   424→                              onClick={() =>
+   425→                                handleSelectAnswer(question.id, optIdx)
+   426→                              }
+   427→                              className={`
+   428→                                flex w-full items-start gap-3 rounded-lg border-2 px-4 py-3 text-left text-sm transition-all duration-200
+   429→                                sm:text-base
+   430→                                ${
+   431→                                  isSelected
+   432→                                    ? "border-brand-500 bg-brand-50 text-brand-900 shadow-sm ring-1 ring-brand-200"
+   433→                                    : "border-transparent bg-muted/50 text-foreground hover:border-brand-200 hover:bg-brand-50/50"
+   434→                                }
+   435→                              `}
+   436→                            >
+   437→                              <span
+   438→                                className={`
+   439→                                  flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 text-xs font-bold transition-colors
+   440→                                  ${
+   441→                                    isSelected
+   442→                                      ? "border-brand-600 bg-brand-600 text-white"
+   443→                                      : "border-muted-foreground/30 text-muted-foreground"
+   444→                                  }
+   445→                                `}
+   446→                              >
+   447→                                {OPTION_LABELS[optIdx]}
+   448→                              </span>
+   449→                              <span className="pt-0.5 leading-relaxed">
+   450→                                {question[key]}
+   451→                              </span>
+   452→                            </button>
+   453→                          );
+   454→                        })}
+   455→                      </div>
+   456→                    </CardContent>
+   457→                  </Card>
+   458→                </motion.div>
+   459→              );
+   460→            })}
+   461→          </motion.div>
+   462→        </AnimatePresence>
+   463→      )}
+   464→
+   465→      {/* Page Navigation */}
+   466→      <div className="mt-8 flex flex-col items-center gap-4 sm:flex-row sm:justify-between">
+   467→        {/* Previous Button */}
+   468→        <Button
+   469→          variant="outline"
+   470→          className="border-brand-200 text-brand-700 hover:bg-brand-50 hover:text-brand-800"
+   471→          onClick={() => handlePageChange(currentPage - 1)}
+   472→          disabled={currentPage <= 1 || isLoading}
+   473→        >
+   474→          <ChevronLeft className="size-4" />
+   475→          Өмнөх
+   476→        </Button>
+   477→
+   478→        {/* Page Numbers */}
+   479→        <div className="flex items-center gap-1.5">
+   480→          {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+   481→            <button
+   482→              key={page}
+   483→              type="button"
+   484→              onClick={() => handlePageChange(page)}
+   485→              disabled={isLoading}
+   486→              className={`
+   487→                flex h-9 w-9 items-center justify-center rounded-md text-sm font-medium transition-all
+   488→                ${
+   489→                  page === currentPage
+   490→                    ? "bg-brand-600 text-white shadow-sm"
+   491→                    : "text-muted-foreground hover:bg-brand-50 hover:text-brand-700"
+   492→                }
+   493→                disabled:opacity-50
+   494→              `}
+   495→            >
+   496→              {page}
+   497→            </button>
+   498→          ))}
+   499→        </div>
+   500→
+   501→        {/* Next / Finish Button */}
+   502→        {currentPage < totalPages ? (
+   503→          <Button
+   504→            className="bg-brand-600 text-white hover:bg-brand-700"
+   505→            onClick={() => handlePageChange(currentPage + 1)}
+   506→            disabled={isLoading}
+   507→          >
+   508→            Дараах
+   509→            <ChevronRight className="size-4" />
+   510→          </Button>
+   511→        ) : (
+   512→          <Button
+   513→            className="bg-brand-600 text-white hover:bg-brand-700"
+   514→            onClick={handleFinish}
+   515→            disabled={isSubmitting || isLoading}
+   516→          >
+   517→            {isSubmitting ? (
+   518→              <Loader2 className="size-4 animate-spin" />
+   519→            ) : (
+   520→              <CheckCircle2 className="size-4" />
+   521→            )}
+   522→            Дуусгах
+   523→          </Button>
+   524→        )}
+   525→      </div>
+   526→    </motion.div>
+   527→  );
+   528→}
+   529→
+   530→/* ─── Step 3: Results ───────────────────────────────────── */
+   531→
+   532→function QuizResults({
+   533→  quiz,
+   534→  result,
+   535→  onRetry,
+   536→  onBackToList,
+   537→}: {
+   538→  quiz: QuizListItem;
+   539→  result: QuizResult;
+   540→  onRetry: () => void;
+   541→  onBackToList: () => void;
+   542→}) {
+   543→  const percentage = Math.round((result.score / result.total) * 100);
+   544→  const isPassed = result.passed;
+   545→
+   546→  return (
+   547→    <motion.div
+   548→      initial={{ opacity: 0, scale: 0.95 }}
+   549→      animate={{ opacity: 1, scale: 1 }}
+   550→      transition={{ duration: 0.5, ease: "easeOut" }}
+   551→      className="mx-auto max-w-lg"
+   552→    >
+   553→      <Card className="overflow-hidden border-2 bg-white">
+   554→        {/* Top Accent */}
+   555→        <div
+   556→          className={`h-2 ${
+   557→            isPassed
+   558→              ? "bg-gradient-to-r from-brand-500 to-brand-700"
+   559→              : "bg-gradient-to-r from-red-400 to-red-600"
+   560→          }`}
+   561→        />
+   562→
+   563→        <CardContent className="p-8 sm:p-10">
+   564→          <div className="flex flex-col items-center text-center">
+   565→            {/* Icon Animation */}
+   566→            <motion.div
+   567→              initial={{ scale: 0 }}
+   568→                  animate={{ scale: 1 }}
+   569→                  transition={{
+   570→                    type: "spring",
+   571→                    stiffness: 200,
+   572→                    damping: 15,
+   573→                    delay: 0.2,
+   574→                  }}
+   575→                  className={`
+   576→                    mb-6 flex h-24 w-24 items-center justify-center rounded-full
+   577→                    ${
+   578→                      isPassed
+   579→                        ? "bg-brand-100 text-brand-600"
+   580→                        : "bg-red-100 text-red-500"
+   581→                    }
+   582→                  `}
+   583→                >
+   584→                  {isPassed ? (
+   585→                    <Trophy className="size-12" />
+   586→                  ) : (
+   587→                    <XCircle className="size-12" />
+   588→                  )}
+   589→                </motion.div>
+   590→
+   591→                {/* Title */}
+   592→                <motion.h2
+   593→                  initial={{ opacity: 0, y: 10 }}
+   594→                  animate={{ opacity: 1, y: 0 }}
+   595→                  transition={{ delay: 0.4 }}
+   596→                  className={`text-2xl font-bold sm:text-3xl ${
+   597→                    isPassed ? "text-brand-800" : "text-red-700"
+   598→                  }`}
+   599→                >
+   600→                  {isPassed ? "Тэнцлээ!" : "Тэнцээгүй"}
+   601→                </motion.h2>
+   602→
+   603→                <motion.p
+   604→                  initial={{ opacity: 0 }}
+   605→                  animate={{ opacity: 1 }}
+   606→                  transition={{ delay: 0.5 }}
+   607→                  className="mt-2 text-muted-foreground"
+   608→                >
+   609→                  {quiz.title}
+   610→                </motion.p>
+   611→
+   612→                {/* Score Circle */}
+   613→                <motion.div
+   614→                  initial={{ opacity: 0, y: 20 }}
+   615→                  animate={{ opacity: 1, y: 0 }}
+   616→                  transition={{ delay: 0.6 }}
+   617→                  className="my-8 relative flex h-36 w-36 items-center justify-center"
+   618→                >
+   619→                  <svg className="absolute inset-0 -rotate-90" viewBox="0 0 120 120">
+   620→                    <circle
+   621→                      cx="60"
+   622→                      cy="60"
+   623→                      r="52"
+   624→                      fill="none"
+   625→                      stroke-width="8"
+   626→                      className="stroke-brand-100"
+   627→                    />
+   628→                    <circle
+   629→                      cx="60"
+   630→                      cy="60"
+   631→                      r="52"
+   632→                      fill="none"
+   633→                      stroke-width="8"
+   634→                      stroke-linecap="round"
+   635→                      className={isPassed ? "stroke-brand-600" : "stroke-red-500"}
+   636→                      stroke-dasharray={`${2 * Math.PI * 52}`}
+   637→                      stroke-dashoffset={`${2 * Math.PI * 52 * (1 - percentage / 100)}`}
+   638→                      style={{ transition: "stroke-dashoffset 1.5s ease-out 0.8s" }}
+   639→                    />
+   640→                  </svg>
+   641→                  <div className="text-center">
+   642→                    <span
+   643→                      className={`text-3xl font-bold ${
+   644→                        isPassed ? "text-brand-700" : "text-red-600"
+   645→                      }`}
+   646→                    >
+   647→                      {percentage}%
+   648→                    </span>
+   649→                  </div>
+   650→                </motion.div>
+   651→
+   652→                {/* Stats */}
+   653→                <motion.div
+   654→                  initial={{ opacity: 0 }}
+   655→                  animate={{ opacity: 1 }}
+   656→                  transition={{ delay: 0.8 }}
+   657→                  className="grid w-full grid-cols-3 gap-4"
+   658→                >
+   659→                  <div className="rounded-lg bg-brand-50 p-3">
+   660→                    <div className="flex items-center justify-center gap-1.5 text-brand-600">
+   661→                      <Target className="size-4" />
+   662→                      <CheckCircle2 className="size-4" />
+   663→                    </div>
+   664→                    <p className="mt-1 text-xl font-bold text-brand-800">
+   665→                      {result.score}
+   666→                    </p>
+   667→                    <p className="text-xs text-muted-foreground">Зөв</p>
+   668→                  </div>
+   669→                  <div className="rounded-lg bg-red-50 p-3">
+   670→                    <div className="flex items-center justify-center gap-1.5 text-red-500">
+   671→                      <XCircle className="size-4" />
+   672→                    </div>
+   673→                    <p className="mt-1 text-xl font-bold text-red-700">
+   674→                      {result.total - result.score}
+   675→                    </p>
+   676→                    <p className="text-xs text-muted-foreground">Буруу</p>
+   677→                  </div>
+   678→                  <div className="rounded-lg bg-muted/50 p-3">
+   679→                    <div className="flex items-center justify-center text-muted-foreground">
+   680→                      <Clock className="size-4" />
+   681→                    </div>
+   682→                    <p className="mt-1 text-xl font-bold text-foreground">
+   683→                      {result.total}
+   684→                    </p>
+   685→                    <p className="text-xs text-muted-foreground">Нийт</p>
+   686→                  </div>
+   687→                </motion.div>
+   688→
+   689→                {/* Threshold note */}
+   690→                <motion.p
+   691→                  initial={{ opacity: 0 }}
+   692→                  animate={{ opacity: 1 }}
+   693→                  transition={{ delay: 1 }}
+   694→                  className="mt-4 text-sm text-muted-foreground"
+   695→                >
+   696→                  Тэнсэх хамгийн бага оноо: <span className="font-semibold">70%</span>
+   697→                </motion.p>
+   698→
+   699→                {/* Actions */}
+   700→                <motion.div
+   701→                  initial={{ opacity: 0, y: 10 }}
+   702→                  animate={{ opacity: 1, y: 0 }}
+   703→                  transition={{ delay: 1.1 }}
+   704→                  className="mt-8 flex flex-col gap-3 sm:flex-row"
+   705→                >
+   706→                  <Button
+   707→                    variant="outline"
+   708→                    className="flex-1 border-brand-200 text-brand-700 hover:bg-brand-50 hover:text-brand-800"
+   709→                    onClick={onBackToList}
+   710→                  >
+   711→                    <ListChecks className="size-4" />
+   712→                    Сорилын жагсаалт
+   713→                  </Button>
+   714→                  <Button
+   715→                    className="flex-1 bg-brand-600 text-white hover:bg-brand-700"
+   716→                    onClick={onRetry}
+   717→                  >
+   718→                    <RotateCcw className="size-4" />
+   719→                    Дахин оролдох
+   720→                  </Button>
+   721→                </motion.div>
+   722→              </div>
+   723→            </CardContent>
+   724→          </Card>
+   725→        </motion.div>
+   726→      );
+   727→    }
+   728→    
+   729→    /* ─── Main Component ──────────────────────────────────── */
+   730→    
+   731→    type Step = "selection" | "taking" | "results";
+   732→    
+   733→    export default function QuizPage() {
+   734→      const [step, setStep] = useState<Step>("selection");
+   735→      const [selectedQuiz, setSelectedQuiz] = useState<QuizListItem | null>(null);
+   736→      const [result, setResult] = useState<QuizResult | null>(null);
+   737→      const [isSubmitting, setIsSubmitting] = useState(false);
+   738→    
+   739→      const handleSelectQuiz = useCallback((quiz: QuizListItem) => {
+   740→        setSelectedQuiz(quiz);
+   741→        setResult(null);
+   742→        setStep("taking");
+   743→      }, []);
+   744→    
+   745→      const handleFinish = useCallback(
+   746→        async (answers: number[]) => {
+   747→          if (!selectedQuiz) return;
+   748→    
+   749→          setIsSubmitting(true);
+   750→          try {
+   751→            const res = await fetch("/api/quiz", {
+   752→              method: "POST",
+   753→              headers: { "Content-Type": "application/json" },
+   754→              body: JSON.stringify({
+   755→                quizId: selectedQuiz.id,
+   756→                answers,
+   757→              }),
+   758→            });
+   759→    
+   760→            const data = await res.json();
+   761→    
+   762→            if (res.ok) {
+   763→              setResult({
+   764→                attemptId: data.attemptId,
+   765→                score: data.score,
+   766→                total: data.total,
+   767→                passed: data.passed,
+   768→              });
+   769→              setStep("results");
+   770→    
+   771→              if (data.passed) {
+   772→                toast.success("Баяр хүргэе!", {
+   773→                  description: `Та ${data.score}/${data.total} оноо авч тэнцлээ!`,
+   774→                });
+   775→              } else {
+   776→                toast.error("Тэнцээгүй", {
+   777→                  description: `Та ${data.score}/${data.total} оноо авсан байна. 70% шаардлагатай.`,
+   778→                });
+   779→              }
+   780→            } else {
+   781→              toast.error("Алдаа", {
+   782→                description: data.error || "Хариултуудыг илгээхэд алдаа гарлаа.",
+   783→              });
+   784→            }
+   785→          } catch {
+   786→            toast.error("Холболтын алдаа");
+   787→          } finally {
+   788→            setIsSubmitting(false);
+   789→          }
+   790→        },
+   791→        [selectedQuiz]
+   792→      );
+   793→    
+   794→      const handleRetry = useCallback(() => {
+   795→        setResult(null);
+   796→        setStep("taking");
+   797→      }, []);
+   798→    
+   799→      const handleBackToList = useCallback(() => {
+   800→        setSelectedQuiz(null);
+   801→        setResult(null);
+   802→        setStep("selection");
+   803→      }, []);
+   804→    
+   805→      return (
+   806→        <section className="w-full">
+   807→          {step === "selection" && (
+   808→            <QuizSelection onSelect={handleSelectQuiz} />
+   809→          )}
+   810→    
+   811→          {step === "taking" && selectedQuiz && (
+   812→            <QuizTaking
+   813→              quiz={selectedQuiz}
+   814→              onFinish={handleFinish}
+   815→              onBack={handleBackToList}
+   816→            />
+   817→          )}
+   818→    
+   819→          {step === "results" && selectedQuiz && result && (
+   820→            <QuizResults
+   821→              quiz={selectedQuiz}
+   822→              result={result}
+   823→              onRetry={handleRetry}
+   824→              onBackToList={handleBackToList}
+   825→            />
+   826→          )}
+   827→    
+   828→          {/* Submit overlay */}
+   829→          {isSubmitting && (
+   830→            <motion.div
+   831→              initial={{ opacity: 0 }}
+   832→              animate={{ opacity: 1 }}
+   833→              className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
+   834→            >
+   835→              <div className="flex flex-col items-center gap-4 rounded-2xl bg-white p-8 shadow-2xl">
+   836→                <Loader2 className="size-10 animate-spin text-brand-600" />
+   837→                <p className="text-lg font-medium text-brand-900">
+   838→                  Хариултуудыг шалгаж байна...
+   839→                </p>
+   840→              </div>
+   841→            </motion.div>
+   842→          )}
+   843→        </section>
+   844→      );
+   845→    }
+   846→    

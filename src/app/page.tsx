@@ -1,73 +1,99 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import { Toaster } from "sonner";
-import Navbar from "@/components/navbar";
-import HeroSection from "@/components/sections/hero-section";
-import AboutSection from "@/components/sections/about-section";
-import TrainingSection from "@/components/sections/training-section";
-import QuizSection from "@/components/sections/quiz-section";
-import ExamSection from "@/components/sections/exam-section";
-import ServiceSection from "@/components/sections/service-section";
-import FeedbackSection from "@/components/sections/feedback-section";
-import SurveySection from "@/components/sections/survey-section";
+import { Navbar } from "@/components/navbar";
 import Footer from "@/components/footer";
+import { LoginDialog } from "@/components/auth/login-dialog";
+import { useAuthStore } from "@/hooks/use-auth";
 
-const sectionIds = [
-  "home",
-  "about",
-  "training",
-  "quiz",
-  "exam",
-  "service",
-  "feedback",
-  "survey",
-];
+// Lazy-loaded page components
+import HomePage from "@/components/pages/home-page";
+import AboutPage from "@/components/pages/about-page";
+import TrainingPage from "@/components/pages/training-page";
+import QuizPage from "@/components/pages/quiz-page";
+import ExamPage from "@/components/pages/exam-page";
+import ConsultingPage from "@/components/pages/consulting-page";
+import FeedbackPage from "@/components/pages/feedback-page";
+import SurveyPage from "@/components/pages/survey-page";
+import AdminPage from "@/components/pages/admin-page";
+
+export type PageId = "home" | "about" | "training" | "quiz" | "exam" | "consulting" | "feedback" | "survey" | "admin";
+
+const pageConfig: Record<PageId, string> = {
+  home: "Нүүр",
+  about: "Бидний тухай",
+  training: "Сургалт",
+  quiz: "Мэдлэг сорих",
+  exam: "Шалгалт",
+  consulting: "Зөвлөх үйлчилгээ",
+  feedback: "Санал хүсэлт",
+  survey: "Сэтгэл ханамж",
+  admin: "Админ",
+};
+
+export function getPages() {
+  return pageConfig;
+}
 
 export default function Home() {
-  const [activeSection, setActiveSection] = useState("home");
+  const [currentPage, setCurrentPage] = useState<PageId>("home");
+  const [authOpen, setAuthOpen] = useState(false);
+  const { user, setAuth, token } = useAuthStore();
 
-  const handleNavigate = useCallback((sectionId: string) => {
-    const element = document.getElementById(sectionId);
-    if (element) {
-      element.scrollIntoView({ behavior: "smooth" });
+  useEffect(() => {
+    // Verify token on mount
+    if (token) {
+      fetch("/api/auth/me", {
+        headers: { Authorization: `Bearer ${token}` },
+      }).then((res) => {
+        if (!res.ok) {
+          setAuth(null, null);
+        }
+      }).catch(() => {});
     }
   }, []);
 
-  useEffect(() => {
-    const observer = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          if (entry.isIntersecting) {
-            setActiveSection(entry.target.id);
-          }
-        });
-      },
-      { rootMargin: "-20% 0px -60% 0px" }
-    );
+  const handleNavigate = (pageId: PageId) => {
+    setCurrentPage(pageId);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
 
-    sectionIds.forEach((id) => {
-      const el = document.getElementById(id);
-      if (el) observer.observe(el);
-    });
-
-    return () => observer.disconnect();
-  }, []);
+  const renderPage = () => {
+    switch (currentPage) {
+      case "home": return <HomePage onNavigate={handleNavigate} />;
+      case "about": return <AboutPage />;
+      case "training": return <TrainingPage />;
+      case "quiz": return <QuizPage />;
+      case "exam": return <ExamPage />;
+      case "consulting": return <ConsultingPage />;
+      case "feedback": return <FeedbackPage />;
+      case "survey": return <SurveyPage />;
+      case "admin": return <AdminPage />;
+      default: return <HomePage onNavigate={handleNavigate} />;
+    }
+  };
 
   return (
     <div className="min-h-screen flex flex-col">
-      <Navbar activeSection={activeSection} onNavigate={handleNavigate} />
-      <main className="flex-1">
-        <HeroSection onNavigate={handleNavigate} />
-        <AboutSection />
-        <TrainingSection />
-        <QuizSection />
-        <ExamSection />
-        <ServiceSection />
-        <FeedbackSection />
-        <SurveySection />
+      <Navbar
+        currentPage={currentPage}
+        onNavigate={handleNavigate}
+        onAuthClick={() => setAuthOpen(true)}
+        user={user}
+        onLogout={() => {
+          useAuthStore.getState().logout();
+          setCurrentPage("home");
+        }}
+      />
+      <main className="flex-1 pt-16 lg:pt-20">
+        {renderPage()}
       </main>
       <Footer onNavigate={handleNavigate} />
+      <LoginDialog
+        open={authOpen}
+        onOpenChange={setAuthOpen}
+      />
       <Toaster position="top-right" richColors />
     </div>
   );
