@@ -1,0 +1,1303 @@
+     1→"use client";
+     2→
+     3→import { useState, useEffect, useCallback } from "react";
+     4→import { motion, AnimatePresence } from "framer-motion";
+     5→import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+     6→import { Button } from "@/components/ui/button";
+     7→import { Input } from "@/components/ui/input";
+     8→import { Label } from "@/components/ui/label";
+     9→import { Textarea } from "@/components/ui/textarea";
+    10→import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+    11→import { Badge } from "@/components/ui/badge";
+    12→import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+    13→import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+    14→import {
+    15→  Table,
+    16→  TableBody,
+    17→  TableCell,
+    18→  TableHead,
+    19→  TableHeader,
+    20→  TableRow,
+    21→} from "@/components/ui/table";
+    22→import { useAuthStore } from "@/hooks/use-auth";
+    23→import { toast } from "sonner";
+    24→import {
+    25→  Shield,
+    26→  Plus,
+    27→  Play,
+    28→  Square,
+    29→  Trash2,
+    30→  Download,
+    31→  BarChart3,
+    32→  Users,
+    33→  BookOpen,
+    34→  Copy,
+    35→  Check,
+    36→  X,
+    37→  ClipboardList,
+    38→  Loader2,
+    39→  GraduationCap,
+    40→  FileSpreadsheet,
+    41→  FileText,
+    42→  Search,
+    43→} from "lucide-react";
+    44→
+    45→interface Quiz {
+    46→  id: string;
+    47→  title: string;
+    48→  description: string;
+    49→  slug: string;
+    50→  questionCount: number;
+    51→}
+    52→
+    53→interface Exam {
+    54→  id: string;
+    55→  title: string;
+    56→  code: string;
+    57→  isActive: boolean;
+    58→  timeLimit: number | null;
+    59→  createdAt: string;
+    60→  _count: { attempts: number };
+    61→}
+    62→
+    63→interface ExamResult {
+    64→  id: string;
+    65→  userName: string;
+    66→  score: number;
+    67→  total: number;
+    68→  passed: boolean;
+    69→  createdAt: string;
+    70→}
+    71→
+    72→interface ExamQuestion {
+    73→  questionText: string;
+    74→  optionA: string;
+    75→  optionB: string;
+    76→  optionC: string;
+    77→  optionD: string;
+    78→  correctIndex: number;
+    79→}
+    80→
+    81→interface AdminCourse {
+    82→  id: string;
+    83→  title: string;
+    84→  category: string;
+    85→  description: string;
+    86→  duration: string;
+    87→  price: number | null;
+    88→  maxStudents: number | null;
+    89→  _count: { registrations: number };
+    90→}
+    91→
+    92→interface Student {
+    93→  id: string;
+    94→  firstName: string;
+    95→  lastName: string;
+    96→  email: string;
+    97→  phone: string;
+    98→  address: string | null;
+    99→  secondaryPhone: string | null;
+   100→  createdAt: string;
+   101→  courseCount: number;
+   102→  examAttemptCount: number;
+   103→  quizAttemptCount: number;
+   104→}
+   105→
+   106→export default function AdminPage() {
+   107→  const { user, token } = useAuthStore();
+   108→  const [activeTab, setActiveTab] = useState("exams");
+   109→  const [loading, setLoading] = useState(false);
+   110→
+   111→  // Exams state
+   112→  const [exams, setExams] = useState<Exam[]>([]);
+   113→  const [examResults, setExamResults] = useState<{
+   114→    results: ExamResult[];
+   115→    stats: { total: number; passed: number; failed: number; average: number };
+   116→  } | null>(null);
+   117→  const [resultsExamId, setResultsExamId] = useState<string | null>(null);
+   118→
+   119→  // Create exam dialog
+   120→  const [createDialogOpen, setCreateDialogOpen] = useState(false);
+   121→  const [examTitle, setExamTitle] = useState("");
+   122→  const [examCode, setExamCode] = useState("");
+   123→  const [examTimeLimit, setExamTimeLimit] = useState("30");
+   124→  const [newQuestions, setNewQuestions] = useState<ExamQuestion[]>([]);
+   125→  const [currentQ, setCurrentQ] = useState<ExamQuestion>({
+   126→    questionText: "",
+   127→    optionA: "",
+   128→    optionB: "",
+   129→    optionC: "",
+   130→    optionD: "",
+   131→    correctIndex: 0,
+   132→  });
+   133→
+   134→  // Results dialog
+   135→  const [resultsDialogOpen, setResultsDialogOpen] = useState(false);
+   136→
+   137→  // Quizzes state
+   138→  const [quizzes, setQuizzes] = useState<Quiz[]>([]);
+   139→  const [seeding, setSeeding] = useState(false);
+   140→
+   141→  // Courses state
+   142→  const [courses, setCourses] = useState<AdminCourse[]>([]);
+   143→  const [courseDialogOpen, setCourseDialogOpen] = useState(false);
+   144→  const [courseForm, setCourseForm] = useState({
+   145→    title: "",
+   146→    category: "staff",
+   147→    description: "",
+   148→    duration: "",
+   149→    price: "",
+   150→    maxStudents: "",
+   151→  });
+   152→
+   153→  // Students state
+   154→  const [students, setStudents] = useState<Student[]>([]);
+   155→  const [studentSearch, setStudentSearch] = useState("");
+   156→  const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
+   157→  const [studentDetailOpen, setStudentDetailOpen] = useState(false);
+   158→
+   159→  const authHeaders = {
+   160→    "Content-Type": "application/json",
+   161→    Authorization: token ? `Bearer ${token}` : "",
+   162→  };
+   163→
+   164→  const fetchExams = useCallback(async () => {
+   165→    try {
+   166→      const res = await fetch("/api/admin/exams", { headers: authHeaders });
+   167→      if (res.ok) {
+   168→        const data = await res.json();
+   169→        setExams(data.exams || []);
+   170→      }
+   171→    } catch {
+   172→      /* ignore */
+   173→    }
+   174→  }, [token]);
+   175→
+   176→  const fetchQuizzes = useCallback(async () => {
+   177→    try {
+   178→      const res = await fetch("/api/quiz");
+   179→      if (res.ok) {
+   180→        const data = await res.json();
+   181→        setQuizzes(data.quizzes || []);
+   182→      }
+   183→    } catch {
+   184→      /* ignore */
+   185→    }
+   186→  }, []);
+   187→
+   188→  const fetchCourses = useCallback(async () => {
+   189→    try {
+   190→      const res = await fetch("/api/admin/courses", { headers: authHeaders });
+   191→      if (res.ok) {
+   192→        const data = await res.json();
+   193→        setCourses(data.courses || []);
+   194→      }
+   195→    } catch {
+   196→      /* ignore */
+   197→    }
+   198→  }, [token]);
+   199→
+   200→  const fetchStudents = useCallback(async () => {
+   201→    try {
+   202→      const res = await fetch("/api/admin/students", { headers: authHeaders });
+   203→      if (res.ok) {
+   204→        const data = await res.json();
+   205→        setStudents(data.students || []);
+   206→      }
+   207→    } catch {
+   208→      /* ignore */
+   209→    }
+   210→  }, [token]);
+   211→
+   212→  useEffect(() => {
+   213→    if (user?.role === "ADMIN") {
+   214→      fetchExams();
+   215→      fetchQuizzes();
+   216→      fetchCourses();
+   217→      fetchStudents();
+   218→    }
+   219→  }, [user, fetchExams, fetchQuizzes, fetchCourses, fetchStudents]);
+   220→
+   221→  // Not admin
+   222→  if (!user || user.role !== "ADMIN") {
+   223→    return (
+   224→      <div className="bg-gradient-to-b from-brand-900 to-brand-800 flex items-center justify-center py-20">
+   225→        <Card className="max-w-md mx-4 shadow-xl">
+   226→          <CardContent className="py-12 text-center">
+   227→            <Shield className="w-16 h-16 text-brand-300 mx-auto mb-4" />
+   228→            <h2 className="text-xl font-bold text-brand-900 mb-2">
+   229→              Админ эрхтэй хэрэглэгч биш
+   230→            </h2>
+   231→            <p className="text-muted-foreground">
+   232→              Энэ хуудас зөвхөн админ хандах боломжтой.
+   233→            </p>
+   234→          </CardContent>
+   235→        </Card>
+   236→      </div>
+   237→    );
+   238→  }
+   239→
+   240→  const generateCode = () => {
+   241→    const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+   242→    let code = "";
+   243→    for (let i = 0; i < 6; i++)
+   244→      code += chars[Math.floor(Math.random() * chars.length)];
+   245→    return code;
+   246→  };
+   247→
+   248→  // Seed quizzes
+   249→  const handleSeedQuizzes = async () => {
+   250→    setSeeding(true);
+   251→    try {
+   252→      const res = await fetch("/api/admin/seed-quiz", {
+   253→        method: "POST",
+   254→        headers: authHeaders,
+   255→      });
+   256→      const data = await res.json();
+   257→      if (res.ok) {
+   258→        toast.success(data.message);
+   259→        fetchQuizzes();
+   260→      } else {
+   261→        toast.error(data.error);
+   262→      }
+   263→    } catch {
+   264→      toast.error("Алдаа гарлаа");
+   265→    } finally {
+   266→      setSeeding(false);
+   267→    }
+   268→  };
+   269→
+   270→  // Add question to list
+   271→  const addQuestion = () => {
+   272→    if (
+   273→      !currentQ.questionText.trim() ||
+   274→      !currentQ.optionA.trim() ||
+   275→      !currentQ.optionB.trim()
+   276→    ) {
+   277→      toast.error("Асуулт болон дор хаяж 2 хариулт оруулна уу");
+   278→      return;
+   279→    }
+   280→    setNewQuestions([...newQuestions, { ...currentQ }]);
+   281→    setCurrentQ({
+   282→      questionText: "",
+   283→      optionA: "",
+   284→      optionB: "",
+   285→      optionC: "",
+   286→      optionD: "",
+   287→      correctIndex: 0,
+   288→    });
+   289→  };
+   290→
+   291→  const removeQuestion = (idx: number) => {
+   292→    setNewQuestions(newQuestions.filter((_, i) => i !== idx));
+   293→  };
+   294→
+   295→  // Create exam
+   296→  const handleCreateExam = async () => {
+   297→    if (!examTitle.trim()) {
+   298→      toast.error("Шалгалтын нэр оруулна уу");
+   299→      return;
+   300→    }
+   301→    if (!examCode.trim()) {
+   302→      toast.error("Код оруулна уу");
+   303→      return;
+   304→    }
+   305→    if (newQuestions.length < 5) {
+   306→      toast.error("Дор хаяж 5 асуулт оруулна уу");
+   307→      return;
+   308→    }
+   309→
+   310→    setLoading(true);
+   311→    try {
+   312→      const res = await fetch("/api/admin/exams", {
+   313→        method: "POST",
+   314→        headers: authHeaders,
+   315→        body: JSON.stringify({
+   316→          title: examTitle,
+   317→          code: examCode,
+   318→          timeLimit: parseInt(examTimeLimit),
+   319→          questions: JSON.stringify(newQuestions),
+   320→        }),
+   321→      });
+   322→      const data = await res.json();
+   323→      if (res.ok) {
+   324→        toast.success("Шалгалт амжилттай үүсгэлээ!");
+   325→        setCreateDialogOpen(false);
+   326→        setExamTitle("");
+   327→        setExamCode("");
+   328→        setNewQuestions([]);
+   329→        fetchExams();
+   330→      } else {
+   331→        toast.error(data.error);
+   332→      }
+   333→    } catch {
+   334→      toast.error("Алдаа гарлаа");
+   335→    } finally {
+   336→      setLoading(false);
+   337→    }
+   338→  };
+   339→
+   340→  // Toggle exam active state
+   341→  const handleToggleExam = async (exam: Exam) => {
+   342→    try {
+   343→      const res = await fetch(`/api/admin/exams/${exam.id}/start`, {
+   344→        method: exam.isActive ? "DELETE" : "POST",
+   345→        headers: authHeaders,
+   346→      });
+   347→      if (res.ok) {
+   348→        toast.success(exam.isActive ? "Шалгалт зогсов" : "Шалгалт эхэллээ");
+   349→        fetchExams();
+   350→      }
+   351→    } catch {
+   352→      toast.error("Алдаа");
+   353→    }
+   354→  };
+   355→
+   356→  // Delete exam
+   357→  const handleDeleteExam = async (examId: string) => {
+   358→    if (!confirm("Энэ шалгалтыг устгах уу?")) return;
+   359→    try {
+   360→      const res = await fetch(`/api/admin/exams/${examId}/start`, {
+   361→        method: "DELETE",
+   362→        headers: authHeaders,
+   363→      });
+   364→      if (res.ok) {
+   365→        toast.success("Шалгалт устгагдлаа");
+   366→        fetchExams();
+   367→      }
+   368→    } catch {
+   369→      toast.error("Алдаа");
+   370→    }
+   371→  };
+   372→
+   373→  // View results
+   374→  const handleViewResults = async (examId: string) => {
+   375→    setLoading(true);
+   376→    try {
+   377→      const res = await fetch(`/api/admin/exams/${examId}/results`, {
+   378→        headers: authHeaders,
+   379→      });
+   380→      if (res.ok) {
+   381→        const data = await res.json();
+   382→        setExamResults(data);
+   383→        setResultsExamId(examId);
+   384→        setResultsDialogOpen(true);
+   385→      }
+   386→    } catch {
+   387→      toast.error("Алдаа");
+   388→    } finally {
+   389→      setLoading(false);
+   390→    }
+   391→  };
+   392→
+   393→  // Export results
+   394→  const handleExport = async (examId: string, format: string) => {
+   395→    try {
+   396→      const res = await fetch(
+   397→        `/api/admin/export?examId=${examId}&format=${format}`,
+   398→        { headers: authHeaders }
+   399→      );
+   400→      if (!res.ok) {
+   401→        const data = await res.json();
+   402→        toast.error(data.error);
+   403→        return;
+   404→      }
+   405→
+   406→      const blob = await res.blob();
+   407→      const url = window.URL.createObjectURL(blob);
+   408→      const a = document.createElement("a");
+   409→      a.href = url;
+   410→
+   411→      if (format === "excel") {
+   412→        a.download = `exam-results.xlsx`;
+   413→      } else {
+   414→        a.download = `exam-results.csv`;
+   415→      }
+   416→
+   417→      document.body.appendChild(a);
+   418→      a.click();
+   419→      a.remove();
+   420→      window.URL.revokeObjectURL(url);
+   421→      toast.success(`${format === "excel" ? "Excel" : "CSV"} файл амжилттай татагдлаа`);
+   422→    } catch {
+   423→      toast.error("Экспорт хийхэд алдаа гарлаа");
+   424→    }
+   425→  };
+   426→
+   427→  // Create course
+   428→  const handleCreateCourse = async () => {
+   429→    if (!courseForm.title.trim() || !courseForm.description.trim() || !courseForm.duration.trim()) {
+   430→      toast.error("Заавал бөглөх талбарыг бөглөнө үү");
+   431→      return;
+   432→    }
+   433→
+   434→    setLoading(true);
+   435→    try {
+   436→      const res = await fetch("/api/admin/courses", {
+   437→        method: "POST",
+   438→        headers: authHeaders,
+   439→        body: JSON.stringify({
+   440→          title: courseForm.title,
+   441→          category: courseForm.category,
+   442→          description: courseForm.description,
+   443→          duration: courseForm.duration,
+   444→          price: courseForm.price ? parseInt(courseForm.price) : null,
+   445→          maxStudents: courseForm.maxStudents ? parseInt(courseForm.maxStudents) : null,
+   446→        }),
+   447→      });
+   448→      const data = await res.json();
+   449→      if (res.ok) {
+   450→        toast.success("Сургалт амжилттай үүсгэлээ!");
+   451→        setCourseDialogOpen(false);
+   452→        setCourseForm({ title: "", category: "staff", description: "", duration: "", price: "", maxStudents: "" });
+   453→        fetchCourses();
+   454→      } else {
+   455→        toast.error(data.error);
+   456→      }
+   457→    } catch {
+   458→      toast.error("Алдаа гарлаа");
+   459→    } finally {
+   460→      setLoading(false);
+   461→    }
+   462→  };
+   463→
+   464→  // Delete course
+   465→  const handleDeleteCourse = async (courseId: string) => {
+   466→    if (!confirm("Энэ сургалтыг устгах уу?")) return;
+   467→    try {
+   468→      const res = await fetch(`/api/admin/courses?id=${courseId}`, {
+   469→        method: "DELETE",
+   470→        headers: authHeaders,
+   471→      });
+   472→      if (res.ok) {
+   473→        toast.success("Сургалт устгагдлаа");
+   474→        fetchCourses();
+   475→      }
+   476→    } catch {
+   477→      toast.error("Алдаа");
+   478→    }
+   479→  };
+   480→
+   481→  const filteredStudents = students.filter(
+   482→    (s) =>
+   483→      `${s.firstName} ${s.lastName} ${s.email} ${s.phone}`
+   484→        .toLowerCase()
+   485→        .includes(studentSearch.toLowerCase())
+   486→  );
+   487→
+   488→  return (
+   489→    <div className="bg-gray-50">
+   490→      {/* Admin Header */}
+   491→      <div className="bg-brand-900 py-8 px-4">
+   492→        <div className="max-w-6xl mx-auto">
+   493→          <motion.div
+   494→            initial={{ opacity: 0, y: 20 }}
+   495→            animate={{ opacity: 1, y: 0 }}
+   496→            className="flex items-center gap-4"
+   497→          >
+   498→            <div className="w-12 h-12 rounded-xl bg-brand-700 flex items-center justify-center">
+   499→              <Shield className="w-6 h-6 text-white" />
+   500→            </div>
+   501→            <div>
+   502→              <h1 className="text-2xl font-bold text-white">
+   503→                Админ хэсэг
+   504→              </h1>
+   505→              <p className="text-brand-300 text-sm">
+   506→                ХАБЭА - Шалгалт, сорил, сургалт удирдлага
+   507→              </p>
+   508→            </div>
+   509→          </motion.div>
+   510→        </div>
+   511→      </div>
+   512→
+   513→      <div className="max-w-6xl mx-auto px-4 py-6">
+   514→        <Tabs value={activeTab} onValueChange={setActiveTab}>
+   515→          <TabsList className="grid w-full grid-cols-4 mb-6">
+   516→            <TabsTrigger value="exams" className="gap-1 text-xs sm:text-sm">
+   517→              <ClipboardList className="w-4 h-4 hidden sm:inline-block" />
+   518→              Шалгалт
+   519→            </TabsTrigger>
+   520→            <TabsTrigger value="quizzes" className="gap-1 text-xs sm:text-sm">
+   521→              <BookOpen className="w-4 h-4 hidden sm:inline-block" />
+   522→              Сорил
+   523→            </TabsTrigger>
+   524→            <TabsTrigger value="courses" className="gap-1 text-xs sm:text-sm">
+   525→              <GraduationCap className="w-4 h-4 hidden sm:inline-block" />
+   526→              Сургалт
+   527→            </TabsTrigger>
+   528→            <TabsTrigger value="students" className="gap-1 text-xs sm:text-sm">
+   529→              <Users className="w-4 h-4 hidden sm:inline-block" />
+   530→              Оюутан
+   531→            </TabsTrigger>
+   532→          </TabsList>
+   533→
+   534→          {/* ========== EXAMS TAB ========== */}
+   535→          <TabsContent value="exams">
+   536→            <div className="flex items-center justify-between mb-6">
+   537→              <h2 className="text-lg font-semibold text-brand-900">Шалгалтууд</h2>
+   538→              <Button
+   539→                onClick={() => {
+   540→                  setExamCode(generateCode());
+   541→                  setCreateDialogOpen(true);
+   542→                }}
+   543→                className="bg-brand-600 hover:bg-brand-700"
+   544→              >
+   545→                <Plus className="w-4 h-4 mr-2" />
+   546→                Шинэ шалгалт
+   547→              </Button>
+   548→            </div>
+   549→
+   550→            {exams.length === 0 ? (
+   551→              <Card>
+   552→                <CardContent className="py-16 text-center">
+   553→                  <ClipboardList className="w-12 h-12 text-brand-300 mx-auto mb-4" />
+   554→                  <p className="text-muted-foreground">
+   555→                    Одоогоор шалгалт байхгүй байна
+   556→                  </p>
+   557→                </CardContent>
+   558→              </Card>
+   559→            ) : (
+   560→              <div className="space-y-4">
+   561→                {exams.map((exam) => (
+   562→                  <motion.div
+   563→                    key={exam.id}
+   564→                    initial={{ opacity: 0, y: 10 }}
+   565→                    animate={{ opacity: 1, y: 0 }}
+   566→                  >
+   567→                    <Card className="hover:shadow-md transition-shadow">
+   568→                      <CardContent className="p-4">
+   569→                        <div className="flex items-center justify-between flex-wrap gap-3">
+   570→                          <div className="flex-1 min-w-0">
+   571→                            <div className="flex items-center gap-2 mb-1">
+   572→                              <h3 className="font-semibold text-brand-900 truncate">
+   573→                                {exam.title}
+   574→                              </h3>
+   575→                              <Badge
+   576→                                variant={exam.isActive ? "default" : "secondary"}
+   577→                              >
+   578→                                {exam.isActive ? "Идэвхтэй" : "Идэвхгүй"}
+   579→                              </Badge>
+   580→                            </div>
+   581→                            <div className="flex items-center gap-4 text-sm text-muted-foreground">
+   582→                              <span className="font-mono bg-gray-100 px-2 py-1 rounded">
+   583→                                Код: {exam.code}
+   584→                              </span>
+   585→                              <span className="flex items-center gap-1">
+   586→                                <Users className="w-3 h-3" />{" "}
+   587→                                {exam._count.attempts} оролтогч
+   588→                              </span>
+   589→                            </div>
+   590→                          </div>
+   591→                          <div className="flex items-center gap-2">
+   592→                            <Button
+   593→                              size="sm"
+   594→                              variant="outline"
+   595→                              onClick={() => handleViewResults(exam.id)}
+   596→                              disabled={exam._count.attempts === 0}
+   597→                            >
+   598→                              <BarChart3 className="w-4 h-4 mr-1" /> Үр дүн
+   599→                            </Button>
+   600→                            <Button
+   601→                              size="sm"
+   602→                              variant={
+   603→                                exam.isActive ? "destructive" : "default"
+   604→                              }
+   605→                              onClick={() => handleToggleExam(exam)}
+   606→                            >
+   607→                              {exam.isActive ? (
+   608→                                <>
+   609→                                  <Square className="w-4 h-4 mr-1" /> Зогсоох
+   610→                                </>
+   611→                              ) : (
+   612→                                <>
+   613→                                  <Play className="w-4 h-4 mr-1" /> Эхлүүлэх
+   614→                                </>
+   615→                              )}
+   616→                            </Button>
+   617→                            <Button
+   618→                              size="sm"
+   619→                              variant="ghost"
+   620→                              onClick={() => handleDeleteExam(exam.id)}
+   621→                            >
+   622→                              <Trash2 className="w-4 h-4 text-red-500" />
+   623→                            </Button>
+   624→                          </div>
+   625→                        </div>
+   626→                      </CardContent>
+   627→                    </Card>
+   628→                  </motion.div>
+   629→                ))}
+   630→              </div>
+   631→            )}
+   632→          </TabsContent>
+   633→
+   634→          {/* ========== QUIZZES TAB ========== */}
+   635→          <TabsContent value="quizzes">
+   636→            <div className="flex items-center justify-between mb-6">
+   637→              <h2 className="text-lg font-semibold text-brand-900">
+   638→                Мэдлэг сорих сорилууд
+   639→              </h2>
+   640→              <Button
+   641→                onClick={handleSeedQuizzes}
+   642→                disabled={seeding || quizzes.length > 0}
+   643→                className="bg-brand-600 hover:bg-brand-700"
+   644→              >
+   645→                {seeding ? (
+   646→                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+   647→                ) : (
+   648→                  <Plus className="w-4 h-4 mr-2" />
+   649→                )}
+   650→                {quizzes.length > 0
+   651→                  ? "Сорил аль хэдийн байна"
+   652→                  : "Сорил үүсгэх (12 сорил)"}
+   653→              </Button>
+   654→            </div>
+   655→
+   656→            {quizzes.length === 0 ? (
+   657→              <Card>
+   658→                <CardContent className="py-16 text-center">
+   659→                  <BookOpen className="w-12 h-12 text-brand-300 mx-auto mb-4" />
+   660→                  <p className="text-muted-foreground mb-4">
+   661→                    Одоогоор сорил байхгүй байна
+   662→                  </p>
+   663→                  <p className="text-sm text-muted-foreground">
+   664→                    &quot;Сорил үүсгэх&quot; товч дээр дарж 12 сорил (20 асуулт
+   665→                    бүхий) үүсгэнэ үү
+   666→                  </p>
+   667→                </CardContent>
+   668→              </Card>
+   669→            ) : (
+   670→              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+   671→                {quizzes.map((quiz) => (
+   672→                  <Card key={quiz.id} className="hover:shadow-md transition-shadow">
+   673→                    <CardHeader className="pb-2">
+   674→                      <CardTitle className="text-base">{quiz.title}</CardTitle>
+   675→                    </CardHeader>
+   676→                    <CardContent>
+   677→                      <p className="text-sm text-muted-foreground mb-3">
+   678→                        {quiz.description}
+   679→                      </p>
+   680→                      <div className="flex items-center gap-2">
+   681→                        <Badge variant="outline">
+   682→                          {quiz.questionCount} асуулт
+   683→                        </Badge>
+   684→                        <Badge variant="outline">{quiz.slug}</Badge>
+   685→                      </div>
+   686→                    </CardContent>
+   687→                  </Card>
+   688→                ))}
+   689→              </div>
+   690→            )}
+   691→          </TabsContent>
+   692→
+   693→          {/* ========== COURSES TAB ========== */}
+   694→          <TabsContent value="courses">
+   695→            <div className="flex items-center justify-between mb-6">
+   696→              <h2 className="text-lg font-semibold text-brand-900">Сургалтууд</h2>
+   697→              <Button
+   698→                onClick={() => setCourseDialogOpen(true)}
+   699→                className="bg-brand-600 hover:bg-brand-700"
+   700→              >
+   701→                <Plus className="w-4 h-4 mr-2" />
+   702→                Шинэ сургалт
+   703→              </Button>
+   704→            </div>
+   705→
+   706→            {courses.length === 0 ? (
+   707→              <Card>
+   708→                <CardContent className="py-16 text-center">
+   709→                  <GraduationCap className="w-12 h-12 text-brand-300 mx-auto mb-4" />
+   710→                  <p className="text-muted-foreground">
+   711→                    Одоогоор сургалт байхгүй байна
+   712→                  </p>
+   713→                </CardContent>
+   714→              </Card>
+   715→            ) : (
+   716→              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+   717→                {courses.map((course) => (
+   718→                  <Card key={course.id} className="hover:shadow-md transition-shadow">
+   719→                    <CardHeader className="pb-2">
+   720→                      <div className="flex items-start justify-between">
+   721→                        <CardTitle className="text-base">{course.title}</CardTitle>
+   722→                        <Button
+   723→                          size="icon"
+   724→                          variant="ghost"
+   725→                          className="h-8 w-8 shrink-0"
+   726→                          onClick={() => handleDeleteCourse(course.id)}
+   727→                        >
+   728→                          <Trash2 className="w-4 h-4 text-red-500" />
+   729→                        </Button>
+   730→                      </div>
+   731→                    </CardHeader>
+   732→                    <CardContent>
+   733→                      <p className="text-sm text-muted-foreground mb-3 line-clamp-2">
+   734→                        {course.description}
+   735→                      </p>
+   736→                      <div className="flex flex-wrap items-center gap-2">
+   737→                        <Badge variant="outline">
+   738→                          {course.category === "staff"
+   739→                            ? "Ажилтны"
+   740→                            : course.category === "personal"
+   741→                            ? "Хувь хүний"
+   742→                            : "ISO"}
+   743→                        </Badge>
+   744→                        <Badge variant="outline">{course.duration}</Badge>
+   745→                        <Badge variant="outline">
+   746→                          {course.price
+   747→                            ? `${course.price.toLocaleString()}₮`
+   748→                            : "Үнэгүй"}
+   749→                        </Badge>
+   750→                        <Badge variant="secondary">
+   751→                          {course._count.registrations} бүртгүүлсэн
+   752→                        </Badge>
+   753→                      </div>
+   754→                    </CardContent>
+   755→                  </Card>
+   756→                ))}
+   757→              </div>
+   758→            )}
+   759→          </TabsContent>
+   760→
+   761→          {/* ========== STUDENTS TAB ========== */}
+   762→          <TabsContent value="students">
+   763→            <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
+   764→              <h2 className="text-lg font-semibold text-brand-900">
+   765→                Оюутнууд ({students.length})
+   766→              </h2>
+   767→              <div className="relative">
+   768→                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+   769→                <Input
+   770→                  value={studentSearch}
+   771→                  onChange={(e) => setStudentSearch(e.target.value)}
+   772→                  placeholder="Хайх..."
+   773→                  className="pl-10 w-64"
+   774→                />
+   775→              </div>
+   776→            </div>
+   777→
+   778→            {students.length === 0 ? (
+   779→              <Card>
+   780→                <CardContent className="py-16 text-center">
+   781→                  <Users className="w-12 h-12 text-brand-300 mx-auto mb-4" />
+   782→                  <p className="text-muted-foreground">Одоогоор оюутан байхгүй байна</p>
+   783→                </CardContent>
+   784→              </Card>
+   785→            ) : (
+   786→              <Card>
+   787→                <CardContent className="p-0">
+   788→                  <div className="max-h-[500px] overflow-y-auto">
+   789→                    <Table>
+   790→                      <TableHeader>
+   791→                        <TableRow>
+   792→                          <TableHead>№</TableHead>
+   793→                          <TableHead>Овог Нэр</TableHead>
+   794→                          <TableHead className="hidden md:table-cell">Имэйл</TableHead>
+   795→                          <TableHead className="hidden lg:table-cell">Утас</TableHead>
+   796→                          <TableHead className="hidden sm:table-cell">Сургалт</TableHead>
+   797→                          <TableHead className="hidden sm:table-cell">Шалгалт</TableHead>
+   798→                          <TableHead className="hidden lg:table-cell">Огноо</TableHead>
+   799→                        </TableRow>
+   800→                      </TableHeader>
+   801→                      <TableBody>
+   802→                        {filteredStudents.map((student, idx) => (
+   803→                          <TableRow
+   804→                            key={student.id}
+   805→                            className="cursor-pointer hover:bg-brand-50/50"
+   806→                            onClick={() => {
+   807→                              setSelectedStudent(student);
+   808→                              setStudentDetailOpen(true);
+   809→                            }}
+   810→                          >
+   811→                            <TableCell>{idx + 1}</TableCell>
+   812→                            <TableCell className="font-medium">
+   813→                              {student.lastName} {student.firstName}
+   814→                            </TableCell>
+   815→                            <TableCell className="hidden md:table-cell text-sm">
+   816→                              {student.email}
+   817→                            </TableCell>
+   818→                            <TableCell className="hidden lg:table-cell text-sm">
+   819→                              {student.phone}
+   820→                            </TableCell>
+   821→                            <TableCell className="hidden sm:table-cell">
+   822→                              <Badge variant="secondary">{student.courseCount}</Badge>
+   823→                            </TableCell>
+   824→                            <TableCell className="hidden sm:table-cell">
+   825→                              <Badge variant="secondary">{student.examAttemptCount}</Badge>
+   826→                            </TableCell>
+   827→                            <TableCell className="hidden lg:table-cell text-sm text-muted-foreground">
+   828→                              {new Date(student.createdAt).toLocaleDateString("mn-MN")}
+   829→                            </TableCell>
+   830→                          </TableRow>
+   831→                        ))}
+   832→                      </TableBody>
+   833→                    </Table>
+   834→                  </div>
+   835→                </CardContent>
+   836→              </Card>
+   837→            )}
+   838→          </TabsContent>
+   839→        </Tabs>
+   840→      </div>
+   841→
+   842→      {/* ========== CREATE EXAM DIALOG ========== */}
+   843→      <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
+   844→        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+   845→          <DialogHeader>
+   846→            <DialogTitle className="text-brand-900">Шинэ шалгалт үүсгэх</DialogTitle>
+   847→          </DialogHeader>
+   848→
+   849→          <div className="space-y-6">
+   850→            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+   851→              <div>
+   852→                <Label>Шалгалтын нэр</Label>
+   853→                <Input
+   854→                  value={examTitle}
+   855→                  onChange={(e) => setExamTitle(e.target.value)}
+   856→                  placeholder="Шалгалтын нэр"
+   857→                />
+   858→              </div>
+   859→              <div>
+   860→                <Label>Код</Label>
+   861→                <div className="flex gap-2">
+   862→                  <Input
+   863→                    value={examCode}
+   864→                    onChange={(e) => setExamCode(e.target.value)}
+   865→                    placeholder="ABC123"
+   866→                    className="font-mono"
+   867→                  />
+   868→                  <Button
+   869→                    variant="outline"
+   870→                    size="icon"
+   871→                    onClick={() => setExamCode(generateCode())}
+   872→                  >
+   873→                    <Copy className="w-4 h-4" />
+   874→                  </Button>
+   875→                </div>
+   876→              </div>
+   877→              <div>
+   878→                <Label>Цаг (минут)</Label>
+   879→                <Input
+   880→                  type="number"
+   881→                  value={examTimeLimit}
+   882→                  onChange={(e) => setExamTimeLimit(e.target.value)}
+   883→                  min="5"
+   884→                  max="180"
+   885→                />
+   886→              </div>
+   887→            </div>
+   888→
+   889→            <div className="border rounded-xl p-4 space-y-3 bg-gray-50">
+   890→              <h4 className="font-semibold text-brand-900">
+   891→                Асуулт нэмэх ({newQuestions.length} асуулт)
+   892→              </h4>
+   893→              <Textarea
+   894→                value={currentQ.questionText}
+   895→                onChange={(e) =>
+   896→                  setCurrentQ({ ...currentQ, questionText: e.target.value })
+   897→                }
+   898→                placeholder="Асуултын текст"
+   899→                rows={2}
+   900→              />
+   901→              <div className="grid grid-cols-2 gap-3">
+   902→                <Input
+   903→                  value={currentQ.optionA}
+   904→                  onChange={(e) =>
+   905→                    setCurrentQ({ ...currentQ, optionA: e.target.value })
+   906→                  }
+   907→                  placeholder="A) Хариулт"
+   908→                />
+   909→                <Input
+   910→                  value={currentQ.optionB}
+   911→                  onChange={(e) =>
+   912→                    setCurrentQ({ ...currentQ, optionB: e.target.value })
+   913→                  }
+   914→                  placeholder="B) Хариулт"
+   915→                />
+   916→                <Input
+   917→                  value={currentQ.optionC}
+   918→                  onChange={(e) =>
+   919→                    setCurrentQ({ ...currentQ, optionC: e.target.value })
+   920→                  }
+   921→                  placeholder="C) Хариулт"
+   922→                />
+   923→                <Input
+   924→                  value={currentQ.optionD}
+   925→                  onChange={(e) =>
+   926→                    setCurrentQ({ ...currentQ, optionD: e.target.value })
+   927→                  }
+   928→                  placeholder="D) Хариулт"
+   929→                />
+   930→              </div>
+   931→              <div className="flex items-center gap-3">
+   932→                <Label>Зөв хариулт:</Label>
+   933→                <div className="flex gap-2">
+   934→                  {["A", "B", "C", "D"].map((letter, idx) => (
+   935→                    <button
+   936→                      key={letter}
+   937→                      onClick={() =>
+   938→                        setCurrentQ({ ...currentQ, correctIndex: idx })
+   939→                      }
+   940→                      className={`w-10 h-10 rounded-lg font-bold transition-all ${
+   941→                        currentQ.correctIndex === idx
+   942→                          ? "bg-brand-600 text-white"
+   943→                          : "bg-white border-2 border-gray-200 hover:border-brand-300"
+   944→                      }`}
+   945→                    >
+   946→                      {letter}
+   947→                    </button>
+   948→                  ))}
+   949→                </div>
+   950→                <Button
+   951→                  onClick={addQuestion}
+   952→                  className="ml-auto bg-brand-600 hover:bg-brand-700"
+   953→                >
+   954→                  <Plus className="w-4 h-4 mr-1" /> Нэмэх
+   955→                </Button>
+   956→              </div>
+   957→            </div>
+   958→
+   959→            {newQuestions.length > 0 && (
+   960→              <div className="space-y-2 max-h-60 overflow-y-auto">
+   961→                <h4 className="text-sm font-medium text-muted-foreground">
+   962→                  Нэмэгдсэн асуултууд:
+   963→                </h4>
+   964→                {newQuestions.map((q, idx) => (
+   965→                  <div
+   966→                    key={idx}
+   967→                    className="flex items-center gap-2 p-2 bg-white border rounded-lg text-sm"
+   968→                  >
+   969→                    <span className="font-mono text-brand-600 font-bold w-8">
+   970→                      {idx + 1}.
+   971→                    </span>
+   972→                    <span className="flex-1 truncate">{q.questionText}</span>
+   973→                    <Badge variant="outline" className="text-xs">
+   974→                      Зөв: {["A", "B", "C", "D"][q.correctIndex]}
+   975→                    </Badge>
+   976→                    <Button
+   977→                      variant="ghost"
+   978→                      size="icon"
+   979→                      onClick={() => removeQuestion(idx)}
+   980→                    >
+   981→                      <X className="w-4 h-4 text-red-500" />
+   982→                    </Button>
+   983→                  </div>
+   984→                ))}
+   985→              </div>
+   986→            )}
+   987→
+   988→            <DialogFooter>
+   989→              <Button
+   990→                variant="outline"
+   991→                onClick={() => setCreateDialogOpen(false)}
+   992→              >
+   993→                Хаах
+   994→              </Button>
+   995→              <Button
+   996→                onClick={handleCreateExam}
+   997→                className="bg-brand-600 hover:bg-brand-700"
+   998→                disabled={loading || newQuestions.length < 5}
+   999→              >
+  1000→                {loading
+  1001→                  ? "Хадгаж байна..."
+  1002→                  : `Хадгалах (${newQuestions.length} асуулт)`}
+  1003→              </Button>
+  1004→            </DialogFooter>
+  1005→          </div>
+  1006→        </DialogContent>
+  1007→      </Dialog>
+  1008→
+  1009→      {/* ========== RESULTS DIALOG ========== */}
+  1010→      <Dialog open={resultsDialogOpen} onOpenChange={setResultsDialogOpen}>
+  1011→        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+  1012→          <DialogHeader>
+  1013→            <DialogTitle className="text-brand-900 flex items-center gap-2">
+  1014→              <BarChart3 className="w-5 h-5" />
+  1015→              Шалгалтын үр дүн
+  1016→            </DialogTitle>
+  1017→          </DialogHeader>
+  1018→
+  1019→          {examResults && (
+  1020→            <div className="space-y-4">
+  1021→              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+  1022→                <div className="bg-brand-50 rounded-xl p-4 text-center">
+  1023→                  <Users className="w-5 h-5 text-brand-600 mx-auto mb-1" />
+  1024→                  <p className="text-2xl font-bold text-brand-900">
+  1025→                    {examResults.stats.total}
+  1026→                  </p>
+  1027→                  <p className="text-xs text-muted-foreground">Нийт</p>
+  1028→                </div>
+  1029→                <div className="bg-green-50 rounded-xl p-4 text-center">
+  1030→                  <Check className="w-5 h-5 text-green-600 mx-auto mb-1" />
+  1031→                  <p className="text-2xl font-bold text-green-700">
+  1032→                    {examResults.stats.passed}
+  1033→                  </p>
+  1034→                  <p className="text-xs text-muted-foreground">Тэнсэв</p>
+  1035→                </div>
+  1036→                <div className="bg-red-50 rounded-xl p-4 text-center">
+  1037→                  <X className="w-5 h-5 text-red-500 mx-auto mb-1" />
+  1038→                  <p className="text-2xl font-bold text-red-600">
+  1039→                    {examResults.stats.failed}
+  1040→                  </p>
+  1041→                  <p className="text-xs text-muted-foreground">Амжилтгүй</p>
+  1042→                </div>
+  1043→                <div className="bg-blue-50 rounded-xl p-4 text-center">
+  1044→                  <BarChart3 className="w-5 h-5 text-blue-600 mx-auto mb-1" />
+  1045→                  <p className="text-2xl font-bold text-blue-700">
+  1046→                    {examResults.stats.average}%
+  1047→                  </p>
+  1048→                  <p className="text-xs text-muted-foreground">Дундаж</p>
+  1049→                </div>
+  1050→              </div>
+  1051→
+  1052→              {examResults.results.length > 0 ? (
+  1053→                <Table>
+  1054→                  <TableHeader>
+  1055→                    <TableRow>
+  1056→                      <TableHead>№</TableHead>
+  1057→                      <TableHead>Овог Нэр</TableHead>
+  1058→                      <TableHead>Оноо</TableHead>
+  1059→                      <TableHead>Нийт</TableHead>
+  1060→                      <TableHead>Үр дүн</TableHead>
+  1061→                      <TableHead>Огноо</TableHead>
+  1062→                    </TableRow>
+  1063→                  </TableHeader>
+  1064→                  <TableBody>
+  1065→                    {examResults.results.map((r, idx) => (
+  1066→                      <TableRow key={r.id}>
+  1067→                        <TableCell>{idx + 1}</TableCell>
+  1068→                        <TableCell className="font-medium">
+  1069→                          {r.userName}
+  1070→                        </TableCell>
+  1071→                        <TableCell>{r.score}</TableCell>
+  1072→                        <TableCell>{r.total}</TableCell>
+  1073→                        <TableCell>
+  1074→                          <Badge
+  1075→                            variant={r.passed ? "default" : "destructive"}
+  1076→                          >
+  1077→                            {r.passed ? "Тэнсэв" : "Амжилтгүй"}
+  1078→                          </Badge>
+  1079→                        </TableCell>
+  1080→                        <TableCell className="text-sm text-muted-foreground">
+  1081→                          {new Date(r.createdAt).toLocaleString("mn-MN")}
+  1082→                        </TableCell>
+  1083→                      </TableRow>
+  1084→                    ))}
+  1085→                  </TableBody>
+  1086→                </Table>
+  1087→              ) : (
+  1088→                <p className="text-center py-8 text-muted-foreground">
+  1089→                  Одоогоор оролтогч байхгүй
+  1090→                </p>
+  1091→              )}
+  1092→
+  1093→              {examResults.results.length > 0 && resultsExamId && (
+  1094→                <div className="flex justify-end gap-3 pt-4 border-t">
+  1095→                  <Button
+  1096→                    variant="outline"
+  1097→                    onClick={() =>
+  1098→                      handleExport(resultsExamId, "csv")
+  1099→                    }
+  1100→                  >
+  1101→                    <FileText className="w-4 h-4 mr-2" />
+  1102→                    CSV татах
+  1103→                  </Button>
+  1104→                  <Button
+  1105→                    onClick={() =>
+  1106→                      handleExport(resultsExamId, "excel")
+  1107→                    }
+  1108→                    className="bg-brand-600 hover:bg-brand-700"
+  1109→                  >
+  1110→                    <FileSpreadsheet className="w-4 h-4 mr-2" />
+  1111→                    Excel татах
+  1112→                  </Button>
+  1113→                </div>
+  1114→              )}
+  1115→            </div>
+  1116→          )}
+  1117→        </DialogContent>
+  1118→      </Dialog>
+  1119→
+  1120→      {/* ========== CREATE COURSE DIALOG ========== */}
+  1121→      <Dialog open={courseDialogOpen} onOpenChange={setCourseDialogOpen}>
+  1122→        <DialogContent className="sm:max-w-lg">
+  1123→          <DialogHeader>
+  1124→            <DialogTitle className="text-brand-900">Шинэ сургалт үүсгэх</DialogTitle>
+  1125→          </DialogHeader>
+  1126→
+  1127→          <div className="space-y-4">
+  1128→            <div>
+  1129→              <Label>Сургалтын нэр *</Label>
+  1130→              <Input
+  1131→                value={courseForm.title}
+  1132→                onChange={(e) =>
+  1133→                  setCourseForm({ ...courseForm, title: e.target.value })
+  1134→                }
+  1135→                placeholder="Сургалтын нэр"
+  1136→              />
+  1137→            </div>
+  1138→            <div className="grid grid-cols-2 gap-4">
+  1139→              <div>
+  1140→                <Label>Ангилал</Label>
+  1141→                <Select
+  1142→                  value={courseForm.category}
+  1143→                  onValueChange={(v) =>
+  1144→                    setCourseForm({ ...courseForm, category: v })
+  1145→                  }
+  1146→                >
+  1147→                  <SelectTrigger>
+  1148→                    <SelectValue />
+  1149→                  </SelectTrigger>
+  1150→                  <SelectContent>
+  1151→                    <SelectItem value="staff">Ажилтны сургалт</SelectItem>
+  1152→                    <SelectItem value="personal">Хувь хүний сургалт</SelectItem>
+  1153→                    <SelectItem value="iso">ISO сургалт</SelectItem>
+  1154→                  </SelectContent>
+  1155→                </Select>
+  1156→              </div>
+  1157→              <div>
+  1158→                <Label>Хугацаа</Label>
+  1159→                <Input
+  1160→                  value={courseForm.duration}
+  1161→                  onChange={(e) =>
+  1162→                    setCourseForm({ ...courseForm, duration: e.target.value })
+  1163→                  }
+  1164→                  placeholder="Жишээ: 16 цаг"
+  1165→                />
+  1166→              </div>
+  1167→            </div>
+  1168→            <div>
+  1169→              <Label>Тайлбар *</Label>
+  1170→              <Textarea
+  1171→                value={courseForm.description}
+  1172→                onChange={(e) =>
+  1173→                  setCourseForm({ ...courseForm, description: e.target.value })
+  1174→                }
+  1175→                placeholder="Сургалтын дэлгэрэнгүй тайлбар"
+  1176→                rows={3}
+  1177→              />
+  1178→            </div>
+  1179→            <div className="grid grid-cols-2 gap-4">
+  1180→              <div>
+  1181→                <Label>Үнэ (₮)</Label>
+  1182→                <Input
+  1183→                  type="number"
+  1184→                  value={courseForm.price}
+  1185→                  onChange={(e) =>
+  1186→                    setCourseForm({ ...courseForm, price: e.target.value })
+  1187→                  }
+  1188→                  placeholder="Хоосон бол үнэгүй"
+  1189→                />
+  1190→              </div>
+  1191→              <div>
+  1192→                <Label>Макс оюутан</Label>
+  1193→                <Input
+  1194→                  type="number"
+  1195→                  value={courseForm.maxStudents}
+  1196→                  onChange={(e) =>
+  1197→                    setCourseForm({ ...courseForm, maxStudents: e.target.value })
+  1198→                  }
+  1199→                  placeholder="Хоосон бол хязгааргүй"
+  1200→                />
+  1201→              </div>
+  1202→            </div>
+  1203→
+  1204→            <DialogFooter>
+  1205→              <Button
+  1206→                variant="outline"
+  1207→                onClick={() => setCourseDialogOpen(false)}
+  1208→              >
+  1209→                Хаах
+  1210→              </Button>
+  1211→              <Button
+  1212→                onClick={handleCreateCourse}
+  1213→                className="bg-brand-600 hover:bg-brand-700"
+  1214→                disabled={loading}
+  1215→              >
+  1216→                {loading ? "Хадгаж байна..." : "Хадгалах"}
+  1217→              </Button>
+  1218→            </DialogFooter>
+  1219→          </div>
+  1220→        </DialogContent>
+  1221→      </Dialog>
+  1222→
+  1223→      {/* ========== STUDENT DETAIL DIALOG ========== */}
+  1224→      <Dialog open={studentDetailOpen} onOpenChange={setStudentDetailOpen}>
+  1225→        <DialogContent className="sm:max-w-lg">
+  1226→          <DialogHeader>
+  1227→            <DialogTitle className="text-brand-900">Оюутны мэдээлэл</DialogTitle>
+  1228→          </DialogHeader>
+  1229→
+  1230→          {selectedStudent && (
+  1231→            <div className="space-y-4">
+  1232→              <div className="grid grid-cols-2 gap-4">
+  1233→                <div>
+  1234→                  <Label className="text-muted-foreground">Овог</Label>
+  1235→                  <p className="font-medium">{selectedStudent.lastName}</p>
+  1236→                </div>
+  1237→                <div>
+  1238→                  <Label className="text-muted-foreground">Нэр</Label>
+  1239→                  <p className="font-medium">{selectedStudent.firstName}</p>
+  1240→                </div>
+  1241→                <div>
+  1242→                  <Label className="text-muted-foreground">Имэйл</Label>
+  1243→                  <p className="font-medium text-sm">{selectedStudent.email}</p>
+  1244→                </div>
+  1245→                <div>
+  1246→                  <Label className="text-muted-foreground">Утас</Label>
+  1247→                  <p className="font-medium text-sm">{selectedStudent.phone}</p>
+  1248→                </div>
+  1249→                {selectedStudent.address && (
+  1250→                  <div className="col-span-2">
+  1251→                    <Label className="text-muted-foreground">Хаяг</Label>
+  1252→                    <p className="font-medium text-sm">{selectedStudent.address}</p>
+  1253→                  </div>
+  1254→                )}
+  1255→                {selectedStudent.secondaryPhone && (
+  1256→                  <div>
+  1257→                    <Label className="text-muted-foreground">2-р утас</Label>
+  1258→                    <p className="font-medium text-sm">
+  1259→                      {selectedStudent.secondaryPhone}
+  1260→                    </p>
+  1261→                  </div>
+  1262→                )}
+  1263→              </div>
+  1264→
+  1265→              <div className="border-t pt-4">
+  1266→                <h4 className="font-semibold text-brand-900 mb-3">Статистик</h4>
+  1267→                <div className="grid grid-cols-3 gap-4">
+  1268→                  <div className="bg-brand-50 rounded-xl p-3 text-center">
+  1269→                    <GraduationCap className="w-5 h-5 text-brand-600 mx-auto mb-1" />
+  1270→                    <p className="text-lg font-bold text-brand-900">
+  1271→                      {selectedStudent.courseCount}
+  1272→                    </p>
+  1273→                    <p className="text-xs text-muted-foreground">Сургалт</p>
+  1274→                  </div>
+  1275→                  <div className="bg-brand-50 rounded-xl p-3 text-center">
+  1276→                    <ClipboardList className="w-5 h-5 text-brand-600 mx-auto mb-1" />
+  1277→                    <p className="text-lg font-bold text-brand-900">
+  1278→                      {selectedStudent.examAttemptCount}
+  1279→                    </p>
+  1280→                    <p className="text-xs text-muted-foreground">Шалгалт</p>
+  1281→                  </div>
+  1282→                  <div className="bg-brand-50 rounded-xl p-3 text-center">
+  1283→                    <BookOpen className="w-5 h-5 text-brand-600 mx-auto mb-1" />
+  1284→                    <p className="text-lg font-bold text-brand-900">
+  1285→                      {selectedStudent.quizAttemptCount}
+  1286→                    </p>
+  1287→                    <p className="text-xs text-muted-foreground">Сорил</p>
+  1288→                  </div>
+  1289→                </div>
+  1290→              </div>
+  1291→
+  1292→              <div className="text-sm text-muted-foreground">
+  1293→                Бүртгэгдсэн:{" "}
+  1294→                {new Date(selectedStudent.createdAt).toLocaleString("mn-MN")}
+  1295→              </div>
+  1296→            </div>
+  1297→          )}
+  1298→        </DialogContent>
+  1299→      </Dialog>
+  1300→    </div>
+  1301→  );
+  1302→}
+  1303→

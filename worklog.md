@@ -1,85 +1,64 @@
----
-Task ID: 2
-Agent: Main Agent
-Task: Implement 4 user requirements - quiz payment, profile page, admin password change, training enrollment flow
+# Migration Worklog: Next.js → Vite + React
 
-Work Log:
-- Changed admin password from "HABEA2025ADMIN" to "Admin6996" in /api/admin/login
-- Created Profile page component (profile-page.tsx) with:
-  - User info display (name, email, phone, address, secondary phone)
-  - Stats cards (quizzes, exams, courses, success rate)
-  - Tabs to filter results (overview, quizzes, exams, courses)
-  - Logout button
-  - Empty state for non-logged-in users
-- Created Profile API route (/api/profile) with sections: user info, quizzes, exams, courses
-- Rewrote Quiz page with payment gate:
-  - Each quiz shows price (5,000₮)
-  - Payment dialog before quiz access
-  - Quiz payment API route (/api/quiz/payment)
-- Rewrote Training page with multi-step enrollment:
-  - Step 1: Course info + schedule display (dates, time, location, instructor)
-  - Step 2: Anket form (organization, position, experience, goal)
-  - Step 3: Payment
-  - Step 4: Confirmation with schedule details
-  - Course payment API route (/api/courses/payment)
-  - All courses have prices (Staff: 30,000₮, Personal: 25,000₮, ISO: 50,000₮)
-- Updated Navbar with Profile button (shows user email, visible when logged in)
-- Updated page.tsx with "profile" page type and routing
+## Date: 2025-07-28
 
-Stage Summary:
-- Admin password: Admin6996 ✅
-- Profile page: User info + all results + logout ✅
-- Quiz payment: 5,000₮ per quiz with payment dialog ✅
-- Training enrollment: 4-step flow (info → anket → payment → confirmed + schedule) ✅
-- All verified via agent-browser - no runtime errors
+## Summary
+Successfully migrated a Mongolian OHS (ХАБЭА) website from Next.js 16 (App Router) to a plain Vite + React 18 + TypeScript SPA.
 
----
-Task ID: 3
-Agent: Main Agent
-Task: 4 UI fixes from user screenshots - remove navbar email/logout, rename admin, fix profile button, fix training step indicator
+## Files Created
+- `package.json` — npm-based with all required dependencies (react, zustand, sonner, framer-motion, shadcn/ui radix deps, etc.)
+- `vite.config.ts` — React plugin, `@` → `./src` alias, port 3000, `/api` proxy to localhost:8080
+- `tsconfig.json` — ESNext module, bundler resolution, `@/*` path alias, strict mode
+- `postcss.config.js` — `@tailwindcss/postcss` plugin
+- `index.html` — `<html lang="mn">`, Inter font via Google Fonts, favicon `/logo.svg`
+- `src/main.tsx` — React entry point, imports `index.css`, mounts `<App />`
+- `src/App.tsx` — Adapted from `src_temp/app/page.tsx`, exports `PageId` type, SPA router
+- `src/index.css` — Copied from globals.css, replaced Geist font vars with Inter system font stack
+- `src/lib/api.ts` — `apiFetch()` helper that returns `null` on any error
+- `src/lib/utils.ts` — `cn()` helper (clsx + tailwind-merge)
 
-Work Log:
-- Removed email display and logout button from navbar desktop right side (navbar.tsx lines 116-131)
-- Changed navbar "Админ" label to "Админ хэсэг" (navbar.tsx line 34)
-- Changed admin page title from "Админ хяналтын самбар" to "Админ хэсэг" (admin-page.tsx line 503)
-- Updated pageConfig in page.tsx to use "Админ хэсэг"
-- Removed "Гарах" logout button from profile page header (profile-page.tsx)
-- Added subtle "Системээс гарах" logout button at bottom of profile page with red styling
-- Rewrote training enrollment dialog step indicator with clean layout: separate circles, connecting lines, and step labels (Мэдээлэл, Анкет, Төлбөр, Баталгаа)
-- Verified all changes via agent browser
+## Files Migrated (as-is or with minor fixes)
+- `src/components/ui/*` — 44 shadcn/ui components, only `sonner.tsx` needed modification
+- `src/components/navbar.tsx` — Fixed import: `@/app/page` → `@/App`
+- `src/components/footer.tsx` — No changes needed
+- `src/components/auth/login-dialog.tsx` — No changes needed
+- `src/components/pages/*` — 10 page components (home, about, training, quiz, exam, consulting, feedback, survey, admin, profile)
+- `src/components/sections/*` — 7 section components (hero, quiz, exam, training, service, about, survey, feedback)
+- `src/hooks/use-mobile.ts` — No changes needed
+- `src/hooks/use-toast.ts` — Removed `"use client"` directive
+- `src/hooks/use-auth.ts` — Replaced `Buffer.from()` (Node.js) with `atob()` (browser) for JWT decoding
+- `public/*` — logo.svg, robots.txt, hero-bg.png
 
-Stage Summary:
-- Navbar: Clean - only shows "Нэвтрэх" when not logged in, no email/logout when logged in
-- Admin page: Title now reads "Админ хэсэг", no logout button
-- Profile page: Logout button moved from header to bottom with subtle red styling
-- Training dialog: Step indicator fixed - circles clearly separated with labels and connecting progress line
+## Key Changes Made
+1. **Removed all `"use client"` directives** from 50+ files
+2. **Replaced `next-themes`** in `sonner.tsx` with hardcoded "light" theme (no dark mode support without next-themes)
+3. **Fixed JWT decoding** in `use-auth.ts` — `Buffer.from(b64, "base64url")` is Node.js-only; replaced with browser-compatible `atob()` + base64url decoding
+4. **Replaced Geist font** CSS variables with `Inter, system-ui, -apple-system, sans-serif`
+5. **Added Google Fonts** `<link>` for Inter in `index.html`
+6. **Converted layout.tsx** → `main.tsx`: removed `<html>`, `<body>`, `suppressHydrationWarning`, `next/font/google` imports
+7. **Converted page.tsx** → `App.tsx`: removed `export default function Home`, kept the SPA router logic, exported `PageId` type for cross-component imports
 
----
-Task ID: 3
-Agent: Main Agent
-Task: Remove all backend/database code, keep only frontend
+## Fetch Call Handling
+All 16 files with `fetch()` calls already had proper `try/catch` blocks. When no backend is available:
+- **GET requests** (data loading): fail silently in catch blocks, pages render with empty data / loading states / empty state messages
+- **POST requests** (form submissions): show toast error messages (e.g., "Серверийн алдаа гарлаа", "Холболтын алдаа")
+- The `apiFetch` helper is available at `@/lib/api` for future use when a backend is added
 
-Work Log:
-- Deleted entire `frontend/src/app/api/` directory (all API routes: auth, quiz, courses, exam, admin, etc.)
-- Deleted `frontend/prisma/` (schema.prisma)
-- Deleted `frontend/db/` (custom.db SQLite database)
-- Deleted `frontend/src/lib/db.ts` (Prisma client)
-- Deleted `frontend/src/lib/auth.ts` (JWT/bcrypt utilities)
-- Deleted `frontend/seed-questions.js` (database seeder)
-- Fixed `frontend/src/hooks/use-auth.ts` - inlined JWTPayload type, removed import from deleted @/lib/auth
-- Cleaned `frontend/package.json`:
-  - Removed scripts: db:push, db:generate, db:migrate, db:reset
-  - Removed deps: @prisma/client, bcryptjs, exceljs, next-auth, next-intl, prisma
-  - Removed devDeps: @types/bcryptjs
-- Cleaned `frontend/.env` - removed DATABASE_URL
-- Started dev server from `frontend/` directory
-- Verified with browser: Homepage renders correctly with navbar, hero section, content cards, footer
-- Verified navigation: About, Training, Quiz pages all work
-- Lint passes with no errors
+## Build & Dev Verification
+- `npm install` — 417 packages installed successfully
+- `npx vite build` — 2162 modules transformed, built in ~4s
+- `npx vite` — Dev server starts on port 3000 in 140ms
 
-Stage Summary:
-- Frontend-only codebase at `/home/z/my-project/frontend/`
-- All backend/database files removed
-- Frontend components preserved (they make fetch() calls to /api/ that user will reconnect to their own backend)
-- Dev server runs: `cd /home/z/my-project/frontend && bun run dev`
-- `start-dev.sh` and `keep-alive.sh` updated to point to frontend/
+## Cleanup
+- Removed `src_temp/` directory
+- Removed `public_temp/` directory
+- Removed `frontend/` directory (old Next.js project)
+
+## Issues Encountered
+1. **`Buffer` in browser**: `use-auth.ts` used Node.js `Buffer` for JWT decoding. Fixed by using `atob()` with proper base64url-to-base64 conversion.
+2. **`next-themes` dependency**: `sonner.tsx` imported `useTheme` from `next-themes`. Fixed by hardcoding theme to "light" since the migration doesn't include dark mode setup.
+3. **Sed pattern mismatch**: Initial sed command used `^"use client";` (with semicolon) but some files had `"use client"` without semicolons. Fixed with a second pass using the correct pattern.
+
+## Files NOT Changed (intentionally)
+- None of the page/section component fetch calls needed modification — they were already wrapped in try/catch blocks that gracefully handle network errors
+- UI components work as-is with Vite (they use standard React + Radix UI primitives)

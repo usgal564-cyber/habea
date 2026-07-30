@@ -1,7 +1,8 @@
 #!/bin/bash
-cd /home/z/my-project/frontend
+cd /home/z/my-project
 while true; do
-  ./node_modules/.bin/next dev -p 3000 2>&1 | tee -a /home/z/my-project/dev.log
-  echo "RESTARTING..." >> /home/z/my-project/dev.log
+  echo "=== $(date) Starting Vite ===" >> /home/z/my-project/dev.log
+  npx vite --host >> /home/z/my-project/dev.log 2>&1
+  echo "=== $(date) Exited, restarting in 2s ===" >> /home/z/my-project/dev.log
   sleep 2
 done
