@@ -1,0 +1,1425 @@
+   260→
+   261→// ============================================================
+   262→// Quiz handlers
+   263→// ============================================================
+   264→
+   265→func GetQuizzesHandler(c *gin.Context) {
+   266→        var quizzes []Quiz
+   267→        if err := DB.Find(&quizzes).Error; err != nil {
+   268→                c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch quizzes"})
+   269→                return
+   270→        }
+   271→
+   272→        c.JSON(http.StatusOK, gin.H{"quizzes": quizzes})
+   273→}
+   274→
+   275→func QuizPaymentHandler(c *gin.Context) {
+   276→        var req QuizPaymentRequest
+   277→        if err := c.ShouldBindJSON(&req); err != nil {
+   278→                c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+   279→                return
+   280→        }
+   281→
+   282→        var quiz Quiz
+   283→        if err := DB.Where("id = ?", req.QuizID).First(&quiz).Error; err != nil {
+   284→                c.JSON(http.StatusNotFound, gin.H{"error": "Quiz not found"})
+   285→                return
+   286→        }
+   287→
+   288→        c.JSON(http.StatusOK, gin.H{
+   289→                "message": "Амжилттай",
+   290→                "paid":    true,
+   291→        })
+   292→}
+   293→
+   294→func QuizSubmitHandler(c *gin.Context) {
+   295→        var req QuizSubmitRequest
+   296→        if err := c.ShouldBindJSON(&req); err != nil {
+   297→                c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+   298→                return
+   299→        }
+   300→
+   301→        var questions []QuizQuestion
+   302→        if err := DB.Where("quiz_id = ?", req.QuizID).Order(""index" ASC").Find(&questions).Error; err != nil {
+   303→                c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch questions"})
+   304→                return
+   305→        }
+   306→
+   307→        if len(questions) == 0 {
+   308→                c.JSON(http.StatusNotFound, gin.H{"error": "Quiz has no questions"})
+   309→                return
+   310→        }
+   311→
+   312→        questionMap := make(map[string]QuizQuestion)
+   313→        for _, q := range questions {
+   314→                questionMap[q.ID] = q
+   315→        }
+   316→
+   317→        correct := 0
+   318→        total := len(questions)
+   319→        for _, ans := range req.Answers {
+   320→                if q, ok := questionMap[ans.QuestionID]; ok {
+   321→                        if ans.SelectedOption == q.Correct {
+   322→                                correct++
+   323→                        }
+   324→                }
+   325→        }
+   326→
+   327→        answersJSON, _ := json.Marshal(req.Answers)
+   328→        userID, _ := c.Get("userId")
+   329→
+   330→        attempt := QuizAttempt{
+   331→                ID:      uuid.New().String(),
+   332→                UserID:  userID.(string),
+   333→                QuizID:  req.QuizID,
+   334→                Score:   correct,
+   335→                Total:   total,
+   336→                Answers: string(answersJSON),
+   337→        }
+   338→        DB.Create(&attempt)
+   339→
+   340→        percentage := 0
+   341→        if total > 0 {
+   342→                percentage = (correct * 100) / total
+   343→        }
+   344→
+   345→        c.JSON(http.StatusOK, gin.H{
+   346→                "score":      correct,
+   347→                "total":      total,
+   348→                "correct":    correct,
+   349→                "percentage": percentage,
+   350→        })
+   351→}
+   352→
+   353→// ============================================================
+   354→// Exam handlers
+   355→// ============================================================
+   356→
+   357→func ExamHandler(c *gin.Context) {
+   358→        var req ExamActionRequest
+   359→        if err := c.ShouldBindJSON(&req); err != nil {
+   360→                c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+   361→                return
+   362→        }
+   363→
+   364→        switch req.Action {
+   365→        case "verify":
+   366→                verifyExamCode(c, req.Code)
+   367→        case "submit":
+   368→                submitExam(c, req)
+   369→        default:
+   370→                c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid action"})
+   371→        }
+   372→}
+   373→
+   374→func verifyExamCode(c *gin.Context, code string) {
+   375→        var exam Exam
+   376→        if err := DB.Where("code = ? AND is_active = ?", code, true).First(&exam).Error; err != nil {
+   377→                c.JSON(http.StatusNotFound, gin.H{"error": "Invalid or inactive exam code"})
+   378→                return
+   379→        }
+   380→
+   381→        c.JSON(http.StatusOK, gin.H{
+   382→                "exam": gin.H{
+   383→                        "id":            exam.ID,
+   384→                        "title":         exam.Title,
+   385→                        "duration":      exam.Duration,
+   386→                        "questionCount": exam.QuestionCount,
+   387→                },
+   388→        })
+   389→}
+   390→
+   391→func submitExam(c *gin.Context, req ExamActionRequest) {
+   392→        userID, _ := c.Get("userId")
+   393→
+   394→        var exam Exam
+   395→        if err := DB.Where("id = ?", req.ExamID).First(&exam).Error; err != nil {
+   396→                c.JSON(http.StatusNotFound, gin.H{"error": "Exam not found"})
+   397→                return
+   398→        }
+   399→
+   400→        if !exam.IsActive {
+   401→                c.JSON(http.StatusBadRequest, gin.H{"error": "Exam is not active"})
+   402→                return
+   403→        }
+   404→
+   405→        var questions []QuizQuestion
+   406→        DB.Where("quiz_id = ?", req.ExamID).Order(""index" ASC").Find(&questions)
+   407→
+   408→        score := 0
+   409→        total := len(questions)
+   410→        for i, answer := range req.Answers {
+   411→                if i < len(questions) && answer == questions[i].Correct {
+   412→                        score++
+   413→                }
+   414→        }
+   415→
+   416→        passed := false
+   417→        if total > 0 {
+   418→                passed = float64(score)/float64(total) >= 0.7
+   419→        }
+   420→
+   421→        answersJSON, _ := json.Marshal(req.Answers)
+   422→
+   423→        attempt := ExamAttempt{
+   424→                ID:      uuid.New().String(),
+   425→                ExamID:  req.ExamID,
+   426→                UserID:  userID.(string),
+   427→                Score:   score,
+   428→                Total:   total,
+   429→                Passed:  passed,
+   430→                Answers: string(answersJSON),
+   431→        }
+   432→
+   433→        if err := DB.Create(&attempt).Error; err != nil {
+   434→                c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save attempt"})
+   435→                return
+   436→        }
+   437→
+   438→        c.JSON(http.StatusOK, gin.H{
+   439→                "score":  score,
+   440→                "total":  total,
+   441→                "passed": passed,
+   442→        })
+   443→}
+   444→
+   445→// ============================================================
+   446→// Course handlers
+   447→// ============================================================
+   448→
+   449→func GetCoursesHandler(c *gin.Context) {
+   450→        var courses []Course
+   451→        if err := DB.Find(&courses).Error; err != nil {
+   452→                c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch courses"})
+   453→                return
+   454→        }
+   455→
+   456→        c.JSON(http.StatusOK, gin.H{"courses": courses})
+   457→}
+   458→
+   459→func CoursePaymentHandler(c *gin.Context) {
+   460→        var req CoursePaymentRequest
+   461→        if err := c.ShouldBindJSON(&req); err != nil {
+   462→                c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+   463→                return
+   464→        }
+   465→
+   466→        userID, _ := c.Get("userId")
+   467→
+   468→        var course Course
+   469→        if err := DB.Where("id = ?", req.CourseID).First(&course).Error; err != nil {
+   470→                c.JSON(http.StatusNotFound, gin.H{"error": "Course not found"})
+   471→                return
+   472→        }
+   473→
+   474→        enrollment := Enrollment{
+   475→                ID:       uuid.New().String(),
+   476→                UserID:   userID.(string),
+   477→                CourseID: req.CourseID,
+   478→                Paid:     true,
+   479→        }
+   480→
+   481→        if err := DB.Create(&enrollment).Error; err != nil {
+   482→                c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to process payment"})
+   483→                return
+   484→        }
+   485→
+   486→        c.JSON(http.StatusOK, gin.H{
+   487→                "message": "Амжилттай",
+   488→                "paid":    true,
+   489→        })
+   490→}
+   491→
+   492→// ============================================================
+   493→// Form handlers (public POST)
+   494→// ============================================================
+   495→
+   496→func ContactHandler(c *gin.Context) {
+   497→        var req ContactRequest
+   498→        if err := c.ShouldBindJSON(&req); err != nil {
+   499→                c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+   500→                return
+   501→        }
+   502→
+   503→        contact := ContactForm{
+   504→                ID:      uuid.New().String(),
+   505→                Name:    req.Name,
+   506→                Email:   req.Email,
+   507→                Phone:   req.Phone,
+   508→                Subject: req.Subject,
+   509→                Message: req.Message,
+   510→        }
+   511→
+   512→        if err := DB.Create(&contact).Error; err != nil {
+   513→                c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save contact"})
+   514→                return
+   515→        }
+   516→
+   517→        c.JSON(http.StatusOK, gin.H{"message": "Амжилттай"})
+   518→}
+   519→
+   520→func FeedbackHandler(c *gin.Context) {
+   521→        var req FeedbackRequest
+   522→        if err := c.ShouldBindJSON(&req); err != nil {
+   523→                c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+   524→                return
+   525→        }
+   526→
+   527→        feedback := Feedback{
+   528→                ID:      uuid.New().String(),
+   529→                Name:    req.Name,
+   530→                Email:   req.Email,
+   531→                Phone:   req.Phone,
+   532→                Message: req.Message,
+   533→                Rating:  req.Rating,
+   534→        }
+   535→
+   536→        if err := DB.Create(&feedback).Error; err != nil {
+   537→                c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save feedback"})
+   538→                return
+   539→        }
+   540→
+   541→        c.JSON(http.StatusOK, gin.H{"message": "Амжилттай"})
+   542→}
+   543→
+   544→func SurveyHandler(c *gin.Context) {
+   545→        var req SurveyRequest
+   546→        if err := c.ShouldBindJSON(&req); err != nil {
+   547→                c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+   548→                return
+   549→        }
+   550→
+   551→        survey := SurveyResponse{
+   552→                ID:        uuid.New().String(),
+   553→                Name:      req.Name,
+   554→                Email:     req.Email,
+   555→                Phone:     req.Phone,
+   556→                Responses: req.Responses,
+   557→        }
+   558→
+   559→        if err := DB.Create(&survey).Error; err != nil {
+   560→                c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save survey"})
+   561→                return
+   562→        }
+   563→
+   564→        c.JSON(http.StatusOK, gin.H{"message": "Амжилттай"})
+   565→}
+   566→
+   567→func ConsultationHandler(c *gin.Context) {
+   568→        var req ConsultationRequest
+   569→        if err := c.ShouldBindJSON(&req); err != nil {
+   570→                c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+   571→                return
+   572→        }
+   573→
+   574→        order := ServiceOrder{
+   575→                ID:          uuid.New().String(),
+   576→                Name:        req.Name,
+   577→                Email:       req.Email,
+   578→                Phone:       req.Phone,
+   579→                Company:     req.Company,
+   580→                ServiceType: req.ServiceType,
+   581→                Message:     req.Message,
+   582→        }
+   583→
+   584→        if err := DB.Create(&order).Error; err != nil {
+   585→                c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save consultation"})
+   586→                return
+   587→        }
+   588→
+   589→        c.JSON(http.StatusOK, gin.H{"message": "Амжилттай"})
+   590→}
+   591→
+   592→func ServiceOrderHandler(c *gin.Context) {
+   593→        var req ServiceOrderRequest
+   594→        if err := c.ShouldBindJSON(&req); err != nil {
+   595→                c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+   596→                return
+   597→        }
+   598→
+   599→        order := ServiceOrder{
+   600→                ID:          uuid.New().String(),
+   601→                Name:        req.Name,
+   602→                Email:       req.Email,
+   603→                Phone:       req.Phone,
+   604→                Company:     req.Company,
+   605→                ServiceType: req.ServiceType,
+   606→                Message:     req.Message,
+   607→                Date:        req.Date,
+   608→        }
+   609→
+   610→        if err := DB.Create(&order).Error; err != nil {
+   611→                c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save service order"})
+   612→                return
+   613→        }
+   614→
+   615→        c.JSON(http.StatusOK, gin.H{"message": "Амжилттай"})
+   616→}
+   617→
+   618→// ============================================================
+   619→// Profile handlers
+   620→// ============================================================
+   621→
+   622→func GetProfileHandler(c *gin.Context) {
+   623→        userID, _ := c.Get("userId")
+   624→        section := c.Query("section")
+   625→
+   626→        switch section {
+   627→        case "quizzes":
+   628→                getQuizResults(c, userID.(string))
+   629→        case "exams":
+   630→                getExamResults(c, userID.(string))
+   631→        case "courses":
+   632→                getCourseRegistrations(c, userID.(string))
+   633→        default:
+   634→                getBasicProfile(c, userID.(string))
+   635→        }
+   636→}
+   637→
+   638→func getBasicProfile(c *gin.Context, userID string) {
+   639→        var user User
+   640→        if err := DB.Where("id = ?", userID).First(&user).Error; err != nil {
+   641→                c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
+   642→                return
+   643→        }
+   644→
+   645→        c.JSON(http.StatusOK, gin.H{
+   646→                "user": gin.H{
+   647→                        "userId":         user.ID,
+   648→                        "email":          user.Email,
+   649→                        "role":           user.Role,
+   650→                        "firstName":      user.FirstName,
+   651→                        "lastName":       user.LastName,
+   652→                        "phone":          user.Phone,
+   653→                        "address":        user.Address,
+   654→                        "secondaryPhone": user.SecondaryPhone,
+   655→                },
+   656→        })
+   657→}
+   658→
+   659→func getQuizResults(c *gin.Context, userID string) {
+   660→        var attempts []QuizAttempt
+   661→        if err := DB.Where("user_id = ?", userID).Order("created_at DESC").Find(&attempts).Error; err != nil {
+   662→                c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch quiz results"})
+   663→                return
+   664→        }
+   665→
+   666→        type QuizResultItem struct {
+   667→                ID        string `json:"id"`
+   668→                QuizID    string `json:"quizId"`
+   669→                Score     int    `json:"score"`
+   670→                Total     int    `json:"total"`
+   671→                CreatedAt string `json:"createdAt"`
+   672→                Quiz      gin.H  `json:"quiz"`
+   673→        }
+   674→
+   675→        results := make([]QuizResultItem, len(attempts))
+   676→        for i, a := range attempts {
+   677→                var quiz Quiz
+   678→                DB.Select("id, title").Where("id = ?", a.QuizID).First(&quiz)
+   679→
+   680→                results[i] = QuizResultItem{
+   681→                        ID:        a.ID,
+   682→                        QuizID:    a.QuizID,
+   683→                        Score:     a.Score,
+   684→                        Total:     a.Total,
+   685→                        CreatedAt: a.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
+   686→                        Quiz:      gin.H{"title": quiz.Title},
+   687→                }
+   688→        }
+   689→
+   690→        c.JSON(http.StatusOK, gin.H{"quizzes": results})
+   691→}
+   692→
+   693→func getExamResults(c *gin.Context, userID string) {
+   694→        var attempts []ExamAttempt
+   695→        if err := DB.Where("user_id = ?", userID).Order("created_at DESC").Find(&attempts).Error; err != nil {
+   696→                c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch exam results"})
+   697→                return
+   698→        }
+   699→
+   700→        type ExamResultItem struct {
+   701→                ID        string `json:"id"`
+   702→                ExamID    string `json:"examId"`
+   703→                Score     int    `json:"score"`
+   704→                Total     int    `json:"total"`
+   705→                Passed    bool   `json:"passed"`
+   706→                CreatedAt string `json:"createdAt"`
+   707→                Exam      gin.H  `json:"exam"`
+   708→        }
+   709→
+   710→        results := make([]ExamResultItem, len(attempts))
+   711→        for i, a := range attempts {
+   712→                var exam Exam
+   713→                DB.Select("id, title").Where("id = ?", a.ExamID).First(&exam)
+   714→
+   715→                results[i] = ExamResultItem{
+   716→                        ID:        a.ID,
+   717→                        ExamID:    a.ExamID,
+   718→                        Score:     a.Score,
+   719→                        Total:     a.Total,
+   720→                        Passed:    a.Passed,
+   721→                        CreatedAt: a.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
+   722→                        Exam:      gin.H{"title": exam.Title},
+   723→                }
+   724→        }
+   725→
+   726→        c.JSON(http.StatusOK, gin.H{"exams": results})
+   727→}
+   728→
+   729→func getCourseRegistrations(c *gin.Context, userID string) {
+   730→        var enrollments []Enrollment
+   731→        if err := DB.Where("user_id = ?", userID).Order("created_at DESC").Find(&enrollments).Error; err != nil {
+   732→                c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch registrations"})
+   733→                return
+   734→        }
+   735→
+   736→        type CourseRegItem struct {
+   737→                ID        string `json:"id"`
+   738→                CourseID  string `json:"courseId"`
+   739→                Paid      bool   `json:"paid"`
+   740→                CreatedAt string `json:"createdAt"`
+   741→                Course    gin.H  `json:"course"`
+   742→        }
+   743→
+   744→        results := make([]CourseRegItem, len(enrollments))
+   745→        for i, e := range enrollments {
+   746→                var course Course
+   747→                DB.Select("id, title, category, duration").Where("id = ?", e.CourseID).First(&course)
+   748→
+   749→                results[i] = CourseRegItem{
+   750→                        ID:        e.ID,
+   751→                        CourseID:  e.CourseID,
+   752→                        Paid:      e.Paid,
+   753→                        CreatedAt: e.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
+   754→                        Course: gin.H{
+   755→                                "title":    course.Title,
+   756→                                "category": course.Category,
+   757→                                "duration": course.Duration,
+   758→                        },
+   759→                }
+   760→        }
+   761→
+   762→        c.JSON(http.StatusOK, gin.H{"courses": results})
+   763→}
+   764→
+   765→// ============================================================
+   766→// Admin handlers
+   767→// ============================================================
+   768→
+   769→func AdminGetExamsHandler(c *gin.Context) {
+   770→        var exams []Exam
+   771→        if err := DB.Order("created_at DESC").Find(&exams).Error; err != nil {
+   772→                c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch exams"})
+   773→                return
+   774→        }
+   775→
+   776→        type ExamWithCount struct {
+   777→                ID            string `json:"id"`
+   778→                Title         string `json:"title"`
+   779→                Code          string `json:"code"`
+   780→                Duration      int    `json:"duration"`
+   781→                QuestionCount int    `json:"questionCount"`
+   782→                IsActive      bool   `json:"isActive"`
+   783→                CreatedAt     string `json:"createdAt"`
+   784→                AttemptCount  int    `json:"attemptCount"`
+   785→        }
+   786→
+   787→        result := make([]ExamWithCount, len(exams))
+   788→        for i, exam := range exams {
+   789→                var attemptCount int64
+   790→                DB.Model(&ExamAttempt{}).Where("exam_id = ?", exam.ID).Count(&attemptCount)
+   791→
+   792→                result[i] = ExamWithCount{
+   793→                        ID:            exam.ID,
+   794→                        Title:         exam.Title,
+   795→                        Code:          exam.Code,
+   796→                        Duration:      exam.Duration,
+   797→                        QuestionCount: exam.QuestionCount,
+   798→                        IsActive:      exam.IsActive,
+   799→                        CreatedAt:     exam.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
+   800→                        AttemptCount:  int(attemptCount),
+   801→                }
+   802→        }
+   803→
+   804→        c.JSON(http.StatusOK, gin.H{"exams": result})
+   805→}
+   806→
+   807→func AdminCreateExamHandler(c *gin.Context) {
+   808→        var req AdminCreateExamRequest
+   809→        if err := c.ShouldBindJSON(&req); err != nil {
+   810→                c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+   811→                return
+   812→        }
+   813→
+   814→        duration := 60
+   815→        qCount := 20
+   816→        if req.Duration != nil {
+   817→                duration = *req.Duration
+   818→        }
+   819→        if req.QuestionCount != nil {
+   820→                qCount = *req.QuestionCount
+   821→        }
+   822→
+   823→        exam := Exam{
+   824→                ID:            uuid.New().String(),
+   825→                Title:         req.Title,
+   826→                Code:          req.Code,
+   827→                Duration:      duration,
+   828→                QuestionCount: qCount,
+   829→                IsActive:      false,
+   830→        }
+   831→
+   832→        if err := DB.Create(&exam).Error; err != nil {
+   833→                c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create exam"})
+   834→                return
+   835→        }
+   836→
+   837→        c.JSON(http.StatusCreated, gin.H{"exam": exam})
+   838→}
+   839→
+   840→func AdminStartExamHandler(c *gin.Context) {
+   841→        examID := c.Param("id")
+   842→
+   843→        if err := DB.Model(&Exam{}).Where("id = ?", examID).Update("is_active", true).Error; err != nil {
+   844→                c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to activate exam"})
+   845→                return
+   846→        }
+   847→
+   848→        c.JSON(http.StatusOK, gin.H{"message": "Эхлүүллээ"})
+   849→}
+   850→
+   851→func AdminExamResultsHandler(c *gin.Context) {
+   852→        examID := c.Param("id")
+   853→
+   854→        var attempts []ExamAttempt
+   855→        if err := DB.Where("exam_id = ?", examID).Order("created_at DESC").Find(&attempts).Error; err != nil {
+   856→                c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch results"})
+   857→                return
+   858→        }
+   859→
+   860→        type ResultItem struct {
+   861→                ID        string `json:"id"`
+   862→                UserID    string `json:"userId"`
+   863→                Score     int    `json:"score"`
+   864→                Total     int    `json:"total"`
+   865→                Passed    bool   `json:"passed"`
+   866→                CreatedAt string `json:"createdAt"`
+   867→                User      gin.H  `json:"user"`
+   868→        }
+   869→
+   870→        results := make([]ResultItem, len(attempts))
+   871→        for i, a := range attempts {
+   872→                var user User
+   873→                DB.Select("id, first_name, last_name, email").Where("id = ?", a.UserID).First(&user)
+   874→
+   875→                results[i] = ResultItem{
+   876→                        ID:        a.ID,
+   877→                        UserID:    a.UserID,
+   878→                        Score:     a.Score,
+   879→                        Total:     a.Total,
+   880→                        Passed:    a.Passed,
+   881→                        CreatedAt: a.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
+   882→                        User: gin.H{
+   883→                                "firstName": user.FirstName,
+   884→                                "lastName":  user.LastName,
+   885→                                "email":     user.Email,
+   886→                        },
+   887→                }
+   888→        }
+   889→
+   890→        c.JSON(http.StatusOK, gin.H{"attempts": results})
+   891→}
+   892→
+   893→func AdminGetCoursesHandler(c *gin.Context) {
+   894→        var courses []Course
+   895→        if err := DB.Order("created_at DESC").Find(&courses).Error; err != nil {
+   896→                c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch courses"})
+   897→                return
+   898→        }
+   899→
+   900→        type CourseWithCount struct {
+   901→                ID          string  `json:"id"`
+   902→                Title       string  `json:"title"`
+   903→                Category    string  `json:"category"`
+   904→                Description string  `json:"description"`
+   905→                Duration    string  `json:"duration"`
+   906→                Price       float64 `json:"price"`
+   907→                Schedule    string  `json:"schedule"`
+   908→                Location    string  `json:"location"`
+   909→                MaxStudents int     `json:"maxStudents"`
+   910→                CreatedAt   string  `json:"createdAt"`
+   911→                PaidCount   int     `json:"paidCount"`
+   912→        }
+   913→
+   914→        result := make([]CourseWithCount, len(courses))
+   915→        for i, course := range courses {
+   916→                var paidCount int64
+   917→                DB.Model(&Enrollment{}).Where("course_id = ? AND paid = ?", course.ID, true).Count(&paidCount)
+   918→
+   919→                result[i] = CourseWithCount{
+   920→                        ID:          course.ID,
+   921→                        Title:       course.Title,
+   922→                        Category:    course.Category,
+   923→                        Description: course.Description,
+   924→                        Duration:    course.Duration,
+   925→                        Price:       course.Price,
+   926→                        Schedule:    course.Schedule,
+   927→                        Location:    course.Location,
+   928→                        MaxStudents: course.MaxStudents,
+   929→                        CreatedAt:   course.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
+   930→                        PaidCount:   int(paidCount),
+   931→                }
+   932→        }
+   933→
+   934→        c.JSON(http.StatusOK, gin.H{"courses": result})
+   935→}
+   936→
+   937→func AdminCreateCourseHandler(c *gin.Context) {
+   938→        var req AdminCreateCourseRequest
+   939→        if err := c.ShouldBindJSON(&req); err != nil {
+   940→                c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+   941→                return
+   942→        }
+   943→
+   944→        maxStudents := 30
+   945→        if req.MaxStudents != nil {
+   946→                maxStudents = *req.MaxStudents
+   947→        }
+   948→
+   949→        course := Course{
+   950→                ID:          uuid.New().String(),
+   951→                Title:       req.Title,
+   952→                Category:    req.Category,
+   953→                Description: req.Description,
+   954→                Duration:    req.Duration,
+   955→                Price:       req.Price,
+   956→                Schedule:    req.Schedule,
+   957→                Location:    req.Location,
+   958→                MaxStudents: maxStudents,
+   959→        }
+   960→
+   961→        if err := DB.Create(&course).Error; err != nil {
+   962→                c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create course"})
+   963→                return
+   964→        }
+   965→
+   966→        c.JSON(http.StatusCreated, gin.H{"course": course})
+   967→}
+   968→
+   969→func AdminGetStudentsHandler(c *gin.Context) {
+   970→        var users []User
+   971→        if err := DB.Where("role = ?", "USER").Order("created_at DESC").Find(&users).Error; err != nil {
+   972→                c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch students"})
+   973→                return
+   974→        }
+   975→
+   976→        type StudentWithStats struct {
+   977→                ID              string `json:"id"`
+   978→                FirstName       string `json:"firstName"`
+   979→                LastName        string `json:"lastName"`
+   980→                Email           string `json:"email"`
+   981→                Phone           string `json:"phone"`
+   982→                Address         string `json:"address"`
+   983→                SecondaryPhone  string `json:"secondaryPhone"`
+   984→                CreatedAt       string `json:"createdAt"`
+   985→                CourseCount     int    `json:"courseCount"`
+   986→                ExamAttemptCount int   `json:"examAttemptCount"`
+   987→                QuizAttemptCount int   `json:"quizAttemptCount"`
+   988→        }
+   989→
+   990→        result := make([]StudentWithStats, len(users))
+   991→        for i, user := range users {
+   992→                var courseCount, examCount, quizCount int64
+   993→                DB.Model(&Enrollment{}).Where("user_id = ?", user.ID).Count(&courseCount)
+   994→                DB.Model(&ExamAttempt{}).Where("user_id = ?", user.ID).Count(&examCount)
+   995→                DB.Model(&QuizAttempt{}).Where("user_id = ?", user.ID).Count(&quizCount)
+   996→
+   997→                result[i] = StudentWithStats{
+   998→                        ID:              user.ID,
+   999→                        FirstName:       user.FirstName,
+  1000→                        LastName:        user.LastName,
+  1001→                        Email:           user.Email,
+  1002→                        Phone:           user.Phone,
+  1003→                        Address:         user.Address,
+  1004→                        SecondaryPhone:  user.SecondaryPhone,
+  1005→                        CreatedAt:       user.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
+  1006→                        CourseCount:     int(courseCount),
+  1007→                        ExamAttemptCount: int(examCount),
+  1008→                        QuizAttemptCount: int(quizCount),
+  1009→                }
+  1010→        }
+  1011→
+  1012→        c.JSON(http.StatusOK, gin.H{"students": result})
+  1013→}
+  1014→
+  1015→func AdminExportHandler(c *gin.Context) {
+  1016→        var users []User
+  1017→        DB.Find(&users)
+  1018→
+  1019→        var courses []Course
+  1020→        DB.Find(&courses)
+  1021→
+  1022→        var enrollments []Enrollment
+  1023→        DB.Find(&enrollments)
+  1024→
+  1025→        var exams []Exam
+  1026→        DB.Find(&exams)
+  1027→
+  1028→        var examAttempts []ExamAttempt
+  1029→        DB.Find(&examAttempts)
+  1030→
+  1031→        var quizzes []Quiz
+  1032→        DB.Find(&quizzes)
+  1033→
+  1034→        var quizAttempts []QuizAttempt
+  1035→        DB.Find(&quizAttempts)
+  1036→
+  1037→        var contacts []ContactForm
+  1038→        DB.Find(&contacts)
+  1039→
+  1040→        var feedbacks []Feedback
+  1041→        DB.Find(&feedbacks)
+  1042→
+  1043→        var surveys []SurveyResponse
+  1044→        DB.Find(&surveys)
+  1045→
+  1046→        var serviceOrders []ServiceOrder
+  1047→        DB.Find(&serviceOrders)
+  1048→
+  1049→        c.JSON(http.StatusOK, gin.H{
+  1050→                "data": gin.H{
+  1051→                        "users":          users,
+  1052→                        "courses":        courses,
+  1053→                        "enrollments":    enrollments,
+  1054→                        "exams":          exams,
+  1055→                        "examAttempts":   examAttempts,
+  1056→                        "quizzes":        quizzes,
+  1057→                        "quizAttempts":   quizAttempts,
+  1058→                        "contacts":       contacts,
+  1059→                        "feedbacks":      feedbacks,
+  1060→                        "surveys":        surveys,
+  1061→                        "serviceOrders":  serviceOrders,
+  1062→                },
+  1063→        })
+  1064→}
+  1065→
+  1066→func AdminSeedQuizHandler(c *gin.Context) {
+  1067→        count := seedQuizzes()
+  1068→        c.JSON(http.StatusOK, gin.H{
+  1069→                "message": "Амжилттай",
+  1070→                "count":   count,
+  1071→        })
+  1072→}
+  1073→
+  1074→// ============================================================
+  1075→// Seed data
+  1076→// ============================================================
+  1077→
+  1078→func seedCourses() {
+  1079→        var count int64
+  1080→        DB.Model(&Course{}).Count(&count)
+  1081→        if count > 0 {
+  1082→                return
+  1083→        }
+  1084→
+  1085→        courses := []Course{
+  1086→                {
+  1087→                        ID:          uuid.New().String(),
+  1088→                        Title:       "ХАБЭА-ын суурь сургалт",
+  1089→                        Category:    "ХАБЭА",
+  1090→                        Description: "Ажлын байранд аюулгүй ажиллагааны үндсэн мэдлэг, хууль эрх зүйн орчин, ажилтны эрх үүргийн талаар суурь сургалт. ХАБЭА-ын хууль тогтоомж, стандартыг судлах.",
+  1091→                        Duration:    "3 хоног",
+  1092→                        Price:       150000,
+  1093→                        Schedule:    "Даваа-Гараг, 09:00-17:00",
+  1094→                        Location:    "Улаанбаатар, ХАБЭА Төв",
+  1095→                        MaxStudents: 30,
+  1096→                },
+  1097→                {
+  1098→                        ID:          uuid.New().String(),
+  1099→                        Title:       "Аюулгүй ажиллагааны дэлгэрэнгүй сургалт",
+  1100→                        Category:    "Аюулгүй ажиллагаа",
+  1101→                        Description: "Ажлын байранд аюулгүй ажиллагааны дэлгэрэнгүй журам, хамгаалалтын хэрэгсэл хэрэглэх, онцгой нөхцөлд үйлдэх аргуудыг сурах дэлгэрэнгүй сургалт.",
+  1102→                        Duration:    "5 хоног",
+  1103→                        Price:       250000,
+  1104→                        Schedule:    "Даваа-Баасан, 09:00-17:00",
+  1105→                        Location:    "Улаанбаатар, ХАБЭА Төв",
+  1106→                        MaxStudents: 25,
+  1107→                },
+  1108→                {
+  1109→                        ID:          uuid.New().String(),
+  1110→                        Title:       "Гал түймрийн урьдчилан сэргийлэлт",
+  1111→                        Category:    "Гал түймэр",
+  1112→                        Description: "Гал түймрийн урьдчилан сэргийлэх аргууд, унтраагуур хэрэглэх, яаралтай эвакуацлалт хийх дадал сургуулилт.",
+  1113→                        Duration:    "2 хоног",
+  1114→                        Price:       100000,
+  1115→                        Schedule:    "Бямба-Ням, 10:00-16:00",
+  1116→                        Location:    "Улаанбаатар, Гал унтлагын байр",
+  1117→                        MaxStudents: 20,
+  1118→                },
+  1119→        }
+  1120→
+  1121→        for _, course := range courses {
+  1122→                DB.Create(&course)
+  1123→        }
+  1124→        log.Printf("Seeded %d courses", len(courses))
+  1125→}
+  1126→
+  1127→func seedQuizzes() int {
+  1128→        var count int64
+  1129→        DB.Model(&Quiz{}).Count(&count)
+  1130→        if count > 0 {
+  1131→                return int(count)
+  1132→        }
+  1133→
+  1134→        quizDefs := []struct {
+  1135→                title       string
+  1136→                description string
+  1137→                category    string
+  1138→                questions   []struct {
+  1139→                        q       string
+  1140→                        options []string
+  1141→                        correct int
+  1142→                }
+  1143→        }{
+  1144→                // === Category 1: ХАБЭА-ын хууль эрх зүй (3 quizzes) ===
+  1145→                {
+  1146→                        title:       "ХАБЭА-ын хууль эрх зүй - I",
+  1147→                        description: "ХАБЭА-ын хууль тогтоомж, стандартын үндсэн мэдлэг",
+  1148→                        category:    "ХАБЭА-ын хууль эрх зүй",
+  1149→                        questions: []struct {
+  1150→                                q       string
+  1151→                                options []string
+  1152→                                correct int
+  1153→                        }{
+  1154→                                {"Монгол Улсын ХАБЭА-ын тухай хууль хэзээ батлагдсан бэ?", []string{"2005", "2008", "2014", "2018"}, 2},
+  1155→                                {"Ажил олгогч нь ажилтны аюулгүй байдлыг хангах үндсэн үүрэгтэй эсэх?", []string{"Тийм", "Үгүй", "Зөвхөн том аж ахуйн нэгж", "Зөвхөн уул уурхай"}, 0},
+  1156→                                {"ХАБЭА-ын хяналтын байгууллага ямар байгууллага вэ?", []string{"Засгийн газар", "Хөдөлмөрийн хяналтын газар", "Улсын онцгой комисс", "Иргэний хамгаалалт"}, 1},
+  1157→                                {"Ажилтэн ажлын байрандаа аюулгүй ажиллагааг хангах эрхтэй эсэх?", []string{"Тийм", "Үгүй", "Зөвхөн менежер", "Зөвхөн инженер"}, 0},
+  1158→                                {"ХАБЭА-ын бодлогод хэн гол үүрэг гүйцэтгэдэг вэ?", []string{"Ажилтан", "Ажил олгогч", "Төрийн байгууллага", "Бүгд"}, 3},
+  1159→                                {"Ажлын байрны гэрээт ажилд хАБЭА-ын шаардлага хамаарах уу?", []string{"Хамаарахгүй", "Хамаарна", "Зөвхөн бүтэн цаг", "Зөвхөн үйлдвэр"}, 1},
+  1160→                                {"Ажилтны эрүүл мэндийн шалгалт хийлгэх хугацаа хэд вэ?", []string{"Жил бүр", "2 жилд нэг", "6 сард нэг", "Ажилд орох үед л"}, 0},
+  1161→                                {"Ажил олгогч ХАБЭА-ын сургалт зохион байгуулах үүрэгтэй эсэх?", []string{"Тийм", "Үгүй", "Зөвхөн том компаниуд", "Ажилтны өөрийн үүрэг"}, 0},
+  1162→                                {"Ажлын байрны осол гэмтэлд нөхөн төлбөр олгох эрх зүйн үндэс юу вэ?", []string{"ХАБЭА-ын хууль", "Иргэний хууль", "Хөдөлмөрийн хууль", "Бүгдээс дээрх"}, 3},
+  1163→                                {"Ажил олгогч ажилтанд хАБЭА-ын тухай мэдээлэл өгөх үүрэгтэй эсэх?", []string{"Тийм", "Үгүй", "Хүсвэл өгнө", "Зөвхөн шаардлагатай үед"}, 0},
+  1164→                                {"Монгол Улсын Хөдөлмөрийн хуулиар ажилтны хамгаалалтын ямар үндсэн эрхийг баталгаажуулдаг вэ?", []string{"Аюулгүй ажлын орчин", "Нийгмийн даатгал", "Эрүүл мэндийн даатгал", "Бүгд"}, 3},
+  1165→                                {"Ажил олгогч ажилтанд хамгаалалтын хэрэгсэл өгөх үүрэгтэй эсэх?", []string{"Тийм", "Үгүй", "Зөвхөн аюултай ажилд", "Ажилтан өөрөө худалдаж авна"}, 0},
+  1166→                                {"ХАБЭА-ын зөрчилд торгууль ногдуулах эрх хэн дээр байдаг вэ?", []string{"Цагдаа", "ХАБЭА-ын хяналтын газар", "Шүүх", "Прокурор"}, 1},
+  1167→                                {"Ажилтний хАБЭА-ын сургалтын хамгийн бага хугацаа хэд хоног вэ?", []string{"1 хоног", "3 хоног", "5 хоног", "10 хоног"}, 1},
+  1168→                                {"Ажлын байранд осол гарахад ямар эхний үйлдэл хийх ёстой вэ?", []string{"Ажлыг үргэлжлүүлэх", "Аюулгүй байр руу явах", "Утасдаж дуудах", "Б болон В"}, 3},
+  1169→                                {"ХАБЭА-ын гэрээнд юу орно?", []string{"Ажилтны үүрэг", "Ажил олгогчийн үүрэг", "Хамгааллын хэрэгслийн жагсаалт", "Бүгд"}, 3},
+  1170→                                {"Ажил олгогч ХАБЭА-ын мэргэжилтэн томилох үүрэгтэй эсэх?", []string{"Тийм", "Үгүй", "Зөвхөн 50-аас дээш ажилтантай", "Зөвхөн үйлдвэр"}, 0},
+  1171→                                {"ХАБЭА-ын хууль тогтоомж хүүхдийн ажилд хамаарах уу?", []string{"Хамаарахгүй", "Хамаарна", "Зөвхөн 18-аас дээш насныхан", "Хуваарьтай"}, 1},
+  1172→                                {"Ажилтан аюултай нөхцөлд ажиллахаас татгалзах эрхтэй эсэх?", []string{"Тийм", "Үгүй", "Зөвхөн өвчинтэй үед", "Зөвхөн эмэгтэй"}, 0},
+  1173→                                {"ХАБЭА-ын хяналтын байгууллагын үндсэн зорилго юу вэ?", []string{"Торгууль ногдуулах", "Ажилтнийг хамгаалах", "Ажил олгогчийг дэмжих", "Ажлын байрны аюулгүй байдлыг хангах"}, 3},
+  1174→                },
+  1175→                },
+  1176→                {
+  1177→                        title:       "ХАБЭА-ын хууль эрх зүй - II",
+  1178→                        description: "ХАБЭА-ын хариуцлагын асуудал, торгууль, шагнал",
+  1179→                        category:    "ХАБЭА-ын хууль эрх зүй",
+  1180→                        questions: []struct {
+  1181→                                q       string
+  1182→                                options []string
+  1183→                                correct int
+  1184→                        }{
+  1185→                                {"ХАБЭА-ын зөрчилд ногдох торгуулийн хэмжээ хэд вэ?", []string{"10,000-50,000₮", "50,000-500,000₮", "100,000-1,000,000₮", "1,000,000-5,000,000₮"}, 1},
+  1186→                                {"Ажил олгогч ХАБЭА-ын шаардлагыг хангаагүй тохиолдолд юу болно?", []string{"Юу ч болохгүй", "Торгууль", "Устгах", "Шагнал"}, 1},
+  1187→                                {"Ажилтний хАБЭА-ын дүрмийг зөрчихөд юу болно?", []string{"Юу ч болохгүй", "Сануулагдана", "Ажлаас халах", "Б болон В"}, 3},
+  1188→                                {"ХАБЭА-ын хяналтын байгууллага ямар эрхтэй вэ?", []string{"Зөвлөгөө өгөх", "Шалгах, торгууль ногдуулах", "Ажил олгогчийг огтлох", "Хаах"}, 1},
+  1189→                                {"Ажил олгогч хАБЭА-ын зөрчилд хариуцлага хүлээх эсэх?", []string{"Тийм", "Үгүй", "Зөвхөн ажилтан", "Зөвхөн менежер"}, 0},
+  1190→                                {"Ажилтний хАБЭА-ын сургалт үзүүлэхгүй байх нь зөрчил мөн үү?", []string{"Мөн", "Үгүй", "Зөвхөн аюултай ажилд", "Хамааралгүй"}, 0},
+  1191→                                {"ХАБЭА-ын хяналтын шалгалт хэдэн удаа хийгдэх вэ?", []string{"Жил бүр", "Сар бүр", "Хэрэгцээгээс шалтгаалан", "Улирал бүр"}, 2},
+  1192→                                {"Ажил олгогчийн хАБЭА-ын гэрээний хугацаа хэд вэ?", []string{"1 жил", "2 жил", "3 жил", "Тодорхой бус"}, 3},
+  1193→                                {"ХАБЭА-ын зөрчлийн төрөл хэд байдаг вэ?", []string{"1", "2", "3", "4"}, 2},
+  1194→                                {"Ажилтний хАБЭА-ын эрхийг хаашаа хамгаалдаг вэ?", []string{"Хууль", "Засгийн газар", "Ажил олгогч", "Прокурор"}, 0},
+  1195→                                {"ХАБЭА-ын шаардлага хангаагүй ажил олгогчид ямар торгууль ногддог вэ?", []string{"Зөвхөн сануулга", "Мөнгөн торгууль", "Шүүхийн шийдвэр", "Ажил зогсоох"}, 1},
+  1196→                                {"Ажилтний хАБЭА-ын мэдлэгийг хэрхэн шалгадаг вэ?", []string{"Ярилцлага", "Шалгалт", "Нүүр_FACEBOOK", "Б ба В"}, 3},
+  1197→                                {"ХАБЭА-ын зөрчилд холбогдох хууль хэд вэ?", []string{"ХАБЭА-ын хууль", "Хөдөлмөрийн хууль", "Эрүүл мэндийн хууль", "Б ба В"}, 3},
+  1198→                                {"Ажил олгогч хАБЭА-ын тайланг хэдэд тавьдаг вэ?", []string{"Улирал бүр", "Жил бүр", "Сар бүр", "2 жилд нэг"}, 1},
+  1199→                                {"ХАБЭА-ын зөрчилд хэн хариуцдаг вэ?", []string{"Зөвхөн ажилтан", "Зөвхөн ажил олгогч", "Ажил олгогч ба хариуцагч", "Төрийн байгууллага"}, 2},
+  1200→                                {"Ажил олгогч хАБЭА-ын дүрмээс хасагдсан тохиолдолд юу болно?", []string{"Юу ч болохгүй", "Ажил үргэлжлэнэ", "Ажил зогсоно", "Торгууль ногдохгүй"}, 2},
+  1201→                                {"ХАБЭА-ын хууль тогтоомжид бусад улсын туршлагаас суралцах уу?", []string{"Үгүй", "Тийм", "Зөвхөн ОХУ", "Зөвхөн АНУ"}, 1},
+  1202→                                {"ХАБЭА-ын хяналтын байгууллагын бүтэц хэдэн түвшинтэй вэ?", []string{"1", "2", "3", "4"}, 2},
+  1203→                                {"Ажил олгогч хАБЭА-ын журмаар хамгаалалтын хэрэгсэл өгөх үүрэгтэй эсэх?", []string{"Тийм", "Үгүй", "Зөвхөн үйлдвэрт", "Хамгаалалтын хэрэгсэлгүй"}, 0},
+  1204→                },
+  1205→                },
+  1206→                {
+  1207→                        title:       "ХАБЭА-ын хууль эрх зүй - III",
+  1208→                        description: "Олон улсын хАБЭА-ын стандарт, ILO конвенц",
+  1209→                        category:    "ХАБЭА-ын хууль эрх зүй",
+  1210→                        questions: []struct {
+  1211→                                q       string
+  1212→                                options []string
+  1213→                                correct int
+  1214→                        }{
+  1215→                                {"ILO гэж юу гэсэн үг вэ?", []string{"International Labour Organization", "International Law Office", "Industrial Labor Organization", "Internal Labor Office"}, 0},
+  1216→                                {"Монгол Улс ILO-ын гишүүн орсон огноо хэд вэ?", []string{"1955", "1960", "1968", "1975"}, 2},
+  1217→                                {"ILO-ын ХАБЭА-ын конвенц хэдэн байдаг вэ?", []string{"50", "100", "187", "200"}, 2},
+  1218→                                {"Монгол Улс хэдэн ILO конвенц ратификацласан бэ?", []string{"5", "10", "20", "30"}, 2},
+  1219→                                {"ISO 45001 ямар стандарт вэ?", []string{"Чанарын менежмент", "ХАБЭА-ын менежмент", "Орчны менежмент", "Мэдээллийн аюулгүй байдал"}, 1},
+  1220→                                {"Олон улсын хАБЭА-ын өдөр хэдэд болдог вэ?", []string{"4 сарын 28", "5 сарын 1", "6 сарын 5", "10 сарын 1"}, 0},
+  1221→                                {"ILO-ын 155 дугаар конвенц юуны тухай вэ?", []string{"Хүүхдийн хөдөлмөр", "ХАБЭА-ын тухай", "Бага цалингийн ажил", "Эмэгтэйчүүдийн хөдөлмөр"}, 1},
+  1222→                                {"ILO-ын 161 дүгээр конвенц юуны тухай вэ?", []string{"ХАБЭА-ын үйлчилгээ", "ХАБЭА-ын хяналт", "ХАБЭА-ын сургалт", "ХАБЭА-ын стандарт"}, 1},
+  1223→                                {"Монгол Улсын хАБЭА-ын бодлогын баримт бичиг хэдэн байдаг вэ?", []string{"1", "2", "3", "5"}, 2},
+  1224→                                {"ХАБЭА-ын тухай хуулийн зорилго юу вэ?", []string{"Ажилтнийг хамгаалах", "Ажил олгогчийг дэмжих", "Ажлын байрны аюулгүй байдлыг хангах", "Бүгд"}, 3},
+  1225→                                {"ХАБЭА-ын олон улсын стандартад ямар зүйл багтана?", []string{"Хяналт", "Сургалт", "Хамгаалалт", "Бүгд"}, 3},
+  1226→                                {"Монгол Улсын хАБЭА-ын хууль хэдэн бүлэгтэй вэ?", []string{"3", "5", "7", "10"}, 2},
+  1227→                                {"ISO 45001 стандарт хэдэн удаа шинэчлэгдсэн бэ?", []string{"1", "2", "3", "4"}, 2},
+  1228→                                {"Ажил олгогч ISO стандартын дагуу үйл ажиллагаа явуулах үүрэгтэй эсэх?", []string{"Тийм", "Үгүй", "Зөвхөн том компани", "Зөвхөн гадаад компани"}, 0},
+  1229→                                {"ХАБЭА-ын тухай олон улсын конвенцийн зорилго юу вэ?", []string{"Ажилтнийг хамгаалах", "Ажлын байрны нөхцлийг дээшлүүлэх", "Осол гэмтлийг бууруулах", "Бүгд"}, 3},
+  1230→                                {"Монгол Улс хАБЭА-ын салбарт хамтын ажиллагаа хийдэг улс орнууд хэд байдаг вэ?", []string{"5", "10", "15", "20"}, 2},
+  1231→                                {"ХАБЭА-ын олон улсын өдрийг хэн зохион байгуулдаг вэ?", []string{"ILO", "WHO", "UN", "ILO ба WHO"}, 0},
+  1232→                                {"Ажилтний хАБЭА-ын эрхийг олон улсын түвшинд хэн хамгаалдаг вэ?", []string{"ILO", "WHO", "UNESCO", "WTO"}, 0},
+  1233→                                {"Монгол Улсын хАБЭА-ын бодлого хэний тодорхойлдог вэ?", []string{"Засгийн газар", "Иргэд", "Ажил олгогч", "Улсын их хурал"}, 3},
+  1234→                                {"Олон улсын хАБЭА-ын конвенцийг хэрхэн хэрэгжүүлдэг вэ?", []string{"Хуульчлах", "Шалгах", "Хянах", "Бүгд"}, 3},
+  1235→                },
+  1236→                },
+  1237→
+  1238→                // === Category 2: Аюулгүй ажиллагаа (3 quizzes) ===
+  1239→                {
+  1240→                        title:       "Аюулгүй ажиллагаа - I",
+  1241→                        description: "Ажлын байрны аюулгүй ажиллагааны үндсэн дүрмүүд",
+  1242→                        category:    "Аюулгүй ажиллагаа",
+  1243→                        questions: []struct {
+  1244→                                q       string
+  1245→                                options []string
+  1246→                                correct int
+  1247→                        }{
+  1248→                                {"Ажлын байрны аюулгүй ажиллагааны 5 үндсэн дүрэм юу вэ?", []string{"Хаах, асаах, хийх, харах, сонсох", "Таних, үнэлэх, хянах, хянуулах, сургах", "Зогсох, харах, тэмдэглэх, сануулах, мэдээлэх", "Өмсөх, зүүх, тавих, хийх, өгөх"}, 1},
+  1249→                                {"Хамгаалалтын цагиргийн доор ажиллахдаа юу өмсөх ёстой вэ?", []string{"Зөвхөн цамц", "Каск, бүс, аюулгүйн гутал", "Зөвхөн нүдний шил", "Юу ч өмсөх шаардлагагүй"}, 1},
+  1250→                                {"Бүсэлхийлэх хэрэгслийг хэрхэн ашиглах вэ?", []string{"Нэг гараараа", "Хоёр гараараа, зөв байрлалд", "Хоёр хүн", "Машин"}, 1},
+  1251→                                {"Аюултай бодисоор ажиллахдаа юу зөвшөөрөл авах ёстой вэ?", []string{"Ажил олгогчийн", "ХАБЭА-ын мэргэжилтний", "Цагдаагийн", "Эмчийн"}, 1},
+  1252→                                {"Ажлын байрны аюулгүй байдлын хяналт хэнд хийлгэх вэ?", []string{"Ажил олгогч", "ХАБЭА-ын мэргэжилтэн", "Ажилтан өөрөө", "Цагдаа"}, 1},
+  1253→                                {"Цахилгаан тоног төхөөрөмжийг асаахаас өмнө юу хийх ёстой вэ?", []string{"Шалгах", "Унтраах", "Засварлах", "Хаях"}, 0},
+  1254→                                {"Бүхээгдэхүүнийг хэрхэн зөвөөр зөөвөрлөх вэ?", []string{"Ганцаар", "Хоёулаа өргөж", "Машинаар", "Тусламжтай"}, 1},
+  1255→                                {"Аюултай ажлын зөвшөөрлийг хэн олгож өгдөг вэ?", []string{"Ажил олгогч", "ХАБЭА-ын мэргэжилтэн", "Цагдаа", "Шүүх"}, 1},
+  1256→                                {"Ажлын байрны гэрэлтүүлэг ямар байх ёстой вэ?", []string{"Харанхуй", "Тунгалаг", "Дулаан", "Хүйтэн"}, 1},
+  1257→                                {"Ажилтний хамгаалалтын хэрэгслийг хэнд олгодог вэ?", []string{"Ажилтан өөрөө", "Ажил олгогч", "Төрийн байгууллага", "ХАБЭА-ын газар"}, 1},
+  1258→                                {"Өндөрт ажиллахдаа юу ашиглах ёстой вэ?", []string{"Шатахуун", "Тусгай хамгаалалт, бүсэлхий", "Гар утас", "Цамц"}, 1},
+  1259→                                {"Ажлын байрны самбар дээр юу бичих ёстой вэ?", []string{"Ажилтны нэр", "Аюулгүй ажиллагааны дүрэм", "Цаг", "Огноо"}, 1},
+  1260→                                {"Гар нүүрний хамгаалалтын хэрэгслийг хэзээ өмсөх вэ?", []string{"Ажилд орох үед", "Аюултай бодистой ажиллах үед", "Улирлын өөрчлөлттэй", "Үргэлж"}, 1},
+  1261→                                {"Ажлын байрны агаарын бохирдлыг хэрхэн бууруулах вэ?", []string{"Цонх нээх", "Сэнсэлгээ хийх", "Амьсгалын хамгаалалт өмсөх", "Бүгд"}, 3},
+  1262→                                {"Ажилтний хамгаалалтын хэрэгсэл юу вэ?", []string{"Каск, бүс, нүдний шил", "Цамц", "Гар утас", "Цаас"}, 0},
+  1263→                                {"Ажлын байрны дуу чимээг хэрхэн бууруулах вэ?", []string{"Чимээгүй байх", "Дуу чимээгүй тоног төхөөрөмж", "Чихэвч өмсөх", "Б ба В"}, 3},
+  1264→                                {"Ажлын байрны температур хэд хэм байх ёстой вэ?", []string{"0-10°C", "18-24°C", "30-40°C", "40-50°C"}, 1},
+  1265→                                {"Ажлын байрны аюулгүй байдлыг хэний хариуцдаг вэ?", []string{"Ажилтан", "Ажил олгогч", "ХАБЭА-ын мэргэжилтэн", "Бүгд"}, 3},
+  1266→                                {"Аюулгүй ажиллагааны дүрмийг хаана байрлуулах ёстой вэ?", []string{"Оффисод", "Ажлын байрны ил талд", "Ажлын байрны олон нийтийн газар", "Бүгд"}, 3},
+  1267→                                {"Ажилтний хамгаалалтын хэрэгслийг хэрэглэхээ мартвал юу болно?", []string{"Юу ч болохгүй", "Осол гэмтэл гарах", "Ажилд саатна", "Шагнал"}, 1},
+  1268→                },
+  1269→                },
+  1270→                {
+  1271→                        title:       "Аюулгүй ажиллагаа - II",
+  1272→                        description: "Ажлын байрны осол гэмтлийн урьдчилан сэргийлэлт",
+  1273→                        category:    "Аюулгүй ажиллагаа",
+  1274→                        questions: []struct {
+  1275→                                q       string
+  1276→                                options []string
+  1277→                                correct int
+  1278→                        }{
+  1279→                                {"Осол гэмтэл гарах гол шалтгаан юу вэ?", []string{"Зөв бус ажиллагаа", "Хамгаалалтын хэрэгсэлгүй", "Сургалтгүй", "Бүгд"}, 3},
+  1280→                                {"Урьдчилан сэргийлэх аргууд хэд байдаг вэ?", []string{"1", "2", "3", "4"}, 2},
+  1281→                                {"Ажлын байрны осолд өртөх магадлалыг хэрхэн бууруулах вэ?", []string{"Хяналт", "Сургалт", "Хамгаалалт", "Бүгд"}, 3},
+  1282→                                {"Ажлын байрны осол гэмтлийн статистик хэний мэдээлэл вэ?", []string{"Ажил олгогчийн", "ХАБЭА-ын хяналтын газрын", "Ажилтний", "Цагдаагийн"}, 1},
+  1283→                                {"Осол гэмтэл гарахад эхний тусламж ямар вэ?", []string{"Эмчид дуудах", "Зөвхөн харах", "Өөрөө эмчлэх", "Хаях"}, 0},
+  1284→                                {"Ажлын байрны аюулгүй байдлын үнэлгээ хийх хугацаа хэд вэ?", []string{"Жил бүр", "2 жилд нэг", "3 жилд нэг", "5 жилд нэг"}, 0},
+  1285→                                {"Ажлын байрны осол гэмтэлд хэн хариуцдаг вэ?", []string{"Зөвхөн ажилтан", "Ажил олгогч ба хариуцагч", "Цагдаа", "Эмч"}, 1},
+  1286→                                {"Осол гэмтлийн мөрдлөг хийх зорилго юу вэ?", []string{"Шийтгэх", "Урьдчилан сэргийлэх", "Мөнгө олох", "Ажилтнийг огтлох"}, 1},
+  1287→                                {"Ажлын байрны аюулгүй байдлын төлөвлөгөө хэнд байдаг вэ?", []string{"Ажил олгогч", "ХАБЭА-ын мэргэжилтэн", "Ажилтан", "Засгийн газар"}, 0},
+  1288→                                {"Осол гэмтлийн тохиолдолд юу хийх ёстой вэ?", []string{"Ажлаа үргэлжлүүлэх", "Мэдээлэх, хамгаалах", "Далдлах", "Ажлаас зугтах"}, 1},
+  1289→                                {"Ажлын байрны аюулгүй байдлын чиглэлээр хэдэн төрлийн сургалт байдаг вэ?", []string{"1", "2", "3", "5"}, 2},
+  1290→                                {"Осол гэмтлийн дараа юу хийх ёстой вэ?", []string{"Ажлаа үргэлжлүүлэх", "Шалтгааныг олох", "Ажилтнийг огтлох", "Юу ч хийхгүй"}, 1},
+  1291→                                {"Ажлын байрны осол гэмтлийн зардал хэнд ногддог вэ?", []string{"Ажилтанд", "Ажил олгогчид", "Төрөнд", "Бүгдэд"}, 1},
+  1292→                                {"Осол гэмтэлээс урьдчилан сэргийлэх 3 алхам юу вэ?", []string{"Таних, үнэлэх, хянах", "Хаах, нээх, хийх", "Зогсох, харах, явах", "Өмсөх, зүүх, тавих"}, 0},
+  1293→                                {"Ажлын байрны аюулгүй байдлын журмаар юу заадаг вэ?", []string{"Ажиллах дүрэм", "Хамгаалалтын хэрэгсэл", "Осол гэмтлийн үйлдэл", "Бүгд"}, 3},
+  1294→                                {"Осол гэмтлийн магадлалыг хэрхэн тодорхойлдог вэ?", []string{"Тооцоолол", "Мэргэжлийн үнэлгээ", "Ажилтний санал", "Цагдаагийн мэдээлэл"}, 1},
+  1295→                                {"Ажлын байрны аюулгүй байдлын хяналтын журмаар юу шалгадаг вэ?", []string{"Тоног төхөөрөмж", "Ажилтны мэдлэг", "Хамгаалалтын хэрэгсэл", "Бүгд"}, 3},
+  1296→                                {"Осол гэмтлийн дараахь 3 үйлдэл юу вэ?", []string{"Мэдээлэх, тусламж үзүүлэх, мөрдөн байцаах", "Ажлаа үргэлжлүүлэх", "Далдлах", "Ажилтнийг огтлох"}, 0},
+  1297→                                {"Ажлын байрны аюулгүй байдлын үнэлгээний тайланг хэнд тавьдаг вэ?", []string{"Ажилтанд", "Ажил олгогчид", "ХАБЭА-ын хяналтын газарт", "Цагдаад"}, 2},
+  1298→                                {"Осол гэмтэл гарах магадлалыг бууруулах гол арга юу вэ?", []string{"Сургалт", "Хяналт", "Хамгаалалт", "Бүгдээс дээрх"}, 3},
+  1299→                },
+  1300→                },
+  1301→                {
+  1302→                        title:       "Аюулгүй ажиллагаа - III",
+  1303→                        description: "Хиймэлдэл, цахилгаан аюулгүй байдал",
+  1304→                        category:    "Аюулгүй ажиллагаа",
+  1305→                        questions: []struct {
+  1306→                                q       string
+  1307→                                options []string
+  1308→                                correct int
+  1309→                        }{
+  1310→                                {"Хиймэлдлээс урьдчилан сэргийлэх гол арга юу вэ?", []string{"Хамгаалалт өмсөх", "Агаарыг шалгах", "Сэнсэлгээ хийх", "Бүгд"}, 3},
+  1311→                                {"Цахилгаан ослоос хамгаалахын тулд юу хийх ёстой вэ?", []string{"Бүрхөүл өмсөх", "Зуух, утас шалгах", "Гар хүчээр ажиллах", "Бүгд"}, 3},
+  1312→                                {"Хиймэлдэлтэй ажилладаг газарт юу байх ёстой вэ?", []string{"Сэнсэлгээ", "Агаарын шалгалтынприбор", "Аюулгүй ажиллагааны самбар", "Бүгд"}, 3},
+  1313→                                {"Цахилгааны гүйдлийн хэмжээ хэд вэ?", []string{"12V", "36V", "220V", "380V"}, 2},
+  1314→                                {"Хиймэлдлийн төрөл хэд байдаг вэ?", []string{"1", "2", "3", "5"}, 2},
+  1315→                                {"Цахилгаан утасны изоляцийг хэрхэн шалгах вэ?", []string{"Нүдээр харах", "Мэргэжлийнприбороор", "Гараар татаж", "Хаяах"}, 1},
+  1316→                                {"Хиймэлдлээс хамгаалах хэрэгсэл юу вэ?", []string{"Амьсгалын хамгаалалт", "Каск", "Бүс", "Бүгд"}, 0},
+  1317→                                {"Цахилгааны аюулгүй байдлын дүрмийг хэн зохиодог вэ?", []string{"Ажилтан", "Ажил олгогч", "Цахилгааны инженер", "ХАБЭА-ын мэргэжилтэн"}, 2},
+  1318→                                {"Хиймэлдлийн аюулгүй байдлыг хэрхэн хангах вэ?", []string{"Хяналт", "Сэнсэлгээ", "Хамгаалалт", "Бүгд"}, 3},
+  1319→                                {"Цахилгааны осолд өртвөл юу хийх ёстой вэ?", []string{"Хүнийг татах", "Гүйдлийг таслах", "Ус цацах", "Б болон В"}, 1},
+  1320→                                {"Хиймэлдэлтэй ажиллахын өмнө юу хийх ёстой вэ?", []string{"Агаарыг шалгах", "Хамгаалалт өмсөх", "Сэнсэлгээ асаах", "Бүгд"}, 3},
+  1321→                                {"Цахилгааны гүйдлийн хоргүй хэмжээ хэд вэ?", []string{"12V", "24V", "36V", "48V"}, 2},
+  1322→                                {"Хиймэлдлийн үр дагавар юу вэ?", []string{"Тэсэлгээ", "Уушгины өвчин", "Амьсгалын дарамт", "Бүгд"}, 3},
+  1323→                                {"Цахилгааны тоног төхөөрөмжийг хэрхэн засварлах вэ?", []string{"Гүйдэлтэй", "Гүйдэлгүй", "Ажиллаж байхад", "Ямар ч үед"}, 1},
+  1324→                                {"Хиймэлдэлтэй ажлын байрны агаарын бохирдлын хэмжээ хэд вэ?", []string{"0.1%", "0.5%", "1%", "5%"}, 2},
+  1325→                                {"Цахилгааны ослоос хамгаалах 3 дүрэм юу вэ?", []string{"Бүрхөүл, утас шалгах, гүйдэл таслах", "Харах, сонсох, хийх", "Зогсох, явах, харах", "Бүгд"}, 0},
+  1326→                                {"Хиймэлдлийн шалгалтынприбор юу вэ?", []string{"Газар хэмжигч", "Агаарын бохирдол хэмжигч", "Температурын хэмжигч", "Давс хэмжигч"}, 1},
+  1327→                                {"Цахилгааны аюулгүй байдлын сургалт хэзээ явагддаг вэ?", []string{"Жил бүр", "2 жилд нэг", "3 жилд нэг", "Ажилд орох үед л"}, 0},
+  1328→                                {"Хиймэлдлээс хамгаалах хамгийн зөв арга юу вэ?", []string{"Амьсгалын хамгаалалт", "Агаарыг солих", "Ажлын байрыг хаах", "Бүгд"}, 3},
+  1329→                                {"Цахилгааны осолд өртсөн хүнийг юу хийх ёстой вэ?", []string{"Хүнийг гараар татах", "Шууд эмчид дуудах", "Эхний тусламж үзүүлэх", "Б ба В"}, 3},
+  1330→                },
+  1331→                },
+  1332→
+  1333→                // === Category 3: Эрүүл мэнд, ахуй (3 quizzes) ===
+  1334→                {
+  1335→                        title:       "Эрүүл мэнд, ахуй - I",
+  1336→                        description: "Ажлын байрны эрүүл ахуйн нөхцөл",
+  1337→                        category:    "Эрүүл мэнд, ахуй",
+  1338→                        questions: []struct {
+  1339→                                q       string
+  1340→                                options []string
+  1341→                                correct int
+  1342→                        }{
+  1343→                                {"Ажлын байрны эрүүл ахуйн стандарт юу вэ?", []string{"MNS 4999", "MNS 5000", "MNS 4989", "MNS 5010"}, 0},
+  1344→                                {"Ажлын байрны гэрэлтүүлгийн хэмжээ хэд вэ?", []string{"100 люкс", "200 люкс", "300 люкс", "500 люкс"}, 2},
+  1345→                                {"Ажлын байрны агаарын солилцоо хэд хийгдэх ёстой вэ?", []string{"Цагт 1 удаа", "Цагт 2 удаа", "Цагт 3 удаа", "Минутад 1 удаа"}, 1},
+  1346→                                {"Ажлын байрны дуу чимээний хэмжээ хэд байх ёстой вэ?", []string{"40 дБ", "60 дБ", "80 дБ", "100 дБ"}, 1},
+  1347→                                {"Ажлын байрны температурын хэмжээ хэд байх ёстой вэ?", []string{"10-15°C", "18-24°C", "25-30°C", "30-40°C"}, 1},
+  1348→                                {"Ажлын байрны агаарын чийг хэд байх ёстой вэ?", []string{"20-30%", "30-40%", "40-60%", "60-80%"}, 2},
+  1349→                                {"Ажлын байрны угаалтуурын тоо хэд байх ёстой вэ?", []string{"15 хүнд 1", "20 хүнд 1", "25 хүнд 1", "30 хүнд 1"}, 2},
+  1350→                                {"Ажлын байрны ундны усны чанарын шалгалт хэзээ хийдэг вэ?", []string{"Улирал бүр", "Жил бүр", "2 жилд нэг", "Сар бүр"}, 0},
+  1351→                                {"Ажлын байрны хоолны газар юу байх ёстой вэ?", []string{"Зөвхөн хоол", "Ус, хоол, ариун цэврийн нөхцөл", "Зөвхөн ус", "Юу ч байх шаардлагагүй"}, 1},
+  1352→                                {"Ажлын байрны ариун цэврийн нөхцөл хэд байх ёстой вэ?", []string{"15 хүнд 1", "20 хүнд 1", "25 хүнд 1", "30 хүнд 1"}, 0},
+  1353→                                {"Ажлын байрны хоолны үзүүлэлтийн стандарт юу вэ?", []string{"MNS 4999", "MNS 5157", "MNS 5010", "MNS 4989"}, 1},
+  1354→                                {"Ажлын байрны агаарын бохирдлыг хэрхэн хянах вэ?", []string{"Цонх нээх", "Сэнсэлгээ", "Агааржуулалт", "Бүгд"}, 3},
+  1355→                                {"Ажлын байрны гэрэлтүүлгийн төрөл хэд байдаг вэ?", []string{"1", "2", "3", "4"}, 2},
+  1356→                                {"Ажлын байрны дуу чимээг хэрхэн бууруулах вэ?", []string{"Дуу чимээгүй тоног", "Чимээ тусгаарлагч", "Чихэвч", "Бүгд"}, 3},
+  1357→                                {"Ажлын байрны температурыг хэрхэн хянадаг вэ?", []string{"Орчны агаар", "Сэнсэлгээ", "Дулаан, хүйтэн", "Бүгд"}, 3},
+  1358→                                {"Ажлын байрны ариун цэврийн бодис ямар байх ёстой вэ?", []string{"Хортой", "Аюултай", "Хоргүй, стандарт", "Ямар ч"}, 2},
+  1359→                                {"Ажлын байрны хоолонд юу орсон байх ёстой вэ?", []string{"Төмөр, уураг", "Витамин, амин дэм", "Тос, тослог", "Бүгд"}, 3},
+  1360→                                {"Ажлын байрны ундны усны хэмжээ хэд байх ёстой вэ?", []string{"1 литр", "2 литр", "3 литр", "4 литр"}, 1},
+  1361→                                {"Ажлын байрны ариун цэврийг хэн хариуцдаг вэ?", []string{"Ажилтан", "Ажил олгогч", "Цэвэрлэгч", "ХАБЭА-ын мэргэжилтэн"}, 1},
+  1362→                                {"Ажлын байрны эрүүл ахуйн нөхцөлийг хэн хяндаг вэ?", []string{"Ажил олгогч", "ХАБЭА-ын хяналтын газар", "Эрүүл мэндийн байгууллага", "Б ба В"}, 3},
+  1363→                },
+  1364→                },
+  1365→                {
+  1366→                        title:       "Эрүүл мэнд, ахуй - II",
+  1367→                        description: "Мэргэжлийн өвчин, эрүүл мэндийн хамгаалалт",
+  1368→                        category:    "Эрүүл мэнд, ахуй",
+  1369→                        questions: []struct {
+  1370→                                q       string
+  1371→                                options []string
+  1372→                                correct int
+  1373→                        }{
+  1374→                                {"Мэргэжлийн өвчин гэж юу вэ?", []string{"Ажлын байранд өртсөн өвчин", "Улирлын өвчин", "Насны өвчин", "Дарамт"}, 0},
+  1375→                                {"Мэргэжлийн өвчний төрөл хэд байдаг вэ?", []string{"1", "2", "3", "5"}, 2},
+  1376→                                {"Чулууны үеийн өвчин ямар мэргэжилд тохиолддог вэ?", []string{"Барилгачин", "Нүүр FACEBOOK", "Багш", "Эмч"}, 0},
+  1377→                                {"Мэргэжлийн өвчнөөс урьдчилан сэргийлэх гол арга юу вэ?", []string{"Сургалт", "Хамгаалалт", "Эрүүл мэндийн шалгалт", "Бүгд"}, 3},
+  1378→                                {"Ажилтний эрүүл мэндийн шалгалт хэзээ хийдэг вэ?", []string{"Ажилд орох үед", "Жил бүр", "2 жилд нэг", "Ажилд орох ба жил бүр"}, 3},
+  1379→                                {"Мэргэжлийн өвчний үр дагавар юу вэ?", []string{"Ажилгүйдэл", "Эрүүл мэндийн зардал", "Нийгмийн ачаалал", "Бүгд"}, 3},
+  1380→                                {"Ажилтний эрүүл мэндийн даатгалын төрөл хэд байдаг вэ?", []string{"1", "2", "3", "4"}, 2},
+  1381→                                {"Мэргэжлийн хорт хавдрын шалтгаан юу вэ?", []string{"Химийн бодис", "Дуу чимээ", "Радиаци", "Бүгд"}, 3},
+  1382→                                {"Ажилтний эрүүл мэндийн шалгалтын үр дүнг хэд хадгалах вэ?", []string{"1 жил", "5 жил", "10 жил", "Бүх насаар"}, 2},
+  1383→                                {"Мэргэжлийн өвчнийг хэрхэн оношлох вэ?", []string{"Эмчийн шалгалт", "Ажилтны санал", "Мэргэжлийн үнэлгээ", "Б ба В"}, 0},
+  1384→                                {"Ажилтний эрүүл мэндийн хамгаалалтын тухай хууль хэдэн бүлэгтэй вэ?", []string{"3", "5", "7", "10"}, 2},
+  1385→                                {"Мэргэжлийн өвчнийг хэн оношлодог вэ?", []string{"Ажилтан", "Мэргэжлийн эмч", "Ажил олгогч", "ХАБЭА-ын мэргэжилтэн"}, 1},
+  1386→                                {"Ажилтний эрүүл мэндийн хамгаалалтын зардал хэнд ногддог вэ?", []string{"Ажилтанд", "Ажил олгогчид", "Төрөнд", "Бүгдэд"}, 1},
+  1387→                                {"Мэргэжлийн өвчний урьдчилан сэргийлэх 3 арга юу вэ?", []string{"Хяналт, сургалт, хамгаалалт", "Зөвхөн хамгаалалт", "Зөвхөн сургалт", "Зөвхөн хяналт"}, 0},
+  1388→                                {"Ажилтний эрүүл мэндийн шалгалтын төрөл хэд байдаг вэ?", []string{"1", "2", "3", "4"}, 2},
+  1389→                                {"Мэргэжлийн өвчний эмчилгээний зардал хэн төлдөг вэ?", []string{"Ажилтан", "Ажил олгогч", "Даатгал", "Б ба В"}, 3},
+  1390→                                {"Ажилтний эрүүл мэндийн хамгаалалтын тухай хуулийн зорилго юу вэ?", []string{"Ажилтнийг хамгаалах", "Ажил олгогчийг дэмжих", "Эрүүл мэндийг хамгаалах", "Бүгд"}, 3},
+  1391→                                {"Мэргэжлийн өвчний статистик хэний мэдээлэл вэ?", []string{"Ажил олгогчийн", "Эрүүл мэндийн яамны", "ХАБЭА-ын хяналтын газрын", "Б ба В"}, 3},
+  1392→                                {"Ажилтний эрүүл мэндийн шалгалтын дүнг хаана хадгалах вэ?", []string{"Ажлын байр", "Оффис", "Эрүүл мэндийн байгууллага", "Бүгд"}, 2},
+  1393→                                {"Мэргэжлийн өвчнийг хэрхэн эмчлэх вэ?", []string{"Зөвхөн эмч", "Ажилтан өөрөө", "ХАБЭА-ын мэргэжилтэн", "Ажил олгогч"}, 0},
+  1394→                },
+  1395→                },
+  1396→                {
+  1397→                        title:       "Эрүүл мэнд, ахуй - III",
+  1398→                        description: "Ажилтны сэтгэцэд нөлөөлөх хүчин зүйлс",
+  1399→                        category:    "Эрүүл мэнд, ахуй",
+  1400→                        questions: []struct {
+  1401→                                q       string
+  1402→                                options []string
+  1403→                                correct int
+  1404→                        }{
+  1405→                                {"Ажилтны сэтгэцийн эрүүл мэндийг хэрхэн хамгаалах вэ?", []string{"Сургалт", "Уур амьсгалын дэмжлэг", "Ажлын цагийн хуваарь", "Бүгд"}, 3},
+  1406→                                {"Ажилтны стрессийн шалтгаан юу вэ?", []string{"Ажлын ачаалал", "Харьцаа", "Цалин", "Бүгд"}, 3},
+  1407→                                {"Ажилтны сэтгэцийн эрүүл мэндийн шалгалт хэзээ хийдэг вэ?", []string{"Жил бүр", "2 жилд нэг", "3 жилд нэг", "Хэрэгцээт үед"}, 0},
+  1408→                                {"Дарамтын үед ажилтанд юу хийх ёстой вэ?", []string{"Ажлаа үргэлжлүүлэх", "Амрах, тусламж авах", "Дуугарах", "Ажлаас зугтах"}, 1},
+  1409→                                {"Ажилтны сэтгэцийн дэмжлэгийн үйлчилгээ ямар байдаг вэ?", []string{"Зөвлөгөө", "Эмчилгээ", "Сургалт", "Бүгд"}, 3},
+  1410→                                {"Ажилтны ажлын цагийн хуваарь хэд байх ёстой вэ?", []string{"8 цаг", "10 цаг", "12 цаг", "14 цаг"}, 0},
+  1411→                                {"Ажилтны сэтгэцийн эрүүл мэндийг хэн хариуцдаг вэ?", []string{"Ажилтан", "Ажил олгогч", "Эмч", "Бүгд"}, 3},
+  1412→                                {"Ажилтны дарамтын үр дагавар юу вэ?", []string{"Ажлын бүтээмж буурах", "Эрүүл мэндийн асуудал", "Ажилд ороход хэврэх", "Бүгд"}, 3},
+  1413→                                {"Ажилтны сэтгэцийн эрүүл мэндийн сургалт хэзээ хийдэг вэ?", []string{"Жил бүр", "2 жилд нэг", "3 жилд нэг", "Хэрэгцээт үед"}, 0},
+  1414→                                {"Ажилтны дарамтын төрөл хэд байдаг вэ?", []string{"1", "2", "3", "5"}, 2},
+  1415→                                {"Ажилтны сэтгэцийн эрүүл мэндийн үйлчилгээний төв хаана байдаг вэ?", []string{"Ажлын байр", "Эмнэлэг", "ХАБЭА-ын байгууллага", "Бүгд"}, 3},
+  1416→                                {"Ажилтны сэтгэцийн эрүүл мэндийг дэмжих 3 арга юу вэ?", []string{"Сургалт, зөвлөгөө, амралт", "Зөвхөн сургалт", "Зөвхөн амралт", "Зөвхөн зөвлөгөө"}, 0},
+  1417→                                {"Ажилтны сэтгэцийн эрүүл мэндийн тухай хууль байдаг уу?", []string{"Байдаг", "Байдаггүй", "Зөвхөн том компанид", "Зөвхөн үйлдвэрт"}, 0},
+  1418→                                {"Ажилтны дарамттай ажиллах нь аюултай юу?", []string{"Тийм", "Үгүй", "Зөвхөн зарим үед", "Ажилтны сонголт"}, 0},
+  1419→                                {"Ажилтны сэтгэцийн эрүүл мэндийг хэрхэн үнэлэх вэ?", []string{"Асуулга", "Ярилцлага", "Шалгалт", "Бүгд"}, 3},
+  1420→                                {"Ажилтны дарамтын шинж тэмдэг юу вэ?", []string{"Уур хийлэлт", "Нойрны дутагдал", "Ажилд сэтгэл дүүрэлт", "Бүгд"}, 3},
+  1421→                                {"Ажилтны сэтгэцийн эрүүл мэндийн дэмжлэгийн төрөл хэд байдаг вэ?", []string{"1", "2", "3", "5"}, 2},
+  1422→                                {"Ажилтны дарамтыг хэрхэн бууруулах вэ?", []string{"Амралт", "Сургалт", "Зөвлөгөө", "Бүгд"}, 3},
+  1423→                                {"Ажилтны сэтгэцийн эрүүл мэндийн тухай ямар хууль байдаг вэ?", []string{"ХАБЭА-ын хууль", "Эрүүл мэндийн хууль", "Хөдөлмөрийн хууль", "Бүгд"}, 3},
+  1424→                                {"Ажилтны сэтгэцийн эрүүл мэндийг хамгаалахын тулд юу хийх ёстой вэ?", []string{"Ажил олгогч үүрэг хүлээх", "Ажилтан өөрөө хариуцана", "ХАБЭА-ын мэргэжилтэн хариуцна", "Бүгд хамт"}, 3},
+  1425→                },
+  1426→                },
+  1427→
+  1428→                // === Category 4: Байгаль орчин (2 quizzes) ===
+  1429→                {
+  1430→                        title:       "Байгаль орчин - I",
+  1431→                        description: "Ажлын байрны байгаль орчны нөлөөлөл",
+  1432→                        category:    "Байгаль орчин",
+  1433→                        questions: []struct {
+  1434→                                q       string
+  1435→                                options []string
+  1436→                                correct int
+  1437→                        }{
+  1438→                                {"Ажлын байрны байгаль орчны үнэлгээ юу вэ?", []string{"Агаар, ус, хөрсний шалгалт", "Зөвхөн агаарын шалгалт", "Зөвхөн усны шалгалт", "Зөвхөн хөрсний шалгалт"}, 0},
+  1439→                                {"Ажлын байрны байгаль орчны бохирдлын гол шалтгаан юу вэ?", []string{"Ажлын үйл явц", "Улирал", "Газар зүй", "Уур амьсгал"}, 0},
+  1440→                                {"Ажлын байрны байгаль орчны хяналт хэзээ хийдэг вэ?", []string{"Жил бүр", "2 жилд нэг", "3 жилд нэг", "Улирал бүр"}, 0},
+  1441→                                {"Ажлын байрны байгаль орчны бохирдлын хэмжээ хэд байдаг вэ?", []string{"1", "2", "3", "5"}, 2},
+  1442→                                {"Ажлын байрны байгаль орчны тухай хууль юу вэ?", []string{"Байгаль орчны тухай хууль", "ХАБЭА-ын хууль", "Эрүүл мэндийн хууль", "Хөдөлмөрийн хууль"}, 0},
+  1443→                                {"Ажлын байрны байгаль орчны нөлөөллийн үнэлгээ хэн хийдэг вэ?", []string{"Ажил олгогч", "Байгаль орчны мэргэжилтэн", "ХАБЭА-ын мэргэжилтэн", "Цагдаа"}, 1},
+  1444→                                {"Ажлын байрны байгаль орчны бохирдлыг хэрхэн бууруулах вэ?", []string{"Тоног төхөөрөмж", "Сургалт", "Хяналт", "Бүгд"}, 3},
+  1445→                                {"Ажлын байрны байгаль орчны стандарт юу вэ?", []string{"MNS 5850", "MNS 4999", "MNS 5000", "MNS 5010"}, 0},
+  1446→                                {"Ажлын байрны байгаль орчны нөлөөллийн үр дагавар юу вэ?", []string{"Эрүүл мэндийн асуудал", "Ажлын бүтээмж буурах", "Байгаль орчны гэмтэл", "Бүгд"}, 3},
+  1447→                                {"Ажлын байрны байгаль орчны хяналтын төрөл хэд байдаг вэ?", []string{"1", "2", "3", "4"}, 2},
+  1448→                                {"Ажлын байрны байгаль орчны бохирдлын эх үүсвэр юу вэ?", []string{"Үйлдвэрлэл", "Уул уурхай", "Барилга", "Бүгд"}, 3},
+  1449→                                {"Ажлын байрны байгаль орчныг хэн хамгаалдаг вэ?", []string{"Ажил олгогч", "Төрийн байгууллага", "Иргэд", "Бүгд"}, 3},
+  1450→                                {"Ажлын байрны байгаль орчны бохирдлын торгууль хэд вэ?", []string{"100,000₮", "500,000₮", "1,000,000₮", "5,000,000₮"}, 2},
+  1451→                                {"Ажлын байрны байгаль орчны нөлөөллийн үнэлгээний тайлан хэд хийгддэг вэ?", []string{"Жил бүр", "2 жилд нэг", "3 жилд нэг", "5 жилд нэг"}, 0},
+  1452→                                {"Ажлын байрны байгаль орчны бохирдлыг хэн хяндаг вэ?", []string{"Ажил олгогч", "Байгаль орчны байгууллага", "ХАБЭА-ын хяналтын газар", "Цагдаа"}, 1},
+  1453→                                {"Ажлын байрны байгаль орчны нөлөөллийн үнэлгээний зорилго юу вэ?", []string{"Бохирдлыг бууруулах", "Ажлын байрыг хаах", "Ажилтнийг огтлох", "Юу ч биш"}, 0},
+  1454→                                {"Ажлын байрны байгаль орчны бохирдлын төрөл хэд байдаг вэ?", []string{"3", "5", "7", "10"}, 2},
+  1455→                                {"Ажлын байрны байгаль орчны бохирдлыг хэрхэн тодорхойлдог вэ?", []string{"Мэргэжлийн шалгалт", "Ажилтны санал", "Ажил олгогчийн мэдээлэл", "Цагдаагийн мэдээлэл"}, 0},
+  1456→                                {"Ажлын байрны байгаль орчны тухай олон улсын гэрээ юу вэ?", []string{"Киото протокол", "Парисын гэрээ", "Бүгд", "Юу ч биш"}, 2},
+  1457→                                {"Ажлын байрны байгаль орчны хамгаалалтын талаар хэн сургадаг вэ?", []string{"Ажил олгогч", "ХАБЭА-ын байгууллага", "Байгаль орчны байгууллага", "Бүгд"}, 3},
+  1458→                },
+  1459→                },
+  1460→                {
+  1461→                        title:       "Байгаль орчин - II",
+  1462→                        description: "Байгаль орчны менежмент, нөхөн сэргээлт",
+  1463→                        category:    "Байгаль орчин",
+  1464→                        questions: []struct {
+  1465→                                q       string
+  1466→                                options []string
+  1467→                                correct int
+  1468→                        }{
+  1469→                                {"Байгаль орчны менежментийн үндсэн зарчим юу вэ?", []string{"Бохирдол бууруулах", "Нөхөн сэргээлт", "Тогтвортой хөгжил", "Бүгд"}, 3},
+  1470→                                {"Ажлын байрны байгаль орчны нөхөн сэргээлтийн зорилго юу вэ?", []string{"Байгаль орчныг сэргээх", "Ажлын байрыг өргөтгөх", "Бохирдлыг нэмэгдүүлэх", "Ажилтныг хамгаалах"}, 0},
+  1471→                                {"Байгаль орчны нөхөн сэргээлтийн төрөл хэд байдаг вэ?", []string{"1", "2", "3", "4"}, 2},
+  1472→                                {"Ажлын байрны байгаль орчны нөхөн сэргээлтийн зардал хэн төлдөг вэ?", []string{"Ажил олгогч", "Төр", "Иргэд", "Бүгд"}, 0},
+  1473→                                {"Байгаль орчны менежментийн тухай хууль хэдэн бүлэгтэй вэ?", []string{"3", "5", "7", "10"}, 2},
+  1474→                                {"Ажлын байрны байгаль орчны нөхөн сэргээлтийн хугацаа хэд вэ?", []string{"1 жил", "3 жил", "5 жил", "10 жил"}, 2},
+  1475→                                {"Байгаль орчны менежментийн үнэлгээ хийх хугацаа хэд вэ?", []string{"Жил бүр", "2 жилд нэг", "3 жилд нэг", "5 жилд нэг"}, 0},
+  1476→                                {"Ажлын байрны байгаль орчны нөхөн сэргээлтийн үр дүн юу вэ?", []string{"Байгаль орчныг сэргээх", "Бохирдол бууруулах", "Ажилтний эрүүл мэндийг дээшлүүлэх", "Бүгд"}, 3},
+  1477→                                {"Байгаль орчны менежментийн үйл ажиллагааны төрөл хэд байдаг вэ?", []string{"1", "2", "3", "5"}, 3},
+  1478→                                {"Ажлын байрны байгаль орчны нөхөн сэргээлтийн арга юу вэ?", []string{"Мод тарих", "Ус цэвэрлэх", "Хөрс сэргээх", "Бүгд"}, 3},
+  1479→                                {"Байгаль орчны менежментийн талаар хэн сургадаг вэ?", []string{"Ажил олгогч", "Байгаль орчны байгууллага", "ХАБЭА-ын байгууллага", "Бүгд"}, 3},
+  1480→                                {"Ажлын байрны байгаль орчны нөхөн сэргээлтийн шалгалт хэзээ хийдэг вэ?", []string{"Жил бүр", "2 жилд нэг", "3 жилд нэг", "5 жилд нэг"}, 0},
+  1481→                                {"Байгаль орчны менежментийн тухай олон улсын гэрээ юу вэ?", []string{"Парисын гэрээ", "Киото протокол", "Бүгд", "Юу ч биш"}, 2},
+  1482→                                {"Ажлын байрны байгаль орчны нөхөн сэргээлтийн төсөл хэн бичдэг вэ?", []string{"Ажил олгогч", "Байгаль орчны мэргэжилтэн", "ХАБЭА-ын мэргэжилтэн", "Цагдаа"}, 1},
+  1483→                                {"Байгаль орчны менежментийн үнэлгээний тайлан хаана тавьдаг вэ?", []string{"Ажлын байр", "Байгаль орчны байгууллага", "ХАБЭА-ын хяналтын газар", "Бүгд"}, 3},
+  1484→                                {"Ажлын байрны байгаль орчны нөхөн сэргээлтийн хяналт хэн хийдэг вэ?", []string{"Ажил олгогч", "Байгаль орчны байгууллага", "ХАБЭА-ын хяналтын газар", "Бүгд"}, 3},
+  1485→                                {"Байгаль орчны менежментийн талаар ямар сургалт байдаг вэ?", []string{"Мэргэжлийн сургалт", "Дэлгэрэнгүй сургалт", "Бүх сургалт", "Юу ч биш"}, 0},
+  1486→                                {"Ажлын байрны байгаль орчны нөхөн сэргээлтийн үр дүнг хэрхэн үнэлэх вэ?", []string{"Мэргэжлийн үнэлгээ", "Ажилтний санал", "Ажил олгогчийн мэдээлэл", "Бүгд"}, 0},
+  1487→                                {"Байгаль орчны менежментийн бодлогод хэн оролцдог вэ?", []string{"Ажил олгогч", "Төрийн байгууллага", "Иргэд", "Бүгд"}, 3},
+  1488→                                {"Ажлын байрны байгаль орчны нөхөн сэргээлтийн ач холбогдол юу вэ?", []string{"Байгаль орчныг хамгаалах", "Ажилтний эрүүл мэндийг хамгаалах", "Тогтвортой хөгжил", "Бүгд"}, 3},
+  1489→                },
+  1490→                },
+  1491→
+  1492→                // === Category 5: Гал түймэр, онцгой нөхцөл (2 quizzes) ===
+  1493→                {
+  1494→                        title:       "Гал түймэр, онцгой нөхцөл - I",
+  1495→                        description: "Гал түймрийн урьдчилан сэргийлэлт, унтраах",
+  1496→                        category:    "Гал түймэр, онцгой нөхцөл",
+  1497→                        questions: []struct {
+  1498→                                q       string
+  1499→                                options []string
+  1500→                                correct int
+  1501→                        }{
+  1502→                                {"Гал түймрийн ангилал хэд байдаг вэ?", []string{"1", "2", "3", "5"}, 3},
+  1503→                                {"Унтраагуурын төрөл хэд байдаг вэ?", []string{"2", "3", "4", "5"}, 2},
+  1504→                                {"Гал түймрийн үед юу хийх ёстой вэ?", []string{"Зугтах", "Унтраагуур ашиглах", "Ус цацах", "Харах"}, 1},
+  1505→                                {"Гал түймрийн шалтгаан юу вэ?", []string{"Цахилгаан", "Уухай", "Тамхи", "Бүгд"}, 3},
+  1506→                                {"Гал түймрийн мэдээллийн систем ямар байдаг вэ?", []string{"Дуут", "Гэрэлт", "Сэрүүлэг", "Бүгд"}, 3},
+  1507→                                {"Гал түймрийн урьдчилан сэргийлэх гол арга юу вэ?", []string{"Сургалт", "Хяналт", "Унтраагуур бэлтгэх", "Бүгд"}, 3},
+  1508→                                {"Гал түймрийн эвакуацлалтын төлөвлөгөө хэнд байдаг вэ?", []string{"Ажил олгогч", "Гал унтраагуулах байгууллага", "Ажилтан", "Цагдаа"}, 0},
+  1509→                                {"Гал түймрийн үед хаашаа явах ёстой вэ?", []string{"Дээш", "Доош", "Гарах үүд", "Цонх"}, 2},
+  1510→                                {"Гал түймрийн унтраагуурын байрлал хаана байх ёстой вэ?", []string{"Оффисод", "Ажлын байрны бүх газарт", "Зөвхөн үйлдвэрт", "Хаалган дээр"}, 1},
+  1511→                                {"Гал түймрийн сургалт хэзээ хийдэг вэ?", []string{"Жил бүр", "2 жилд нэг", "3 жилд нэг", "6 сард нэг"}, 0},
+  1512→                                {"Гал түймрийн дараа юу хийх ёстой вэ?", []string{"Ажлаа үргэлжлүүлэх", "Шалтгааныг олох", "Далдлах", "Юу ч хийхгүй"}, 1},
+  1513→                                {"Гал түймрийн тухай хууль хэдэн бүлэгтэй вэ?", []string{"3", "5", "7", "10"}, 2},
+  1514→                                {"Гал түймрийн хор уршгийг хэрхэн бууруулах вэ?", []string{"Агааржуулалт", "Унтраагуур", "Сэнсэлгээ", "Бүгд"}, 3},
+  1515→                                {"Гал түймрийн үед хэн хариуцдаг вэ?", []string{"Ажилтан", "Ажил олгогч", "Гал унтраагуулах байгууллага", "Бүгд"}, 3},
+  1516→                                {"Гал түймрийн урьдчилан сэргийлэх 3 алхам юу вэ?", []string{"Таних, үнэлэх, хянах", "Хаах, нээх, хийх", "Сургах, хянах, унтраах", "Зогсох, харах, явах"}, 0},
+  1517→                                {"Гал түймрийн мэдээллийн системийг хэн хариуцдаг вэ?", []string{"Ажил олгогч", "Гал унтраагуулах байгууллага", "ХАБЭА-ын мэргэжилтэн", "Бүгд"}, 3},
+  1518→                                {"Гал түймрийн ангиллын тухай мэдлэг ямар чухал вэ?", []string{"Унтраагуур сонгох", "Эвакуацлах", "Хянах", "Бүгд"}, 3},
+  1519→                                {"Гал түймрийн үед утсаар ярих ёстой уу?", []string{"Тийм", "Үгүй", "Зөвхөн шууданг", "Зөвхөн утас"}, 1},
+  1520→                                {"Гал түймрийн сургалтын төрөл хэд байдаг вэ?", []string{"1", "2", "3", "4"}, 2},
+  1521→                                {"Гал түймрийн тухай дүрмийг хаана байрлуулах ёстой вэ?", []string{"Оффисод", "Ажлын байрны бүх газар", "Зөвхөн үйлдвэрт", "Гал унтраагуулах байгууллагад"}, 1},
+  1522→                },
+  1523→                },
+  1524→                {
+  1525→                        title:       "Гал түймэр, онцгой нөхцөл - II",
+  1526→                        description: "Онцгой нөхцөлд үйлдэх журам",
+  1527→                        category:    "Гал түймэр, онцгой нөхцөл",
+  1528→                        questions: []struct {
+  1529→                                q       string
+  1530→                                options []string
+  1531→                                correct int
+  1532→                        }{
+  1533→                                {"Онцгой нөхцөл гэж юу вэ?", []string{"Гал түймэр", "Гэмтэл", "Дарамт", "Бүгд"}, 3},
+  1534→                                {"Онцгой нөхцөлийн ангилал хэд байдаг вэ?", []string{"1", "2", "3", "5"}, 2},
+  1535→                                {"Онцгой нөхцөлд ямар утасдаж дуудах вэ?", []string{"101", "102", "103", "105"}, 2},
+  1536→                                {"Онцгой нөхцөлийн үед эхний үйлдэл юу вэ?", []string{"Зугтах", "Мэдээлэх, хамгаалах", "Ажлаа үргэлжлүүлэх", "Дуугарах"}, 1},
+  1537→                                {"Онцгой нөхцөлийн төлөвлөгөө хэнд байдаг вэ?", []string{"Ажил олгогч", "Онцгой байдлын байгууллага", "Ажилтан", "Цагдаа"}, 0},
+  1538→                                {"Онцгой нөхцөлийн сургалт хэзээ хийдэг вэ?", []string{"Жил бүр", "2 жилд нэг", "3 жилд нэг", "6 сард нэг"}, 0},
+  1539→                                {"Онцгой нөхцөлийн үед хэн хариуцдаг вэ?", []string{"Ажилтан", "Ажил олгогч", "Онцгой байдлын байгууллага", "Бүгд"}, 3},
+  1540→                                {"Онцгой нөхцөлийн тухай хууль хэдэн бүлэгтэй вэ?", []string{"3", "5", "7", "10"}, 2},
+  1541→                                {"Онцгой нөхцөлийн дараа юу хийх ёстой вэ?", []string{"Ажлаа үргэлжлүүлэх", "Шалтгааныг олох", "Далдлах", "Юу ч хийхгүй"}, 1},
+  1542→                                {"Онцгой нөхцөлийн ангиллын тухай мэдлэг ямар чухал вэ?", []string{"Хариу өгөх", "Хамгаалах", "Эвакуацлах", "Бүгд"}, 3},
+  1543→                                {"Онцгой нөхцөлийн мэдээллийн систем ямар байдаг вэ?", []string{"Дуут", "Гэрэлт", "Сэрүүлэг", "Бүгд"}, 3},
+  1544→                                {"Онцгой нөхцөлийн үед хаашаа явах ёстой вэ?", []string{"Дээш", "Доош", "Гарах үүд", "Цонх"}, 2},
+  1545→                                {"Онцгой нөхцөлийн сургалтын төрөл хэд байдаг вэ?", []string{"1", "2", "3", "4"}, 2},
+  1546→                                {"Онцгой нөхцөлийн тухай дүрмийг хаана байрлуулах ёстой вэ?", []string{"Оффисод", "Ажлын байрны бүх газар", "Зөвхөн үйлдвэрт", "Онцгой байдлын байгууллагад"}, 1},
+  1547→                                {"Онцгой нөхцөлийн үед ямар хэрэгсэл хэрэгтэй вэ?", []string{"Эхний тусламжийн хайрцаг", "Унтраагуур", "Амьсгалын хамгаалалт", "Бүгд"}, 3},
+  1548→                                {"Онцгой нөхцөлийн үр дагавар юу вэ?", []string{"Хүний амь насны алдагдал", "Малын хорогдол", "Орчны гэмтэл", "Бүгд"}, 3},
+  1549→                                {"Онцгой нөхцөлийн үед хэн тусалдаг вэ?", []string{"Ажилтан", "Ажил олгогч", "Онцгой байдлын байгууллага", "Бүгд"}, 3},
+  1550→                                {"Онцгой нөхцөлийн урьдчилан сэргийлэх гол арга юу вэ?", []string{"Сургалт", "Хяналт", "Төлөвлөгөө", "Бүгд"}, 3},
+  1551→                                {"Онцгой нөхцөлийн дараахь 3 үйлдэл юу вэ?", []string{"Мэдээлэх, тусламж үзүүлэх, мөрдөн байцаах", "Ажлаа үргэлжлүүлэх", "Далдлах", "Ажилтнийг огтлох"}, 0},
+  1552→                                {"Онцгой нөхцөлийн тухай мэдлэгийг хэн олгодог вэ?", []string{"Ажил олгогч", "ХАБЭА-ын байгууллага", "Онцгой байдлын байгууллага", "Бүгд"}, 3},
+  1553→                },
+  1554→                },
+  1555→        }
+  1556→
+  1557→        totalQuestions := 0
+  1558→
+  1559→        for _, qd := range quizDefs {
+  1560→                quizID := uuid.New().String()
+  1561→
+  1562→                quiz := Quiz{
+  1563→                        ID:            quizID,
+  1564→                        Title:         qd.title,
+  1565→                        Description:   qd.description,
+  1566→                        Category:      qd.category,
+  1567→                        QuestionCount: len(qd.questions),
+  1568→                }
+  1569→                DB.Create(&quiz)
+  1570→
+  1571→                for idx, qd := range qd.questions {
+  1572→                        optsJSON, _ := json.Marshal(qd.options)
+  1573→
+  1574→                        qq := QuizQuestion{
+  1575→                                ID:       uuid.New().String(),
+  1576→                                QuizID:   quizID,
+  1577→                                Question: qd.q,
+  1578→                                Options:  string(optsJSON),
+  1579→                                Correct:  qd.correct,
+  1580→                                Index:    idx,
+  1581→                }
+  1582→                        DB.Create(&qq)
+  1583→                        totalQuestions++
+  1584→        }
+  1585→        }
+  1586→
+  1587→        log.Printf("Seeded %d quizzes with %d questions", len(quizDefs), totalQuestions)
+  1588→        return totalQuestions
+  1589→}
+  1590→
+  1591→// GetQuizQuestionsHandler returns questions for a specific quiz (for quiz taking)
+  1592→func GetQuizQuestionsHandler(c *gin.Context) {
+  1593→        quizID := c.Query("quizId")
+  1594→        if quizID == "" {
+  1595→                c.JSON(http.StatusBadRequest, gin.H{"error": "quizId query parameter required"})
+  1596→                return
+  1597→        }
+  1598→
+  1599→        var questions []QuizQuestion
+  1600→        if err := DB.Where("quiz_id = ?", quizID).Order(fmt.Sprintf(""%s" ASC", "index")).Find(&questions).Error; err != nil {
+  1601→                c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch questions"})
+  1602→                return
+  1603→        }
+  1604→
+  1605→        type SafeQuestion struct {
+  1606→                ID       string   `json:"id"`
+  1607→                QuizID   string   `json:"quizId"`
+  1608→                Question string   `json:"question"`
+  1609→                Options  []string `json:"options"`
+  1610→                Index    int      `json:"index"`
+  1611→        }
+  1612→
+  1613→        safeQuestions := make([]SafeQuestion, len(questions))
+  1614→        for i, q := range questions {
+  1615→                var opts []string
+  1616→                json.Unmarshal([]byte(q.Options), &opts)
+  1617→
+  1618→                safeQuestions[i] = SafeQuestion{
+  1619→                        ID:       q.ID,
+  1620→                        QuizID:   q.QuizID,
+  1621→                        Question: q.Question,
+  1622→                        Options:  opts,
+  1623→                        Index:    q.Index,
+  1624→                }
+  1625→        }
+  1626→
+  1627→        var quiz Quiz
+  1628→        DB.Select("id, title").Where("id = ?", quizID).First(&quiz)
+  1629→
+  1630→        c.JSON(http.StatusOK, gin.H{
+  1631→                "quiz":     gin.H{"id": quiz.ID, "title": quiz.Title},
+  1632→                "questions": safeQuestions,
+  1633→        })
+  1634→}
+  1635→
+  1636→// GetExamQuestionsHandler returns questions for a specific exam
+  1637→func GetExamQuestionsHandler(c *gin.Context) {
+  1638→        examID := c.Query("examId")
+  1639→        if examID == "" {
+  1640→                c.JSON(http.StatusBadRequest, gin.H{"error": "examId query parameter required"})
+  1641→                return
+  1642→        }
+  1643→
+  1644→        var exam Exam
+  1645→        if err := DB.Where("id = ?", examID).First(&exam).Error; err != nil {
+  1646→                c.JSON(http.StatusNotFound, gin.H{"error": "Exam not found"})
+  1647→                return
+  1648→        }
+  1649→
+  1650→        var questions []QuizQuestion
+  1651→        if err := DB.Where("quiz_id = ?", examID).Order(fmt.Sprintf(""%s" ASC", "index")).Find(&questions).Error; err != nil {
+  1652→                c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch questions"})
+  1653→                return
+  1654→        }
+  1655→
+  1656→        type SafeQuestion struct {
+  1657→                ID       string   `json:"id"`
+  1658→                Question string   `json:"question"`
+  1659→                Options  []string `json:"options"`
+  1660→                Index    int      `json:"index"`
+  1661→        }
+  1662→
+  1663→        safeQuestions := make([]SafeQuestion, len(questions))
+  1664→        for i, q := range questions {
+  1665→                var opts []string
+  1666→                json.Unmarshal([]byte(q.Options), &opts)
+  1667→
+  1668→                safeQuestions[i] = SafeQuestion{
+  1669→                        ID:       q.ID,
+  1670→                        Question: q.Question,
+  1671→                        Options:  opts,
+  1672→                        Index:    q.Index,
+  1673→                }
+  1674→        }
+  1675→
+  1676→        c.JSON(http.StatusOK, gin.H{
+  1677→                "exam":      exam,
+  1678→                "questions": safeQuestions,
+  1679→        })
+  1680→}
+  1681→
+  1682→// Unused import suppression
+  1683→var _ = strconv.Itoa
+  1684→
