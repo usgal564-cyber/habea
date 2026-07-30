@@ -1,5 +1,10 @@
 import { create } from "zustand";
-import type { JWTPayload } from "@/lib/auth";
+
+interface JWTPayload {
+  userId: string;
+  email: string;
+  role: string;
+}
 
 interface AuthState {
   user: JWTPayload | null;

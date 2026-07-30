@@ -53,3 +53,33 @@ Stage Summary:
 - Admin page: Title now reads "Админ хэсэг", no logout button
 - Profile page: Logout button moved from header to bottom with subtle red styling
 - Training dialog: Step indicator fixed - circles clearly separated with labels and connecting progress line
+
+---
+Task ID: 3
+Agent: Main Agent
+Task: Remove all backend/database code, keep only frontend
+
+Work Log:
+- Deleted entire `frontend/src/app/api/` directory (all API routes: auth, quiz, courses, exam, admin, etc.)
+- Deleted `frontend/prisma/` (schema.prisma)
+- Deleted `frontend/db/` (custom.db SQLite database)
+- Deleted `frontend/src/lib/db.ts` (Prisma client)
+- Deleted `frontend/src/lib/auth.ts` (JWT/bcrypt utilities)
+- Deleted `frontend/seed-questions.js` (database seeder)
+- Fixed `frontend/src/hooks/use-auth.ts` - inlined JWTPayload type, removed import from deleted @/lib/auth
+- Cleaned `frontend/package.json`:
+  - Removed scripts: db:push, db:generate, db:migrate, db:reset
+  - Removed deps: @prisma/client, bcryptjs, exceljs, next-auth, next-intl, prisma
+  - Removed devDeps: @types/bcryptjs
+- Cleaned `frontend/.env` - removed DATABASE_URL
+- Started dev server from `frontend/` directory
+- Verified with browser: Homepage renders correctly with navbar, hero section, content cards, footer
+- Verified navigation: About, Training, Quiz pages all work
+- Lint passes with no errors
+
+Stage Summary:
+- Frontend-only codebase at `/home/z/my-project/frontend/`
+- All backend/database files removed
+- Frontend components preserved (they make fetch() calls to /api/ that user will reconnect to their own backend)
+- Dev server runs: `cd /home/z/my-project/frontend && bun run dev`
+- `start-dev.sh` and `keep-alive.sh` updated to point to frontend/
