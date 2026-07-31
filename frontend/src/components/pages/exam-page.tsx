@@ -9,12 +9,15 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuthStore } from "@/hooks/use-auth";
 import { toast } from "sonner";
 import {
   Shield, Lock, Clock, ChevronRight, ChevronLeft, CheckCircle, XCircle,
   ArrowLeft, Loader2, Plus, Trash2, Copy, Download, Eye, AlertTriangle,
+  FileEdit, Award, Scale, Flame, Heart, ClipboardList, Zap,
 } from "lucide-react";
+import { examTemplates, type ExamTemplate } from "@/data/exam-templates";
 
 interface Question {
   id: string;
@@ -28,6 +31,14 @@ interface Question {
 type ExamState = "enter-code" | "exam-info" | "taking" | "result";
 
 const QUESTIONS_PER_PAGE = 10;
+
+const iconMap: Record<string, React.ReactNode> = {
+  shield: <Shield className="w-6 h-6" />,
+  award: <Award className="w-6 h-6" />,
+  scale: <Scale className="w-6 h-6" />,
+  flame: <Flame className="w-6 h-6" />,
+  heart: <Heart className="w-6 h-6" />,
+};
 
 export default function ExamPage() {
   const { user, token } = useAuthStore();
@@ -46,14 +57,19 @@ export default function ExamPage() {
   const [examHistory, setExamHistory] = useState<any[]>([]);
   const handleSubmitRef = useRef<() => void>(() => {});
 
-  // Admin state
+  // Admin: Create from template
+  const [creatingFromTemplate, setCreatingFromTemplate] = useState<string | null>(null);
+  const [createdCode, setCreatedCode] = useState("");
+  const [createdTitle, setCreatedTitle] = useState("");
+
+  // Admin: Custom create
+  const [showCustomCreate, setShowCustomCreate] = useState(false);
   const [examTitle, setExamTitle] = useState("");
   const [examDuration, setExamDuration] = useState("30");
   const [adminQuestions, setAdminQuestions] = useState<{ question: string; optionA: string; optionB: string; optionC: string; optionD: string; correct: string }[]>([
     { question: "", optionA: "", optionB: "", optionC: "", optionD: "", correct: "0" },
   ]);
-  const [createdCode, setCreatedCode] = useState("");
-  const [creating, setCreating] = useState(false);
+  const [customCreating, setCustomCreating] = useState(false);
 
   const totalPages = Math.ceil(questions.length / QUESTIONS_PER_PAGE);
   const currentQuestions = questions.slice((currentPage - 1) * QUESTIONS_PER_PAGE, currentPage * QUESTIONS_PER_PAGE);
@@ -69,7 +85,6 @@ export default function ExamPage() {
     return () => clearInterval(interval);
   }, [timerActive, timeLeft]);
 
-  // Load exam history for logged-in users
   useEffect(() => {
     if (token) {
       fetch("/api/exam/history", { headers: { Authorization: `Bearer ${token}` } })
@@ -117,7 +132,6 @@ export default function ExamPage() {
       if (!res.ok) { toast.error(data.error); return; }
       setResult({ score: data.score, total: data.total, passed: data.passed });
       setState("result");
-      // Refresh history
       fetch("/api/exam/history", { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()).then(d => setExamHistory(d.history || [])).catch(() => {});
     } catch { toast.error("Алдаа"); }
     finally { setLoading(false); }
@@ -130,27 +144,64 @@ export default function ExamPage() {
   const formatTime = (s: number) => { const m = Math.floor(s / 60); return `${m.toString().padStart(2, "0")}:${(s % 60).toString().padStart(2, "0")}`; };
   const answeredCount = Object.keys(answers).length;
 
-  // Admin: Add question
+  // Admin: Create exam from template
+  const handleCreateFromTemplate = async (template: ExamTemplate) => {
+    setCreatingFromTemplate(template.id);
+    try {
+      const body = {
+        title: template.title,
+        duration: template.duration,
+        questions: template.questions.map(q => ({
+          question: q.question,
+          optionA: q.optionA,
+          optionB: q.optionB,
+          optionC: q.optionC,
+          optionD: q.optionD,
+          correct: q.correct,
+        })),
+      };
+      const res = await fetch("/api/admin/exams", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json();
+      if (!res.ok) { toast.error(data.error || "Алдаа"); setCreatingFromTemplate(null); return; }
+      setCreatedCode(data.exam.code);
+      setCreatedTitle(template.title);
+      toast.success(`Шалгалт үүссэн! Код: ${data.exam.code}`);
+      setTimeout(() => { setCreatingFromTemplate(null); setCreatedCode(""); setCreatedTitle(""); }, 5000);
+    } catch { toast.error("Алдаа"); setCreatingFromTemplate(null); }
+  };
+
+  // Admin: Add question (custom)
   const addQuestion = () => setAdminQuestions([...adminQuestions, { question: "", optionA: "", optionB: "", optionC: "", optionD: "", correct: "0" }]);
   const removeQuestion = (i: number) => { if (adminQuestions.length > 1) setAdminQuestions(adminQuestions.filter((_, idx) => idx !== i)); };
   const updateQ = (i: number, field: string, val: string) => { const nq = [...adminQuestions]; nq[i] = { ...nq[i], [field]: val }; setAdminQuestions(nq); };
 
-  // Admin: Create exam
-  const handleCreateExam = async () => {
+  // Admin: Custom create
+  const handleCustomCreate = async () => {
     if (!examTitle.trim()) { toast.error("Шалгалтын нэр оруулна уу"); return; }
     const valid = adminQuestions.filter(q => q.question.trim() && q.optionA.trim() && q.optionB.trim() && q.optionC.trim() && q.optionD.trim());
     if (valid.length < 1) { toast.error("Дор хаяж 1 асуулт оруулна уу"); return; }
-    setCreating(true);
+    setCustomCreating(true);
     try {
       const body = { title: examTitle, duration: parseInt(examDuration) || 30, questions: valid.map(q => ({ ...q, correct: parseInt(q.correct) })) };
       const res = await fetch("/api/admin/exams", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }, body: JSON.stringify(body) });
       const data = await res.json();
       if (!res.ok) { toast.error(data.error || "Алдаа"); return; }
       setCreatedCode(data.exam.code);
+      setCreatedTitle(examTitle);
       toast.success(`Шалгалт үүссэн! Код: ${data.exam.code}`);
       setExamTitle(""); setExamDuration("30"); setAdminQuestions([{ question: "", optionA: "", optionB: "", optionC: "", optionD: "", correct: "0" }]);
+      setShowCustomCreate(false);
     } catch { toast.error("Алдаа"); }
-    finally { setCreating(false); }
+    finally { setCustomCreating(false); }
+  };
+
+  const copyCode = (c: string) => {
+    navigator.clipboard.writeText(c);
+    toast.success("Код хуулагдлаа!");
   };
 
   return (
@@ -169,9 +220,9 @@ export default function ExamPage() {
         </div>
       </div>
 
-      <div className="max-w-4xl mx-auto px-4 -mt-8 pb-12">
-        {/* ─── Admin: Create Exam Section ─── */}
-        {isAdmin && (
+      <div className="max-w-5xl mx-auto px-4 -mt-8 pb-12">
+        {/* ─── Admin: Template Selection + Custom Create ─── */}
+        {isAdmin && state === "enter-code" && (
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="mb-8">
             <Card className="shadow-xl border-brand-200">
               <CardHeader className="bg-brand-50 rounded-t-xl">
@@ -179,66 +230,192 @@ export default function ExamPage() {
                   <Shield className="w-5 h-5" /> Админ: Шалгалт үүсгэх
                 </CardTitle>
               </CardHeader>
-              <CardContent className="p-6 space-y-4">
-                <div className="grid sm:grid-cols-2 gap-4">
-                  <div>
-                    <Label>Шалгалтын нэр</Label>
-                    <Input value={examTitle} onChange={e => setExamTitle(e.target.value)} placeholder="Жишээ: ХАБЭА үндсэн шалгалт" />
-                  </div>
-                  <div>
-                    <Label>Хугацаа (минут)</Label>
-                    <Input type="number" value={examDuration} onChange={e => setExamDuration(e.target.value)} placeholder="30" />
-                  </div>
-                </div>
-
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <Label className="text-base font-semibold">Асуултууд ({adminQuestions.length})</Label>
-                    <Button type="button" size="sm" variant="outline" onClick={addQuestion}><Plus className="w-4 h-4 mr-1" /> Асуулт нэмэх</Button>
-                  </div>
-
-                  {adminQuestions.map((q, i) => (
-                    <div key={i} className="bg-gray-50 rounded-xl p-4 space-y-3 border">
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm font-bold text-brand-700">Асуулт {i + 1}</span>
-                        <Button type="button" size="sm" variant="ghost" onClick={() => removeQuestion(i)} className="text-red-500 hover:text-red-700">
-                          <Trash2 className="w-4 h-4" />
+              <CardContent className="p-6">
+                {/* Success Message */}
+                {createdCode && (
+                  <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="mb-6 p-4 bg-green-50 border-2 border-green-300 rounded-xl">
+                    <div className="text-center">
+                      <CheckCircle className="w-8 h-8 text-green-600 mx-auto mb-2" />
+                      <p className="text-green-800 font-medium">{createdTitle}</p>
+                      <p className="text-green-700 text-sm mt-1">Шалгалт үүслээ! Код:</p>
+                      <div className="flex items-center justify-center gap-2 mt-2">
+                        <span className="text-2xl font-bold tracking-[0.3em] text-green-900 font-mono">{createdCode}</span>
+                        <Button size="sm" variant="outline" className="text-green-700 border-green-300 hover:bg-green-100" onClick={() => copyCode(createdCode)}>
+                          <Copy className="w-4 h-4" />
                         </Button>
                       </div>
-                      <Textarea value={q.question} onChange={e => updateQ(i, "question", e.target.value)} placeholder="Асуултын текст..." rows={2} />
-                      <div className="grid grid-cols-2 gap-2">
-                        <Input value={q.optionA} onChange={e => updateQ(i, "optionA", e.target.value)} placeholder="A) Хариулт" />
-                        <Input value={q.optionB} onChange={e => updateQ(i, "optionB", e.target.value)} placeholder="B) Хариулт" />
-                        <Input value={q.optionC} onChange={e => updateQ(i, "optionC", e.target.value)} placeholder="C) Хариулт" />
-                        <Input value={q.optionD} onChange={e => updateQ(i, "optionD", e.target.value)} placeholder="D) Хариулт" />
+                    </div>
+                  </motion.div>
+                )}
+
+                <Tabs defaultValue="exam" className="w-full">
+                  <TabsList className="grid w-full grid-cols-2 mb-6">
+                    <TabsTrigger value="exam" className="gap-1.5">
+                      <FileEdit className="w-4 h-4" />
+                      Шалгалт
+                    </TabsTrigger>
+                    <TabsTrigger value="quiz" className="gap-1.5">
+                      <ClipboardList className="w-4 h-4" />
+                      Мэдлэг сорих
+                    </TabsTrigger>
+                  </TabsList>
+
+                  {/* Шалгалт Templates */}
+                  <TabsContent value="exam">
+                    <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {examTemplates.filter(t => t.type === "exam").map((template) => (
+                        <motion.div key={template.id} whileHover={{ y: -2 }}>
+                          <Card className="h-full border-2 hover:border-brand-400 transition-all group cursor-pointer" style={{ borderColor: creatingFromTemplate === template.id ? "#124D1C" : undefined }}>
+                            <CardContent className="p-5 flex flex-col h-full">
+                              <div className="flex items-center gap-3 mb-3">
+                                <div className="w-12 h-12 rounded-xl bg-brand-100 text-brand-700 flex items-center justify-center shrink-0">
+                                  {iconMap[template.icon] || <Shield className="w-6 h-6" />}
+                                </div>
+                                <div className="min-w-0">
+                                  <h3 className="font-bold text-brand-900 text-sm leading-tight">{template.title}</h3>
+                                  <Badge variant="secondary" className="text-xs mt-1 bg-brand-100 text-brand-700">
+                                    {template.questions.length} асуулт
+                                  </Badge>
+                                </div>
+                              </div>
+                              <p className="text-sm text-muted-foreground mb-4 flex-1">{template.description}</p>
+                              <div className="flex items-center justify-between gap-2 mb-3">
+                                <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                                  <span className="flex items-center gap-1"><Clock className="w-3 h-3" />{template.duration} мин</span>
+                                  <span className="flex items-center gap-1"><Zap className="w-3 h-3" />{template.passingScore}%</span>
+                                </div>
+                              </div>
+                              <Button
+                                onClick={() => handleCreateFromTemplate(template)}
+                                disabled={creatingFromTemplate === template.id}
+                                className="w-full bg-brand-600 hover:bg-brand-700 text-white"
+                              >
+                                {creatingFromTemplate === template.id ? (
+                                  <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Үүсгэж байна...</>
+                                ) : (
+                                  "Сонгох"
+                                )}
+                              </Button>
+                            </CardContent>
+                          </Card>
+                        </motion.div>
+                      ))}
+                    </div>
+                  </TabsContent>
+
+                  {/* Мэдлэг сорих Templates */}
+                  <TabsContent value="quiz">
+                    <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {examTemplates.filter(t => t.type === "quiz").map((template) => (
+                        <motion.div key={template.id} whileHover={{ y: -2 }}>
+                          <Card className="h-full border-2 hover:border-amber-400 transition-all group cursor-pointer" style={{ borderColor: creatingFromTemplate === template.id ? "#d97706" : undefined }}>
+                            <CardContent className="p-5 flex flex-col h-full">
+                              <div className="flex items-center gap-3 mb-3">
+                                <div className="w-12 h-12 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
+                                  {iconMap[template.icon] || <ClipboardList className="w-6 h-6" />}
+                                </div>
+                                <div className="min-w-0">
+                                  <h3 className="font-bold text-amber-900 text-sm leading-tight">{template.title}</h3>
+                                  <Badge variant="secondary" className="text-xs mt-1 bg-amber-100 text-amber-700">
+                                    {template.questions.length} асуулт
+                                  </Badge>
+                                </div>
+                              </div>
+                              <p className="text-sm text-muted-foreground mb-4 flex-1">{template.description}</p>
+                              <div className="flex items-center justify-between gap-2 mb-3">
+                                <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                                  <span className="flex items-center gap-1"><Clock className="w-3 h-3" />{template.duration} мин</span>
+                                  <span className="flex items-center gap-1"><Zap className="w-3 h-3" />{template.passingScore}%</span>
+                                </div>
+                              </div>
+                              <Button
+                                onClick={() => handleCreateFromTemplate(template)}
+                                disabled={creatingFromTemplate === template.id}
+                                className="w-full bg-amber-600 hover:bg-amber-700 text-white"
+                              >
+                                {creatingFromTemplate === template.id ? (
+                                  <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Үүсгэж байна...</>
+                                ) : (
+                                  "Сонгох"
+                                )}
+                              </Button>
+                            </CardContent>
+                          </Card>
+                        </motion.div>
+                      ))}
+                    </div>
+                  </TabsContent>
+                </Tabs>
+
+                {/* Divider */}
+                <div className="relative my-6">
+                  <div className="absolute inset-0 flex items-center"><div className="w-full border-t" /></div>
+                  <div className="relative flex justify-center text-xs uppercase">
+                    <span className="bg-white px-3 text-muted-foreground">эсвэл</span>
+                  </div>
+                </div>
+
+                {/* Custom Create Toggle */}
+                {!showCustomCreate ? (
+                  <Button variant="outline" onClick={() => setShowCustomCreate(true)} className="w-full border-dashed border-2 border-brand-300 text-brand-700 hover:bg-brand-50 hover:border-brand-400">
+                    <Plus className="w-4 h-4 mr-2" /> Шинээр үүсгэх
+                  </Button>
+                ) : (
+                  <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} className="border-2 border-brand-200 rounded-xl p-5 bg-brand-50/30">
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="font-bold text-brand-900 flex items-center gap-2"><FileEdit className="w-4 h-4" /> Шинэ шалгалт үүсгэх</h3>
+                      <Button size="sm" variant="ghost" onClick={() => setShowCustomCreate(false)} className="text-muted-foreground"><XCircle className="w-4 h-4" /></Button>
+                    </div>
+                    <div className="grid sm:grid-cols-2 gap-4 mb-4">
+                      <div>
+                        <Label>Шалгалтын нэр</Label>
+                        <Input value={examTitle} onChange={e => setExamTitle(e.target.value)} placeholder="Жишээ: ХАБЭА үндсэн шалгалт" />
                       </div>
-                      <div className="flex items-center gap-2">
-                        <Label className="text-sm">Зөв хариулт:</Label>
-                        <Select value={q.correct} onValueChange={v => updateQ(i, "correct", v)}>
-                          <SelectTrigger className="w-24"><SelectValue /></SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="0">A</SelectItem>
-                            <SelectItem value="1">B</SelectItem>
-                            <SelectItem value="2">C</SelectItem>
-                            <SelectItem value="3">D</SelectItem>
-                          </SelectContent>
-                        </Select>
+                      <div>
+                        <Label>Хугацаа (минут)</Label>
+                        <Input type="number" value={examDuration} onChange={e => setExamDuration(e.target.value)} placeholder="30" />
                       </div>
                     </div>
-                  ))}
-                </div>
 
-                <div className="flex gap-3 pt-2">
-                  <Button onClick={handleCreateExam} disabled={creating || !examTitle.trim()} className="flex-1 bg-brand-600 hover:bg-brand-700">
-                    {creating ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Үүсгэж байна...</> : <><Plus className="w-4 h-4 mr-2" /> Шалгалт үүсгэх</>}
-                  </Button>
-                </div>
+                    <div className="space-y-3 max-h-96 overflow-y-auto pr-1">
+                      <div className="flex items-center justify-between">
+                        <Label className="text-base font-semibold">Асуултууд ({adminQuestions.length})</Label>
+                        <Button type="button" size="sm" variant="outline" onClick={addQuestion}><Plus className="w-4 h-4 mr-1" /> Асуулт нэмэх</Button>
+                      </div>
+                      {adminQuestions.map((q, i) => (
+                        <div key={i} className="bg-white rounded-xl p-4 space-y-3 border">
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm font-bold text-brand-700">Асуулт {i + 1}</span>
+                            <Button type="button" size="sm" variant="ghost" onClick={() => removeQuestion(i)} className="text-red-500 hover:text-red-700">
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          </div>
+                          <Textarea value={q.question} onChange={e => updateQ(i, "question", e.target.value)} placeholder="Асуултын текст..." rows={2} />
+                          <div className="grid grid-cols-2 gap-2">
+                            <Input value={q.optionA} onChange={e => updateQ(i, "optionA", e.target.value)} placeholder="A) Хариулт" />
+                            <Input value={q.optionB} onChange={e => updateQ(i, "optionB", e.target.value)} placeholder="B) Хариулт" />
+                            <Input value={q.optionC} onChange={e => updateQ(i, "optionC", e.target.value)} placeholder="C) Хариулт" />
+                            <Input value={q.optionD} onChange={e => updateQ(i, "optionD", e.target.value)} placeholder="D) Хариулт" />
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Label className="text-sm">Зөв хариулт:</Label>
+                            <Select value={q.correct} onValueChange={v => updateQ(i, "correct", v)}>
+                              <SelectTrigger className="w-24"><SelectValue /></SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="0">A</SelectItem>
+                                <SelectItem value="1">B</SelectItem>
+                                <SelectItem value="2">C</SelectItem>
+                                <SelectItem value="3">D</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
 
-                {createdCode && (
-                  <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="p-4 bg-green-50 border border-green-200 rounded-xl">
-                    <p className="text-green-800 font-medium text-center">
-                      Шалгалт үүслээ! Код: <span className="text-xl font-bold tracking-widest">{createdCode}</span>
-                    </p>
+                    <Button onClick={handleCustomCreate} disabled={customCreating || !examTitle.trim()} className="w-full mt-4 bg-brand-600 hover:bg-brand-700">
+                      {customCreating ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Үүсгэж байна...</> : <><Plus className="w-4 h-4 mr-2" /> Шалгалт үүсгэх</>}
+                    </Button>
                   </motion.div>
                 )}
               </CardContent>
@@ -283,7 +460,7 @@ export default function ExamPage() {
                     {examHistory.map((h: any) => (
                       <Card key={h.id} className="overflow-hidden">
                         <CardContent className="p-4">
-                          <div className="flex items-center justify-between">
+                          <div className="flex items-center justify-between flex-wrap gap-2">
                             <div>
                               <p className="font-medium text-brand-900">{h.examTitle || "Шалгалт"}</p>
                               <p className="text-sm text-muted-foreground">{new Date(h.createdAt).toLocaleDateString("mn-MN")}</p>
@@ -321,8 +498,8 @@ export default function ExamPage() {
                       <Clock className="w-6 h-6 text-brand-600 mx-auto mb-2" /><p className="text-2xl font-bold text-brand-900">{examInfo.duration}</p><p className="text-sm text-muted-foreground">Минут</p>
                     </div>
                   </div>
-                  {!user && <div className="bg-amber-50 border border-amber-200 rounded-xl p-4"><p className="text-amber-800 text-sm">⚠️ Шалгалт өгөхийн тулд нэвтрэх шаардлагатай.</p></div>}
-                  {user && <div className="bg-amber-50 border border-amber-200 rounded-xl p-4"><p className="text-amber-800 text-sm">⚠️ Шалгалт эхлэхдээ цаг хязгаар идэвхжинэ. Бэлэн болсон үедээ "Эхлэх" товч дээр дарна уу.</p></div>}
+                  {!user && <div className="bg-amber-50 border border-amber-200 rounded-xl p-4"><p className="text-amber-800 text-sm flex items-center gap-2"><AlertTriangle className="w-4 h-4 shrink-0" /> Шалгалт өгөхийн тулд нэвтрэх шаардлагатай.</p></div>}
+                  {user && <div className="bg-amber-50 border border-amber-200 rounded-xl p-4"><p className="text-amber-800 text-sm flex items-center gap-2"><AlertTriangle className="w-4 h-4 shrink-0" /> Шалгалт эхлэхдээ цаг хязгаар идэвхжинэ. Бэлэн болсон үедээ "Эхлэх" товч дээр дарна уу.</p></div>}
                   <div className="flex gap-3">
                     <Button variant="outline" onClick={resetExam} className="flex-1"><ArrowLeft className="w-4 h-4 mr-2" /> Буцах</Button>
                     <Button onClick={handleStartExam} className="flex-1 bg-brand-600 hover:bg-brand-700" disabled={loading || !user}>
