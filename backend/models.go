@@ -2,6 +2,10 @@ package main
 
 import "time"
 
+// ============================================================
+// Core User
+// ============================================================
+
 type User struct {
 	ID             string    `gorm:"primaryKey;size:36" json:"userId"`
 	FirstName      string    `json:"firstName"`
@@ -14,6 +18,22 @@ type User struct {
 	Role           string    `gorm:"default:USER" json:"role"`
 	CreatedAt      time.Time `json:"createdAt"`
 }
+
+// ============================================================
+// Admin Account (multiple admin codes with roles)
+// ============================================================
+
+type AdminAccount struct {
+	ID    string `gorm:"primaryKey;size:36" json:"id"`
+	Code  string `gorm:"uniqueIndex" json:"code"`
+	Name  string `json:"name"`
+	Email string `json:"email"`
+	Role  string `json:"role"` // ADMIN, MANAGER, TEACHER
+}
+
+// ============================================================
+// Courses (Training / Сургалт)
+// ============================================================
 
 type Course struct {
 	ID          string    `gorm:"primaryKey;size:36" json:"id"`
@@ -28,6 +48,10 @@ type Course struct {
 	CreatedAt   time.Time `json:"createdAt"`
 }
 
+// ============================================================
+// Quiz (Мэдлэг сорих)
+// ============================================================
+
 type Quiz struct {
 	ID            string    `gorm:"primaryKey;size:36" json:"id"`
 	Title         string    `json:"title"`
@@ -41,8 +65,11 @@ type QuizQuestion struct {
 	ID       string `gorm:"primaryKey;size:36" json:"id"`
 	QuizID   string `json:"quizId"`
 	Question string `json:"question"`
-	Options  string `json:"-" gorm:"type:text"`
-	Correct  int    `json:"-"`
+	OptionA  string `json:"optionA"`
+	OptionB  string `json:"optionB"`
+	OptionC  string `json:"optionC"`
+	OptionD  string `json:"optionD"`
+	Correct  int    `json:"-"` // 0=A, 1=B, 2=C, 3=D
 	Index    int    `json:"index"`
 }
 
@@ -56,6 +83,10 @@ type QuizAttempt struct {
 	CreatedAt time.Time `json:"createdAt"`
 }
 
+// ============================================================
+// Exam (Шалгалт)
+// ============================================================
+
 type Exam struct {
 	ID            string    `gorm:"primaryKey;size:36" json:"id"`
 	Title         string    `json:"title"`
@@ -64,6 +95,18 @@ type Exam struct {
 	QuestionCount int       `json:"questionCount"`
 	IsActive      bool      `gorm:"default:false" json:"isActive"`
 	CreatedAt     time.Time `json:"createdAt"`
+}
+
+type ExamQuestion struct {
+	ID       string `gorm:"primaryKey;size:36" json:"id"`
+	ExamID   string `json:"examId"`
+	Question string `json:"question"`
+	OptionA  string `json:"optionA"`
+	OptionB  string `json:"optionB"`
+	OptionC  string `json:"optionC"`
+	OptionD  string `json:"optionD"`
+	Correct  int    `json:"-"` // 0=A, 1=B, 2=C, 3=D
+	Index    int    `json:"index"`
 }
 
 type ExamAttempt struct {
@@ -77,6 +120,10 @@ type ExamAttempt struct {
 	CreatedAt time.Time `json:"createdAt"`
 }
 
+// ============================================================
+// Enrollment (Course registration)
+// ============================================================
+
 type Enrollment struct {
 	ID        string    `gorm:"primaryKey;size:36" json:"id"`
 	UserID    string    `json:"userId"`
@@ -84,6 +131,28 @@ type Enrollment struct {
 	Paid      bool      `gorm:"default:false" json:"paid"`
 	CreatedAt time.Time `json:"createdAt"`
 }
+
+// ============================================================
+// Consultation (Зөвлөх үйлчилгээ)
+// ============================================================
+
+type Consultation struct {
+	ID           string    `gorm:"primaryKey;size:36" json:"id"`
+	UserID       string    `json:"userId"`
+	Name         string    `json:"name"`
+	Email        string    `json:"email"`
+	Phone        string    `json:"phone"`
+	Company      string    `json:"company"`
+	ServiceType  string    `json:"serviceType"`
+	Message      string    `json:"message"`
+	ConsultantID string    `json:"consultantId"`
+	Status       string    `gorm:"default:pending" json:"status"` // pending, in_progress, completed
+	CreatedAt    time.Time `json:"createdAt"`
+}
+
+// ============================================================
+// Forms (Contact, Feedback, Survey, Service Order)
+// ============================================================
 
 type ContactForm struct {
 	ID        string    `gorm:"primaryKey;size:36" json:"id"`

@@ -1,11 +1,14 @@
 
-import { useState } from "react";
-import { motion } from "framer-motion";
+import { useState, useEffect, useCallback } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   MessageSquare,
   Send,
   Star,
   Quote,
+  Trash2,
+  Loader2,
+  MessageCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -13,8 +16,10 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { useAuthStore } from "@/hooks/use-auth";
 
 const feedbackCategories = [
   { id: "training", label: "Сургалт" },
@@ -23,32 +28,16 @@ const feedbackCategories = [
   { id: "other", label: "Бусад" },
 ];
 
-const existingReviews = [
-  {
-    name: "Бат-Эрдэнэ",
-    category: "training",
-    message:
-      "ХАБЭА сургалт маш сайн байсан. Багш нар мэргэжлийн өндөр түвшинтэй бөгөөд практик жишээ их өгсөн.",
-    rating: 5,
-    date: "2024-12-15",
-  },
-  {
-    name: "Оюунтүүлэн",
-    category: "service",
-    message:
-      "Зөвлөгөөний үйлчилгээ нь хурдан, чанартай байсан. Манай байгууллагын ХАБЭА системийг сайжруулахад их тус болов.",
-    rating: 4,
-    date: "2024-12-10",
-  },
-  {
-    name: "Төгс-Баяр",
-    category: "exam",
-    message:
-      "Шалгалтын систем нь хэрэглэхэд амар бөгөөд асуултууд нь практик ажилд ашигтай байлаа.",
-    rating: 5,
-    date: "2024-12-05",
-  },
-];
+interface FeedbackItem {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  message: string;
+  rating: number;
+  category: string;
+  createdAt: string;
+}
 
 function StarRating({
   value,
@@ -89,6 +78,7 @@ function StarRating({
 }
 
 export default function FeedbackPage() {
+  const { user, token } = useAuthStore();
   const [form, setForm] = useState({
     name: "",
     email: "",
@@ -98,6 +88,56 @@ export default function FeedbackPage() {
   });
   const [rating, setRating] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Server-side feedback list
+  const [feedbackList, setFeedbackList] = useState<FeedbackItem[]>([]);
+  const [loadingFeedback, setLoadingFeedback] = useState(true);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  const isAdmin =
+    user?.role === "ADMIN" ||
+    user?.role === "MANAGER" ||
+    user?.role === "TEACHER";
+
+  const fetchFeedback = useCallback(async () => {
+    setLoadingFeedback(true);
+    try {
+      const res = await fetch("/api/feedback");
+      if (res.ok) {
+        const data = await res.json();
+        setFeedbackList(data.feedback || []);
+      }
+    } catch {
+      // silent fail
+    } finally {
+      setLoadingFeedback(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchFeedback();
+  }, [fetchFeedback]);
+
+  const handleDelete = async (id: string) => {
+    if (!token) return;
+    setDeletingId(id);
+    try {
+      const res = await fetch(`/api/feedback/${id}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        toast.success("Амжилттай устгагдлаа.");
+        fetchFeedback();
+      } else {
+        toast.error("Устгахад алдаа гарлаа.");
+      }
+    } catch {
+      toast.error("Серверийн алдаа гарлаа.");
+    } finally {
+      setDeletingId(null);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -118,6 +158,8 @@ export default function FeedbackPage() {
         );
         setForm({ name: "", email: "", phone: "", category: "", message: "" });
         setRating(0);
+        // Refresh feedback list from server
+        fetchFeedback();
       } else {
         toast.error("Алдаа гарлаа. Дахин оролдоно уу.");
       }
@@ -125,6 +167,18 @@ export default function FeedbackPage() {
       toast.error("Серверийн алдаа гарлаа.");
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const formatDate = (dateStr: string) => {
+    try {
+      return new Date(dateStr).toLocaleDateString("mn-MN", {
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+      });
+    } catch {
+      return dateStr;
     }
   };
 
@@ -163,7 +217,7 @@ export default function FeedbackPage() {
       <section className="py-16 lg:py-20 bg-background">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid lg:grid-cols-2 gap-10">
-            {/* Existing Reviews */}
+            {/* LEFT: Feedback List from Server */}
             <motion.div
               initial={{ opacity: 0, x: -20 }}
               animate={{ opacity: 1, x: 0 }}
@@ -172,54 +226,109 @@ export default function FeedbackPage() {
               <h2 className="text-xl font-bold text-foreground mb-6">
                 Бусдын санал хүсэлт
               </h2>
-              <div className="space-y-4">
-                {existingReviews.map((review, i) => (
-                  <motion.div
-                    key={i}
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.3, delay: 0.15 + i * 0.08 }}
-                  >
-                    <Card className="hover:shadow-md transition-shadow">
+
+              {loadingFeedback ? (
+                <div className="space-y-4">
+                  {[1, 2, 3].map((i) => (
+                    <Card key={i}>
                       <CardContent className="p-5">
-                        <div className="flex items-center justify-between mb-3">
-                          <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-full bg-brand-100 flex items-center justify-center text-sm font-bold text-brand-700">
-                              {review.name.charAt(0)}
-                            </div>
-                            <div>
-                              <p className="font-medium text-foreground text-sm">
-                                {review.name}
-                              </p>
-                              <Badge
-                                variant="secondary"
-                                className="text-xs bg-brand-50 text-brand-700 mt-0.5"
-                              >
-                                {feedbackCategories.find(
-                                  (c) => c.id === review.category
-                                )?.label || review.category}
-                              </Badge>
-                            </div>
+                        <div className="flex items-center gap-3 mb-3">
+                          <Skeleton className="w-10 h-10 rounded-full" />
+                          <div className="space-y-2 flex-1">
+                            <Skeleton className="h-4 w-24" />
+                            <Skeleton className="h-3 w-16" />
                           </div>
-                          <StarRating value={review.rating} readonly />
                         </div>
-                        <div className="relative">
-                          <Quote className="w-5 h-5 text-brand-200 absolute -top-1 -left-1" />
-                          <p className="text-sm text-foreground/80 leading-relaxed pl-5">
-                            {review.message}
-                          </p>
-                        </div>
-                        <p className="text-xs text-muted-foreground mt-3">
-                          {review.date}
-                        </p>
+                        <Skeleton className="h-4 w-full" />
+                        <Skeleton className="h-4 w-3/4 mt-2" />
                       </CardContent>
                     </Card>
-                  </motion.div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              ) : feedbackList.length === 0 ? (
+                <Card className="border-brand-100">
+                  <CardContent className="py-12 text-center">
+                    <div className="w-16 h-16 rounded-full bg-brand-50 flex items-center justify-center mx-auto mb-4">
+                      <MessageCircle className="w-8 h-8 text-brand-300" />
+                    </div>
+                    <p className="text-muted-foreground">
+                      Одоогоор санал хүсэлт байхгүй байна.
+                    </p>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      Та эхлэлч болж саналаа илгээх боломжтой!
+                    </p>
+                  </CardContent>
+                </Card>
+              ) : (
+                <div className="space-y-4">
+                  <AnimatePresence>
+                    {feedbackList.map((fb, i) => (
+                      <motion.div
+                        key={fb.id}
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, x: -20, height: 0 }}
+                        transition={{ duration: 0.3, delay: i * 0.05 }}
+                      >
+                        <Card className="hover:shadow-md transition-shadow">
+                          <CardContent className="p-5">
+                            <div className="flex items-center justify-between mb-3">
+                              <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-full bg-brand-100 flex items-center justify-center text-sm font-bold text-brand-700">
+                                  {fb.name?.charAt(0) || "?"}
+                                </div>
+                                <div>
+                                  <p className="font-medium text-foreground text-sm">
+                                    {fb.name}
+                                  </p>
+                                  <Badge
+                                    variant="secondary"
+                                    className="text-xs bg-brand-50 text-brand-700 mt-0.5"
+                                  >
+                                    {feedbackCategories.find(
+                                      (c) => c.id === fb.category
+                                    )?.label || fb.category}
+                                  </Badge>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <StarRating value={fb.rating} readonly />
+                                {isAdmin && (
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-8 w-8 text-red-400 hover:text-red-600 hover:bg-red-50 shrink-0"
+                                    onClick={() => handleDelete(fb.id)}
+                                    disabled={deletingId === fb.id}
+                                  >
+                                    {deletingId === fb.id ? (
+                                      <Loader2 className="w-4 h-4 animate-spin" />
+                                    ) : (
+                                      <Trash2 className="w-4 h-4" />
+                                    )}
+                                  </Button>
+                                )}
+                              </div>
+                            </div>
+                            <div className="relative">
+                              <Quote className="w-5 h-5 text-brand-200 absolute -top-1 -left-1" />
+                              <p className="text-sm text-foreground/80 leading-relaxed pl-5">
+                                {fb.message}
+                              </p>
+                            </div>
+                            <p className="text-xs text-muted-foreground mt-3">
+                              {formatDate(fb.createdAt)}
+                            </p>
+                          </CardContent>
+                        </Card>
+                      </motion.div>
+                    ))}
+                  </AnimatePresence>
+                </div>
+              )}
             </motion.div>
 
-            {/* Feedback Form */}
+            {/* RIGHT: Feedback Form */}
             <motion.div
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
@@ -332,10 +441,17 @@ export default function FeedbackPage() {
                       disabled={isSubmitting}
                       className="w-full bg-brand-600 hover:bg-brand-700 text-white py-6 text-base font-semibold rounded-xl"
                     >
-                      {isSubmitting
-                        ? "Илгээж байна..."
-                        : "Илгээх"}
-                      <Send className="w-4 h-4 ml-2" />
+                      {isSubmitting ? (
+                        <>
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          Илгээж байна...
+                        </>
+                      ) : (
+                        <>
+                          Илгээх
+                          <Send className="w-4 h-4 ml-2" />
+                        </>
+                      )}
                     </Button>
                   </form>
                 </CardContent>
