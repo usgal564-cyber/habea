@@ -141,3 +141,47 @@ Work Log:
 Stage Summary:
 - Users will no longer be logged out on page refresh when backend is temporarily unavailable
 - JWT decode on refresh now preserves all available user fields
+---
+Task ID: 2
+Agent: Main
+Task: Admin - Show enrolled users info (phone, email) when clicking on a training
+
+Work Log:
+- Added new backend endpoint `GET /api/admin/courses/:id/enrollments` in handlers.go that returns enrolled users with firstName, lastName, email, phone, paid status, createdAt
+- Registered new route in main.go under admin group
+- Updated admin-page.tsx imports: added React, AnimatePresence, ChevronDown, Phone, Mail, User icons
+- Added state: expandedCourseId, courseEnrollments, enrollLoading
+- Added fetchCourseEnrollments function with toggle behavior (click again to collapse)
+- Rewrote "Сургалт" tab in admin page: each course row is now clickable with chevron indicator
+- Expanded rows show enrolled users as grid of cards with avatar, name, phone icon+number, mail icon+email, date, payment status badge
+- Loading state shown while fetching, empty state when no enrollments
+
+Stage Summary:
+- Backend: AdminGetCourseEnrollmentsHandler added, route registered
+- Frontend: Admin enrollments tab now expandable per course, showing user details in card grid
+- Produced artifacts: backend/handlers.go, backend/main.go, frontend/src/components/pages/admin-page.tsx
+
+---
+Task ID: 3
+Agent: Main
+Task: Training registration flow - ovog, ner, utas, email, nuuts ug burtgej awaad tolboroo tolood newterdeg baidlaar
+
+Work Log:
+- Modified EnrollmentDialog in training-page.tsx
+- Changed EnrollStep type from "info"|"anket"|"payment"|"confirmed" to "register"|"info"|"payment"|"confirmed"
+- Removed old anket fields (organization, position, experience, goal)
+- Added registration fields: regLastName, regFirstName, regPhone, regEmail, regPassword, regConfirmPassword
+- Initial step is "register" if not logged in, "info" if logged in
+- Dynamic step labels: 3 steps for non-logged-in (register → payment → confirmed), 3 steps for logged-in (info → payment → confirmed)
+- handleRegister: validates all fields → calls /api/auth/register → auto-login via setAuth → calls /api/courses/:id/register → moves to payment step
+- handleEnrollCourse: for logged-in users, calls /api/courses/:id/register → moves to payment step
+- handlePayment: uses useAuthStore.getState().token for fresh token reference
+- Register step UI: centered form with icon, ovog/ner in grid, utas, email, nuuts ug, confirm password
+- Info step UI: unchanged course info display with enroll button
+- Payment back button navigates to "info" (logged-in) or "register" (not logged-in)
+
+Stage Summary:
+- Enrollment flow redesigned: non-logged-in users register inline during enrollment
+- Auto-login after registration, then auto-enroll in course, then payment
+- No more anket step, cleaner 3-step flow for both states
+- Produced artifact: frontend/src/components/pages/training-page.tsx

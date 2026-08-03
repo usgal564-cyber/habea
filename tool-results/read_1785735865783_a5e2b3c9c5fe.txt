@@ -1,0 +1,910 @@
+     1→     1→package main
+     2→     2→
+     3→     3→import (
+     4→     4→        "crypto/rand"
+     5→     5→        "encoding/csv"
+     6→     6→        "encoding/json"
+     7→     7→        "fmt"
+     8→     8→        "log"
+     9→     9→        "math/big"
+    10→    10→        "net/http"
+    11→    11→        "time"
+    12→    12→
+    13→    13→        "github.com/gin-gonic/gin"
+    14→    14→        "github.com/google/uuid"
+    15→    15→        "golang.org/x/crypto/bcrypt"
+    16→    16→)
+    17→    17→
+    18→    18→// ── Request Structs ──────────────────────────────────────────
+    19→    19→
+    20→    20→type RegisterRequest struct {
+    21→    21→        FirstName      string `json:"firstName" binding:"required"`
+    22→    22→        LastName       string `json:"lastName" binding:"required"`
+    23→    23→        Email          string `json:"email" binding:"required"`
+    24→    24→        Phone          string `json:"phone" binding:"required"`
+    25→    25→        Password       string `json:"password" binding:"required,min=6"`
+    26→    26→        Address        string `json:"address"`
+    27→    27→        SecondaryPhone string `json:"secondaryPhone"`
+    28→    28→}
+    29→    29→
+    30→    30→type LoginRequest struct {
+    31→    31→        Email    string `json:"email" binding:"required"`
+    32→    32→        Password string `json:"password" binding:"required"`
+    33→    33→}
+    34→    34→
+    35→    35→type AdminLoginRequest struct {
+    36→    36→        Code string `json:"code" binding:"required"`
+    37→    37→}
+    38→    38→
+    39→    39→type ContactRequest struct {
+    40→    40→        Name    string `json:"name" binding:"required"`
+    41→    41→        Email   string `json:"email" binding:"required"`
+    42→    42→        Phone   string `json:"phone"`
+    43→    43→        Subject string `json:"subject"`
+    44→    44→        Message string `json:"message" binding:"required"`
+    45→    45→}
+    46→    46→
+    47→    47→type FeedbackRequest struct {
+    48→    48→        Name    string `json:"name" binding:"required"`
+    49→    49→        Email   string `json:"email" binding:"required"`
+    50→    50→        Phone   string `json:"phone"`
+    51→    51→        Message string `json:"message" binding:"required"`
+    52→    52→        Rating  int    `json:"rating"`
+    53→    53→        Category string `json:"category"`
+    54→    54→}
+    55→    55→
+    56→    56→type SurveyRequest struct {
+    57→    57→        Name      string `json:"name" binding:"required"`
+    58→    58→        Email     string `json:"email" binding:"required"`
+    59→    59→        Phone     string `json:"phone"`
+    60→    60→        Responses string `json:"responses" binding:"required"`
+    61→    61→}
+    62→    62→
+    63→    63→type ConsultationRequest struct {
+    64→    64→        Name        string `json:"name" binding:"required"`
+    65→    65→        Email       string `json:"email" binding:"required"`
+    66→    66→        Phone       string `json:"phone" binding:"required"`
+    67→    67→        Company     string `json:"company"`
+    68→    68→        ServiceType string `json:"serviceType" binding:"required"`
+    69→    69→        Message     string `json:"message"`
+    70→    70→}
+    71→    71→
+    72→    72→type ServiceOrderRequest struct {
+    73→    73→        Name        string `json:"name" binding:"required"`
+    74→    74→        Email       string `json:"email" binding:"required"`
+    75→    75→        Phone       string `json:"phone" binding:"required"`
+    76→    76→        Company     string `json:"company"`
+    77→    77→        ServiceType string `json:"serviceType" binding:"required"`
+    78→    78→        Message     string `json:"message"`
+    79→    79→        Date        string `json:"date"`
+    80→    80→}
+    81→    81→
+    82→    82→type QuizPaymentRequest struct {
+    83→    83→        QuizID string `json:"quizId" binding:"required"`
+    84→    84→}
+    85→    85→
+    86→    86→type QuizSubmitAnswer struct {
+    87→    87→        QuestionID     string `json:"questionId"`
+    88→    88→        SelectedOption int    `json:"selectedOption"`
+    89→    89→}
+    90→    90→
+    91→    91→type QuizSubmitRequest struct {
+    92→    92→        QuizID  string             `json:"quizId" binding:"required"`
+    93→    93→        Answers []QuizSubmitAnswer `json:"answers" binding:"required"`
+    94→    94→}
+    95→    95→
+    96→    96→type ExamActionRequest struct {
+    97→    97→        Action  string `json:"action" binding:"required"`
+    98→    98→        Code    string `json:"code"`
+    99→    99→        ExamID  string `json:"examId"`
+   100→   100→        Answers []int  `json:"answers"`
+   101→   101→}
+   102→   102→
+   103→   103→type CoursePaymentRequest struct {
+   104→   104→        CourseID string `json:"courseId" binding:"required"`
+   105→   105→}
+   106→   106→
+   107→   107→type AdminCreateExamRequest struct {
+   108→   108→        Title     string              `json:"title" binding:"required"`
+   109→   109→        Duration  int                 `json:"duration"`
+   110→   110→        Questions []ExamQuestionInput `json:"questions" binding:"required"`
+   111→   111→}
+   112→   112→
+   113→   113→type ExamQuestionInput struct {
+   114→   114→        Question string `json:"question" binding:"required"`
+   115→   115→        OptionA  string `json:"optionA" binding:"required"`
+   116→   116→        OptionB  string `json:"optionB" binding:"required"`
+   117→   117→        OptionC  string `json:"optionC" binding:"required"`
+   118→   118→        OptionD  string `json:"optionD" binding:"required"`
+   119→   119→        Correct  int    `json:"correct" binding:"required"`
+   120→   120→}
+   121→   121→
+   122→   122→type AdminCreateCourseRequest struct {
+   123→   123→        Title       string  `json:"title" binding:"required"`
+   124→   124→        Category    string  `json:"category" binding:"required"`
+   125→   125→        Description string  `json:"description" binding:"required"`
+   126→   126→        Duration    string  `json:"duration" binding:"required"`
+   127→   127→        Price       float64 `json:"price"`
+   128→   128→        Schedule    string  `json:"schedule"`
+   129→   129→        Location    string  `json:"location"`
+   130→   130→        StartDate   string  `json:"startDate"`
+   131→   131→        MaxStudents *int    `json:"maxStudents"`
+   132→   132→}
+   133→   133→
+   134→   134→type AdminCreateQuizRequest struct {
+   135→   135→        Title       string              `json:"title" binding:"required"`
+   136→   136→        Description string              `json:"description"`
+   137→   137→        Category    string              `json:"category"`
+   138→   138→        Price       int                 `json:"price"`
+   139→   139→        Questions   []ExamQuestionInput `json:"questions" binding:"required"`
+   140→   140→}
+   141→   141→
+   142→   142→type UpdateProfileRequest struct {
+   143→   143→        Phone          string `json:"phone"`
+   144→   144→        Address        string `json:"address"`
+   145→   145→        SecondaryPhone string `json:"secondaryPhone"`
+   146→   146→        FirstName      string `json:"firstName"`
+   147→   147→        LastName       string `json:"lastName"`
+   148→   148→}
+   149→   149→
+   150→   150→// ── Helper ───────────────────────────────────────────────────
+   151→   151→
+   152→   152→func generateCode() string {
+   153→   153→        const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+   154→   154→        code := make([]byte, 6)
+   155→   155→        for i := range code {
+   156→   156→                n, _ := rand.Int(rand.Reader, big.NewInt(int64(len(chars))))
+   157→   157→                code[i] = chars[n.Int64()]
+   158→   158→        }
+   159→   159→        return string(code)
+   160→   160→}
+   161→   161→
+   162→   162→func userResponse(user User) gin.H {
+   163→   163→        name := user.FirstName + " " + user.LastName
+   164→   164→        return gin.H{
+   165→   165→                "userId":    user.ID,
+   166→   166→                "email":     user.Email,
+   167→   167→                "role":      user.Role,
+   168→   168→                "name":      name,
+   169→   169→                "firstName": user.FirstName,
+   170→   170→                "lastName":  user.LastName,
+   171→   171→                "phone":     user.Phone,
+   172→   172→        }
+   173→   173→}
+   174→   174→
+   175→   175→// ── Auth Handlers ────────────────────────────────────────────
+   176→   176→
+   177→   177→func RegisterHandler(c *gin.Context) {
+   178→   178→        var req RegisterRequest
+   179→   179→        if err := c.ShouldBindJSON(&req); err != nil {
+   180→   180→                c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+   181→   181→                return
+   182→   182→        }
+   183→   183→        var existing User
+   184→   184→        if DB.Where("email = ?", req.Email).First(&existing).Error == nil {
+   185→   185→                c.JSON(http.StatusConflict, gin.H{"error": "Бүртгэлтэй имэйл байна"})
+   186→   186→                return
+   187→   187→        }
+   188→   188→        hash, _ := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+   189→   189→        user := User{ID: uuid.New().String(), FirstName: req.FirstName, LastName: req.LastName, Email: req.Email, Phone: req.Phone, Password: string(hash), Address: req.Address, SecondaryPhone: req.SecondaryPhone, Role: "USER"}
+   190→   190→        if err := DB.Create(&user).Error; err != nil {
+   191→   191→                c.JSON(500, gin.H{"error": "Failed to create user"})
+   192→   192→                return
+   193→   193→        }
+   194→   194→        token, _ := GenerateToken(user.ID, user.Email, user.Role, user.FirstName+" "+user.LastName)
+   195→   195→        c.JSON(201, gin.H{"user": userResponse(user), "token": token})
+   196→   196→}
+   197→   197→
+   198→   198→func LoginHandler(c *gin.Context) {
+   199→   199→        var req LoginRequest
+   200→   200→        if err := c.ShouldBindJSON(&req); err != nil {
+   201→   201→                c.JSON(400, gin.H{"error": err.Error()})
+   202→   202→                return
+   203→   203→        }
+   204→   204→        var user User
+   205→   205→        if err := DB.Where("email = ?", req.Email).First(&user).Error; err != nil {
+   206→   206→                c.JSON(401, gin.H{"error": "Бүртгэлтэй имэйл байна"})
+   207→   207→                return
+   208→   208→        }
+   209→   209→        if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(req.Password)); err != nil {
+   210→   210→                c.JSON(401, gin.H{"error": "Нууц үг буруу"})
+   211→   211→                return
+   212→   212→        }
+   213→   213→        token, _ := GenerateToken(user.ID, user.Email, user.Role, user.FirstName+" "+user.LastName)
+   214→   214→        c.JSON(200, gin.H{"user": userResponse(user), "token": token})
+   215→   215→}
+   216→   216→
+   217→   217→func MeHandler(c *gin.Context) {
+   218→   218→        userID, _ := c.Get("userId")
+   219→   219→        var user User
+   220→   220→        if err := DB.Where("id = ?", userID).First(&user).Error; err != nil {
+   221→   221→                c.JSON(404, gin.H{"error": "User not found"})
+   222→   222→                return
+   223→   223→        }
+   224→   224→        c.JSON(200, gin.H{"user": userResponse(user)})
+   225→   225→}
+   226→   226→
+   227→   227→func AdminLoginHandler(c *gin.Context) {
+   228→   228→        var req AdminLoginRequest
+   229→   229→        if err := c.ShouldBindJSON(&req); err != nil {
+   230→   230→                c.JSON(400, gin.H{"error": err.Error()})
+   231→   231→                return
+   232→   232→        }
+   233→   233→        var account AdminAccount
+   234→   234→        if err := DB.Where("code = ?", req.Code).First(&account).Error; err != nil {
+   235→   235→                c.JSON(401, gin.H{"error": "Буруу админ код"})
+   236→   236→                return
+   237→   237→        }
+   238→   238→        token, _ := GenerateToken(account.ID, account.Email, account.Role, account.Name)
+   239→   239→        c.JSON(200, gin.H{
+   240→   240→                "user": gin.H{
+   241→   241→                        "userId": account.ID,
+   242→   242→                        "email":  account.Email,
+   243→   243→                        "role":   account.Role,
+   244→   244→                        "name":   account.Name,
+   245→   245→                },
+   246→   246→                "token": token,
+   247→   247→        })
+   248→   248→}
+   249→   249→
+   250→   250→// ── Profile Handlers ─────────────────────────────────────────
+   251→   251→
+   252→   252→func GetProfileHandler(c *gin.Context) {
+   253→   253→        userID, _ := c.Get("userId")
+   254→   254→        var user User
+   255→   255→        if DB.Where("id = ?", userID).First(&user).Error != nil {
+   256→   256→                c.JSON(404, gin.H{"error": "User not found"})
+   257→   257→                return
+   258→   258→        }
+   259→   259→        c.JSON(200, gin.H{"user": userResponse(user)})
+   260→   260→}
+   261→   261→
+   262→   262→func UpdateProfileHandler(c *gin.Context) {
+   263→   263→        userID, _ := c.Get("userId")
+   264→   264→        var user User
+   265→   265→        if DB.Where("id = ?", userID).First(&user).Error != nil {
+   266→   266→                c.JSON(404, gin.H{"error": "User not found"})
+   267→   267→                return
+   268→   268→        }
+   269→   269→        var req UpdateProfileRequest
+   270→   270→        c.ShouldBindJSON(&req)
+   271→   271→        updates := map[string]interface{}{}
+   272→   272→        if req.Phone != "" { updates["phone"] = req.Phone }
+   273→   273→        if req.Address != "" { updates["address"] = req.Address }
+   274→   274→        if req.SecondaryPhone != "" { updates["secondary_phone"] = req.SecondaryPhone }
+   275→   275→        if req.FirstName != "" { updates["first_name"] = req.FirstName }
+   276→   276→        if req.LastName != "" { updates["last_name"] = req.LastName }
+   277→   277→        DB.Model(&user).Updates(updates)
+   278→   278→        DB.Where("id = ?", userID).First(&user)
+   279→   279→        c.JSON(200, gin.H{"user": userResponse(user)})
+   280→   280→}
+   281→   281→
+   282→   282→// ── Quiz Handlers ───────────────────────────────────────────
+   283→   283→
+   284→   284→func GetQuizzesHandler(c *gin.Context) {
+   285→   285→        var quizzes []Quiz
+   286→   286→        DB.Find(&quizzes)
+   287→   287→        c.JSON(200, gin.H{"quizzes": quizzes})
+   288→   288→}
+   289→   289→
+   290→   290→func GetQuizQuestionsHandler(c *gin.Context) {
+   291→   291→        quizID := c.Query("quizId")
+   292→   292→        userID, _ := c.Get("userId")
+   293→   293→        var questions []QuizQuestion
+   294→   294→        DB.Where("quiz_id = ?", quizID).Order("index asc").Find(&questions)
+   295→   295→
+   296→   296→        var prevAttempt QuizAttempt
+   297→   297→        DB.Where("quiz_id = ? AND user_id = ?", quizID, userID).Order("created_at desc").First(&prevAttempt)
+   298→   298→
+   299→   299→        result := gin.H{"questions": questions}
+   300→   300→        if prevAttempt.ID != "" {
+   301→   301→                result["attempt"] = gin.H{"id": prevAttempt.ID, "score": prevAttempt.Score, "total": prevAttempt.Total}
+   302→   302→        }
+   303→   303→        c.JSON(200, result)
+   304→   304→}
+   305→   305→
+   306→   306→func QuizPaymentHandler(c *gin.Context) {
+   307→   307→        var req QuizPaymentRequest
+   308→   308→        if err := c.ShouldBindJSON(&req); err != nil {
+   309→   309→                c.JSON(400, gin.H{"error": err.Error()})
+   310→   310→                return
+   311→   311→        }
+   312→   312→        var quiz Quiz
+   313→   313→        if DB.Where("id = ?", req.QuizID).First(&quiz).Error != nil {
+   314→   314→                c.JSON(404, gin.H{"error": "Quiz not found"})
+   315→   315→                return
+   316→   316→        }
+   317→   317→        c.JSON(200, gin.H{"message": "Амжилттай", "paid": true})
+   318→   318→}
+   319→   319→
+   320→   320→func QuizSubmitHandler(c *gin.Context) {
+   321→   321→        var req QuizSubmitRequest
+   322→   322→        if err := c.ShouldBindJSON(&req); err != nil {
+   323→   323→                c.JSON(400, gin.H{"error": err.Error()})
+   324→   324→                return
+   325→   325→        }
+   326→   326→        userID, _ := c.Get("userId")
+   327→   327→        var questions []QuizQuestion
+   328→   328→        DB.Where("quiz_id = ?", req.QuizID).Order("index asc").Find(&questions)
+   329→   329→
+   330→   330→        score := 0
+   331→   331→        for _, ans := range req.Answers {
+   332→   332→                for _, q := range questions {
+   333→   333→                        if q.ID == ans.QuestionID && q.Correct == ans.SelectedOption {
+   334→   334→                                score++
+   335→   335→                        }
+   336→   336→                }
+   337→   337→        }
+   338→   338→
+   339→   339→        ansJSON, _ := json.Marshal(req.Answers)
+   340→   340→        attempt := QuizAttempt{ID: uuid.New().String(), UserID: userID.(string), QuizID: req.QuizID, Score: score, Total: len(questions), Answers: string(ansJSON)}
+   341→   341→        DB.Create(&attempt)
+   342→   342→
+   343→   343→        c.JSON(200, gin.H{"score": score, "total": len(questions), "passed": score >= int(float64(len(questions))*0.8), "attemptId": attempt.ID})
+   344→   344→}
+   345→   345→
+   346→   346→// ── Exam Handlers ────────────────────────────────────────────
+   347→   347→
+   348→   348→func ExamHandler(c *gin.Context) {
+   349→   349→        var req ExamActionRequest
+   350→   350→        if err := c.ShouldBindJSON(&req); err != nil {
+   351→   351→                c.JSON(400, gin.H{"error": err.Error()})
+   352→   352→                return
+   353→   353→        }
+   354→   354→
+   355→   355→        if req.Action == "verify" {
+   356→   356→                var exam Exam
+   357→   357→                if DB.Where("code = ? AND is_active = ?", req.Code, true).First(&exam).Error != nil {
+   358→   358→                        c.JSON(404, gin.H{"error": "Идэвхтэй шалгалт олдсонгүй эсвэл код буруу байна"})
+   359→   359→                        return
+   360→   360→                }
+   361→   361→                c.JSON(200, gin.H{"exam": gin.H{"id": exam.ID, "title": exam.Title, "questionCount": exam.QuestionCount, "duration": exam.Duration}})
+   362→   362→                return
+   363→   363→        }
+   364→   364→
+   365→   365→        if req.Action == "submit" {
+   366→   366→                userID, _ := c.Get("userId")
+   367→   367→                // Check if already took
+   368→   368→                var existing ExamAttempt
+   369→   369→                if DB.Where("exam_id = ? AND user_id = ?", req.ExamID, userID).First(&existing).Error == nil {
+   370→   370→                        c.JSON(403, gin.H{"error": "Та энэ шалгалтад өмнө нь орсон байна. Дахин өгөх боломжгүй."})
+   371→   371→                        return
+   372→   372→                }
+   373→   373→
+   374→   374→                var questions []ExamQuestion
+   375→   375→                DB.Where("exam_id = ?", req.ExamID).Order("index asc").Find(&questions)
+   376→   376→
+   377→   377→                score := 0
+   378→   378→                for i, ans := range req.Answers {
+   379→   379→                        if i < len(questions) && ans == questions[i].Correct {
+   380→   380→                                score++
+   381→   381→                        }
+   382→   382→                }
+   383→   383→                passed := len(questions) > 0 && score >= int(float64(len(questions))*0.8)
+   384→   384→
+   385→   385→                ansJSON, _ := json.Marshal(req.Answers)
+   386→   386→                attempt := ExamAttempt{ID: uuid.New().String(), UserID: userID.(string), ExamID: req.ExamID, Score: score, Total: len(questions), Passed: passed, Answers: string(ansJSON)}
+   387→   387→                DB.Create(&attempt)
+   388→   388→
+   389→   389→                c.JSON(200, gin.H{"score": score, "total": len(questions), "passed": passed})
+   390→   390→                return
+   391→   391→        }
+   392→   392→
+   393→   393→        c.JSON(400, gin.H{"error": "Invalid action"})
+   394→   394→}
+   395→   395→
+   396→   396→func GetExamQuestionsHandler(c *gin.Context) {
+   397→   397→        examID := c.Query("examId")
+   398→   398→        userID, _ := c.Get("userId")
+   399→   399→
+   400→   400→        // Check if already took
+   401→   401→        var existing ExamAttempt
+   402→   402→        if DB.Where("exam_id = ? AND user_id = ?", examID, userID).First(&existing).Error == nil {
+   403→   403→                c.JSON(403, gin.H{"error": "Та энэ шалгалтад өмнө нь орсон байна. Дахин өгөх боломжгүй."})
+   404→   404→                return
+   405→   405→        }
+   406→   406→
+   407→   407→        var questions []ExamQuestion
+   408→   408→        DB.Where("exam_id = ?", examID).Order("index asc").Find(&questions)
+   409→   409→        c.JSON(200, gin.H{"questions": questions})
+   410→   410→}
+   411→   411→
+   412→   412→func GetExamHistoryHandler(c *gin.Context) {
+   413→   413→        userID, _ := c.Get("userId")
+   414→   414→        var attempts []ExamAttempt
+   415→   415→        DB.Where("user_id = ?", userID).Order("created_at desc").Find(&attempts)
+   416→   416→
+   417→   417→        var results []gin.H
+   418→   418→        for _, a := range attempts {
+   419→   419→                var exam Exam
+   420→   420→                DB.Where("id = ?", a.ExamID).First(&exam)
+   421→   421→                results = append(results, gin.H{
+   422→   422→                        "id": a.ID, "examId": a.ExamID, "examTitle": exam.Title,
+   423→   423→                        "score": a.Score, "total": a.Total, "passed": a.Passed, "createdAt": a.CreatedAt,
+   424→   424→                })
+   425→   425→        }
+   426→   426→        c.JSON(200, gin.H{"history": results})
+   427→   427→}
+   428→   428→
+   429→   429→func ExportExamHandler(c *gin.Context) {
+   430→   430→        attemptID := c.Param("attemptId")
+   431→   431→        var attempt ExamAttempt
+   432→   432→        if DB.Where("id = ?", attemptID).First(&attempt).Error != nil {
+   433→   433→                c.JSON(404, gin.H{"error": "Not found"})
+   434→   434→                return
+   435→   435→        }
+   436→   436→        var exam Exam
+   437→   437→        DB.Where("id = ?", attempt.ExamID).First(&exam)
+   438→   438→        var questions []ExamQuestion
+   439→   439→        DB.Where("exam_id = ?", attempt.ExamID).Order("index asc").Find(&questions)
+   440→   440→
+   441→   441→        var answers []int
+   442→   442→        json.Unmarshal([]byte(attempt.Answers), &answers)
+   443→   443→
+   444→   444→        c.Header("Content-Type", "text/csv; charset=utf-8")
+   445→   445→        c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=exam_%s_result.csv", exam.Code))
+   446→   446→        writer := csv.NewWriter(c.Writer)
+   447→   447→        writer.Write([]string{"Шалгалт", exam.Title, "", "Код", exam.Code, "", "Огноо", attempt.CreatedAt.Format("2006-01-02 15:04:05")})
+   448→   448→        writer.Write([]string{"#", "Асуулт", "A", "B", "C", "D", "Таны хариулт", "Зөв хариулт", "Дүн"})
+   449→   449→        for i, q := range questions {
+   450→   450→                ansStr := "-"
+   451→   451→                correctStr := string([]string{"A", "B", "C", "D"}[q.Correct])
+   452→   452→                if i < len(answers) && answers[i] >= 0 {
+   453→   453→                        ansStr = string([]string{"A", "B", "C", "D"}[answers[i]])
+   454→   454→                }
+   455→   455→                status := "Буруу"
+   456→   456→                if i < len(answers) && answers[i] == q.Correct {
+   457→   457→                        status = "Зөв"
+   458→   458→                }
+   459→   459→                writer.Write([]string{fmt.Sprintf("%d", i+1), q.Question, q.OptionA, q.OptionB, q.OptionC, q.OptionD, ansStr, correctStr, status})
+   460→   460→        }
+   461→   461→        writer.Write([]string{"", "", "", "", "", "", "", "", ""})
+   462→   462→        writer.Write([]string{"Нийт", "", "", "", "", "", fmt.Sprintf("%d/%d", attempt.Score, attempt.Total), "", fmt.Sprintf("%v", attempt.Passed)})
+   463→   463→        writer.Flush()
+   464→   464→}
+   465→   465→
+   466→   466→// ── Course Handlers ───────────────────────────────────────────
+   467→   467→
+   468→   468→func GetCoursesHandler(c *gin.Context) {
+   469→   469→        var courses []Course
+   470→   470→        DB.Order("created_at desc").Find(&courses)
+   471→   471→
+   472→   472→        var result []gin.H
+   473→   473→        for _, co := range courses {
+   474→   474→                var count int64
+   475→   475→                DB.Model(&Enrollment{}).Where("course_id = ?", co.ID).Count(&count)
+   476→   476→                result = append(result, gin.H{
+   477→   477→                        "id": co.ID, "title": co.Title, "category": co.Category, "description": co.Description,
+   478→   478→                        "duration": co.Duration, "price": co.Price, "schedule": co.Schedule,
+   479→   479→                        "location": co.Location, "maxStudents": co.MaxStudents, "enrolled": count, "createdAt": co.CreatedAt,
+   480→   480→                })
+   481→   481→        }
+   482→   482→        c.JSON(200, gin.H{"courses": result})
+   483→   483→}
+   484→   484→
+   485→   485→func CoursePaymentHandler(c *gin.Context) {
+   486→   486→        var req CoursePaymentRequest
+   487→   487→        if err := c.ShouldBindJSON(&req); err != nil {
+   488→   488→                c.JSON(400, gin.H{"error": err.Error()})
+   489→   489→                return
+   490→   490→        }
+   491→   491→        c.JSON(200, gin.H{"message": "Амжилттай", "paid": true})
+   492→   492→}
+   493→   493→
+   494→   494→func RegisterCourseHandler(c *gin.Context) {
+   495→   495→        userID, _ := c.Get("userId")
+   496→   496→        courseID := c.Param("id")
+   497→   497→
+   498→   498→        var existing Enrollment
+   499→   499→        if DB.Where("course_id = ? AND user_id = ?", courseID, userID).First(&existing).Error == nil {
+   500→   500→                c.JSON(409, gin.H{"error": "Та энэ сургалтад бүртгэлтэй байна"})
+   501→   501→                return
+   502→   502→        }
+   503→   503→
+   504→   504→        enrollment := Enrollment{ID: uuid.New().String(), UserID: userID.(string), CourseID: courseID, Paid: true}
+   505→   505→        DB.Create(&enrollment)
+   506→   506→        c.JSON(200, gin.H{"message": "Амжилттай бүртгэгдлээ", "enrollmentId": enrollment.ID})
+   507→   507→}
+   508→   508→
+   509→   509→// ── Form Handlers ────────────────────────────────────────────
+   510→   510→
+   511→   511→func FeedbackHandler(c *gin.Context) {
+   512→   512→        var req FeedbackRequest
+   513→   513→        if err := c.ShouldBindJSON(&req); err != nil {
+   514→   514→                c.JSON(400, gin.H{"error": err.Error()})
+   515→   515→                return
+   516→   516→        }
+   517→   517→        fb := Feedback{ID: uuid.New().String(), Name: req.Name, Email: req.Email, Phone: req.Phone, Message: req.Message, Rating: req.Rating}
+   518→   518→        DB.Create(&fb)
+   519→   519→        c.JSON(201, gin.H{"message": "Амжилттай", "id": fb.ID})
+   520→   520→}
+   521→   521→
+   522→   522→func GetFeedbackHandler(c *gin.Context) {
+   523→   523→        var feedbacks []Feedback
+   524→   524→        DB.Order("created_at desc").Find(&feedbacks)
+   525→   525→        c.JSON(200, gin.H{"feedback": feedbacks})
+   526→   526→}
+   527→   527→
+   528→   528→func DeleteFeedbackHandler(c *gin.Context) {
+   529→   529→        id := c.Param("id")
+   530→   530→        DB.Where("id = ?", id).Delete(&Feedback{})
+   531→   531→        c.JSON(200, gin.H{"message": "Устгагдлаа"})
+   532→   532→}
+   533→   533→
+   534→   534→func SurveyHandler(c *gin.Context) {
+   535→   535→        var req SurveyRequest
+   536→   536→        if err := c.ShouldBindJSON(&req); err != nil {
+   537→   537→                c.JSON(400, gin.H{"error": err.Error()})
+   538→   538→                return
+   539→   539→        }
+   540→   540→        userID, _ := c.Get("userId")
+   541→   541→        resp := SurveyResponse{ID: uuid.New().String(), Name: req.Name, Email: req.Email, Phone: req.Phone, Responses: req.Responses}
+   542→   542→        _ = userID
+   543→   543→        DB.Create(&resp)
+   544→   544→        c.JSON(201, gin.H{"message": "Амжилттай", "id": resp.ID})
+   545→   545→}
+   546→   546→
+   547→   547→func GetSurveyResultsHandler(c *gin.Context) {
+   548→   548→        var responses []SurveyResponse
+   549→   549→        DB.Order("created_at desc").Find(&responses)
+   550→   550→
+   551→   551→        type Stat struct {
+   552→   552→                QuestionID   string      `json:"questionId"`
+   553→   553→                Ratings      []int       `json:"ratings"`
+   554→   554→                AvgRating    float64     `json:"avgRating"`
+   555→   555→                YesCount     int         `json:"yesCount"`
+   556→   556→                NoCount      int         `json:"noCount"`
+   557→   557→                TextAnswers  []string    `json:"textAnswers"`
+   558→   558→        }
+   559→   559→
+   560→   560→        // Aggregate
+   561→   561→        questionStats := make(map[string]*Stat)
+   562→   562→        totalResponses := len(responses)
+   563→   563→
+   564→   564→        for _, r := range responses {
+   565→   565→                var parsed map[string]interface{}
+   566→   566→                json.Unmarshal([]byte(r.Responses), &parsed)
+   567→   567→                for qID, val := range parsed {
+   568→   568→                        if questionStats[qID] == nil {
+   569→   569→                                questionStats[qID] = &Stat{QuestionID: qID}
+   570→   570→                        }
+   571→   571→                        stat := questionStats[qID]
+   572→   572→                        switch v := val.(type) {
+   573→   573→                        case float64:
+   574→   574→                                stat.Ratings = append(stat.Ratings, int(v))
+   575→   575→                        case string:
+   576→   576→                                if v == "yes" {
+   577→   577→                                        stat.YesCount++
+   578→   578→                                } else if v == "no" {
+   579→   579→                                        stat.NoCount++
+   580→   580→                                } else {
+   581→   581→                                        stat.TextAnswers = append(stat.TextAnswers, v)
+   582→   582→                                }
+   583→   583→                        }
+   584→   584→                }
+   585→   585→        }
+   586→   586→
+   587→   587→        var stats []*Stat
+   588→   588→        for _, s := range questionStats {
+   589→   589→                if len(s.Ratings) > 0 {
+   590→   590→                        sum := 0
+   591→   591→                        for _, r := range s.Ratings { sum += r }
+   592→   592→                        s.AvgRating = float64(sum) / float64(len(s.Ratings))
+   593→   593→                }
+   594→   594→                stats = append(stats, s)
+   595→   595→        }
+   596→   596→
+   597→   597→        c.JSON(200, gin.H{"totalResponses": totalResponses, "stats": stats, "responses": responses})
+   598→   598→}
+   599→   599→
+   600→   600→func ContactHandler(c *gin.Context) {
+   601→   601→        var req ContactRequest
+   602→   602→        if err := c.ShouldBindJSON(&req); err != nil {
+   603→   603→                c.JSON(400, gin.H{"error": err.Error()})
+   604→   604→                return
+   605→   605→        }
+   606→   606→        cf := ContactForm{ID: uuid.New().String(), Name: req.Name, Email: req.Email, Phone: req.Phone, Subject: req.Subject, Message: req.Message}
+   607→   607→        DB.Create(&cf)
+   608→   608→        c.JSON(201, gin.H{"message": "Амжилттай"})
+   609→   609→}
+   610→   610→
+   611→   611→func ConsultationHandler(c *gin.Context) {
+   612→   612→        var req ConsultationRequest
+   613→   613→        if err := c.ShouldBindJSON(&req); err != nil {
+   614→   614→                c.JSON(400, gin.H{"error": err.Error()})
+   615→   615→                return
+   616→   616→        }
+   617→   617→        userID, _ := c.Get("userId")
+   618→   618→        cons := Consultation{ID: uuid.New().String(), UserID: userID.(string), Name: req.Name, Email: req.Email, Phone: req.Phone, Company: req.Company, ServiceType: req.ServiceType, Message: req.Message, Status: "pending"}
+   619→   619→        DB.Create(&cons)
+   620→   620→        c.JSON(201, gin.H{"message": "Амжилттай"})
+   621→   621→}
+   622→   622→
+   623→   623→func GetConsultationsHandler(c *gin.Context) {
+   624→   624→        userID, _ := c.Get("userId")
+   625→   625→        var consultations []Consultation
+   626→   626→        DB.Where("user_id = ?", userID).Order("created_at desc").Find(&consultations)
+   627→   627→        c.JSON(200, gin.H{"consultations": consultations})
+   628→   628→}
+   629→   629→
+   630→   630→func ServiceOrderHandler(c *gin.Context) {
+   631→   631→        var req ServiceOrderRequest
+   632→   632→        if err := c.ShouldBindJSON(&req); err != nil {
+   633→   633→                c.JSON(400, gin.H{"error": err.Error()})
+   634→   634→                return
+   635→   635→        }
+   636→   636→        so := ServiceOrder{ID: uuid.New().String(), Name: req.Name, Email: req.Email, Phone: req.Phone, Company: req.Company, ServiceType: req.ServiceType, Message: req.Message, Date: req.Date}
+   637→   637→        DB.Create(&so)
+   638→   638→        c.JSON(201, gin.H{"message": "Амжилттай"})
+   639→   639→}
+   640→   640→
+   641→   641→// ── Admin Handlers ───────────────────────────────────────────
+   642→   642→
+   643→   643→func DashboardHandler(c *gin.Context) {
+   644→   644→        var totalUsers, totalEnrollments, totalQuizAttempts, totalExamAttempts, totalFeedback, totalSurveys, totalConsultations int64
+   645→   645→        DB.Model(&User{}).Count(&totalUsers)
+   646→   646→        DB.Model(&Enrollment{}).Count(&totalEnrollments)
+   647→   647→        DB.Model(&QuizAttempt{}).Count(&totalQuizAttempts)
+   648→   648→        DB.Model(&ExamAttempt{}).Count(&totalExamAttempts)
+   649→   649→        DB.Model(&Feedback{}).Count(&totalFeedback)
+   650→   650→        DB.Model(&SurveyResponse{}).Count(&totalSurveys)
+   651→   651→        DB.Model(&Consultation{}).Count(&totalConsultations)
+   652→   652→
+   653→   653→        // Course enrollment breakdown
+   654→   654→        type CourseStat struct {
+   655→   655→                CourseID string `json:"courseId"`
+   656→   656→                Title    string `json:"title"`
+   657→   657→                Enrolled int64  `json:"enrolled"`
+   658→   658→        }
+   659→   659→        var courses []Course
+   660→   660→        DB.Find(&courses)
+   661→   661→        var courseStats []CourseStat
+   662→   662→        for _, co := range courses {
+   663→   663→                var cnt int64
+   664→   664→                DB.Model(&Enrollment{}).Where("course_id = ?", co.ID).Count(&cnt)
+   665→   665→                courseStats = append(courseStats, CourseStat{CourseID: co.ID, Title: co.Title, Enrolled: cnt})
+   666→   666→        }
+   667→   667→
+   668→   668→        // Recent quiz attempts
+   669→   669→        var recentQuizzes []QuizAttempt
+   670→   670→        DB.Order("created_at desc").Limit(10).Find(&recentQuizzes)
+   671→   671→        var quizResults []gin.H
+   672→   672→        for _, qa := range recentQuizzes {
+   673→   673→                var quiz Quiz
+   674→   674→                DB.Where("id = ?", qa.QuizID).First(&quiz)
+   675→   675→                var user User
+   676→   676→                DB.Where("id = ?", qa.UserID).First(&user)
+   677→   677→                quizResults = append(quizResults, gin.H{
+   678→   678→                        "id": qa.ID, "quizTitle": quiz.Title, "userName": user.FirstName + " " + user.LastName,
+   679→   679→                        "score": qa.Score, "total": qa.Total, "createdAt": qa.CreatedAt,
+   680→   680→                })
+   681→   681→        }
+   682→   682→
+   683→   683→        // Recent exam attempts
+   684→   684→        var recentExams []ExamAttempt
+   685→   685→        DB.Order("created_at desc").Limit(10).Find(&recentExams)
+   686→   686→        var examResults []gin.H
+   687→   687→        for _, ea := range recentExams {
+   688→   688→                var exam Exam
+   689→   689→                DB.Where("id = ?", ea.ExamID).First(&exam)
+   690→   690→                var user User
+   691→   691→                DB.Where("id = ?", ea.UserID).First(&user)
+   692→   692→                examResults = append(examResults, gin.H{
+   693→   693→                        "id": ea.ID, "examTitle": exam.Title, "examCode": exam.Code,
+   694→   694→                        "userName": user.FirstName + " " + user.LastName,
+   695→   695→                        "score": ea.Score, "total": ea.Total, "passed": ea.Passed, "createdAt": ea.CreatedAt,
+   696→   696→                })
+   697→   697→        }
+   698→   698→
+   699→   699→        // Recent feedback
+   700→   700→        var feedbacks []Feedback
+   701→   701→        DB.Order("created_at desc").Limit(10).Find(&feedbacks)
+   702→   702→
+   703→   703→        // Recent surveys
+   704→   704→        var surveys []SurveyResponse
+   705→   705→        DB.Order("created_at desc").Limit(10).Find(&surveys)
+   706→   706→
+   707→   707→        c.JSON(200, gin.H{
+   708→   708→                "totalUsers": totalUsers, "totalEnrollments": totalEnrollments,
+   709→   709→                "totalQuizAttempts": totalQuizAttempts, "totalExamAttempts": totalExamAttempts,
+   710→   710→                "totalFeedback": totalFeedback, "totalSurveys": totalSurveys,
+   711→   711→                "totalConsultations": totalConsultations,
+   712→   712→                "courseStats": courseStats, "recentQuizResults": quizResults,
+   713→   713→                "recentExamResults": examResults, "recentFeedback": feedbacks,
+   714→   714→                "recentSurveys": surveys,
+   715→   715→        })
+   716→   716→}
+   717→   717→
+   718→   718→func AdminGetExamsHandler(c *gin.Context) {
+   719→   719→        var exams []Exam
+   720→   720→        DB.Order("created_at desc").Find(&exams)
+   721→   721→        var result []gin.H
+   722→   722→        for _, e := range exams {
+   723→   723→                var cnt int64
+   724→   724→                DB.Model(&ExamAttempt{}).Where("exam_id = ?", e.ID).Count(&cnt)
+   725→   725→                result = append(result, gin.H{
+   726→   726→                        "id": e.ID, "title": e.Title, "code": e.Code,
+   727→   727→                        "duration": e.Duration, "questionCount": e.QuestionCount,
+   728→   728→                        "isActive": e.IsActive, "attempts": cnt, "createdAt": e.CreatedAt,
+   729→   729→                })
+   730→   730→        }
+   731→   731→        c.JSON(200, gin.H{"exams": result})
+   732→   732→}
+   733→   733→
+   734→   734→func AdminCreateExamHandler(c *gin.Context) {
+   735→   735→        var req AdminCreateExamRequest
+   736→   736→        if err := c.ShouldBindJSON(&req); err != nil {
+   737→   737→                c.JSON(400, gin.H{"error": err.Error()})
+   738→   738→                return
+   739→   739→        }
+   740→   740→        code := generateCode()
+   741→   741→        for {
+   742→   742→                var ex Exam
+   743→   743→                if DB.Where("code = ?", code).First(&ex).Error != nil {
+   744→   744→                        break
+   745→   745→                }
+   746→   746→                code = generateCode()
+   747→   747→        }
+   748→   748→        duration := req.Duration
+   749→   749→        if duration == 0 {
+   750→   750→                duration = 30
+   751→   751→        }
+   752→   752→
+   753→   753→        exam := Exam{ID: uuid.New().String(), Title: req.Title, Code: code, Duration: duration, QuestionCount: len(req.Questions), IsActive: true}
+   754→   754→        if err := DB.Create(&exam).Error; err != nil {
+   755→   755→                c.JSON(500, gin.H{"error": "Failed to create exam"})
+   756→   756→                return
+   757→   757→        }
+   758→   758→
+   759→   759→        for i, q := range req.Questions {
+   760→   760→                qq := ExamQuestion{ID: uuid.New().String(), ExamID: exam.ID, Question: q.Question, OptionA: q.OptionA, OptionB: q.OptionB, OptionC: q.OptionC, OptionD: q.OptionD, Correct: q.Correct, Index: i}
+   761→   761→                DB.Create(&qq)
+   762→   762→        }
+   763→   763→
+   764→   764→        log.Printf("Exam created: %s (code: %s, questions: %d)", req.Title, code, len(req.Questions))
+   765→   765→        c.JSON(201, gin.H{"exam": gin.H{"id": exam.ID, "title": exam.Title, "code": code, "duration": duration, "questionCount": len(req.Questions), "isActive": true}})
+   766→   766→}
+   767→   767→
+   768→   768→func AdminGetExamAttemptsHandler(c *gin.Context) {
+   769→   769→        var attempts []ExamAttempt
+   770→   770→        DB.Order("created_at desc").Find(&attempts)
+   771→   771→        var result []gin.H
+   772→   772→        for _, a := range attempts {
+   773→   773→                var exam Exam
+   774→   774→                DB.Where("id = ?", a.ExamID).First(&exam)
+   775→   775→                var user User
+   776→   776→                DB.Where("id = ?", a.UserID).First(&user)
+   777→   777→                name := user.FirstName + " " + user.LastName
+   778→   778→                if name == " " { name = user.Email }
+   779→   779→                result = append(result, gin.H{
+   780→   780→                        "id": a.ID, "examTitle": exam.Title, "examCode": exam.Code,
+   781→   781→                        "userId": a.UserID, "userName": name,
+   782→   782→                        "score": a.Score, "total": a.Total, "passed": a.Passed, "createdAt": a.CreatedAt,
+   783→   783→                })
+   784→   784→        }
+   785→   785→        c.JSON(200, gin.H{"attempts": result})
+   786→   786→}
+   787→   787→
+   788→   788→func AdminExportExamAttemptsHandler(c *gin.Context) {
+   789→   789→        var attempts []ExamAttempt
+   790→   790→        DB.Order("created_at desc").Find(&attempts)
+   791→   791→
+   792→   792→        c.Header("Content-Type", "text/csv; charset=utf-8")
+   793→   793→        c.Header("Content-Disposition", "attachment; filename=exam_attempts.csv")
+   794→   794→        writer := csv.NewWriter(c.Writer)
+   795→   795→        writer.Write([]string{"ID", "Шалгалт", "Код", "Хэрэглэгч", "Оноо", "Нийт", "Тэнцсэн", "Огноо"})
+   796→   796→        for _, a := range attempts {
+   797→   797→                var exam Exam
+   798→   798→                DB.Where("id = ?", a.ExamID).First(&exam)
+   799→   799→                var user User
+   800→   800→                DB.Where("id = ?", a.UserID).First(&user)
+   801→   801→                name := user.FirstName + " " + user.LastName
+   802→   802→                writer.Write([]string{a.ID, exam.Title, exam.Code, name, fmt.Sprintf("%d", a.Score), fmt.Sprintf("%d", a.Total), fmt.Sprintf("%v", a.Passed), a.CreatedAt.Format("2006-01-02 15:04:05")})
+   803→   803→        }
+   804→   804→        writer.Flush()
+   805→   805→}
+   806→   806→
+   807→   807→func AdminGetCoursesHandler(c *gin.Context) {
+   808→   808→        var courses []Course
+   809→   809→        DB.Order("created_at desc").Find(&courses)
+   810→   810→        var result []gin.H
+   811→   811→        for _, co := range courses {
+   812→   812→                var cnt int64
+   813→   813→                DB.Model(&Enrollment{}).Where("course_id = ?", co.ID).Count(&cnt)
+   814→   814→                result = append(result, gin.H{"id": co.ID, "title": co.Title, "category": co.Category, "description": co.Description, "duration": co.Duration, "price": co.Price, "schedule": co.Schedule, "location": co.Location, "maxStudents": co.MaxStudents, "enrolled": cnt})
+   815→   815→        }
+   816→   816→        c.JSON(200, gin.H{"courses": result})
+   817→   817→}
+   818→   818→
+   819→   819→func AdminCreateCourseHandler(c *gin.Context) {
+   820→   820→        var req AdminCreateCourseRequest
+   821→   821→        if err := c.ShouldBindJSON(&req); err != nil {
+   822→   822→                c.JSON(400, gin.H{"error": err.Error()})
+   823→   823→                return
+   824→   824→        }
+   825→   825→        max := 30
+   826→   826→        if req.MaxStudents != nil { max = *req.MaxStudents }
+   827→   827→        course := Course{ID: uuid.New().String(), Title: req.Title, Category: req.Category, Description: req.Description, Duration: req.Duration, Price: req.Price, Schedule: req.Schedule, Location: req.Location, StartDate: req.StartDate, MaxStudents: max}
+   828→   828→        DB.Create(&course)
+   829→   829→        c.JSON(201, gin.H{"course": course})
+   830→   830→}
+   831→   831→
+   832→   832→func AdminGetQuizzesHandler(c *gin.Context) {
+   833→   833→        var quizzes []Quiz
+   834→   834→        DB.Order("created_at desc").Find(&quizzes)
+   835→   835→        c.JSON(200, gin.H{"quizzes": quizzes})
+   836→   836→}
+   837→   837→
+   838→   838→func AdminCreateQuizHandler(c *gin.Context) {
+   839→   839→        var req AdminCreateQuizRequest
+   840→   840→        if err := c.ShouldBindJSON(&req); err != nil {
+   841→   841→                c.JSON(400, gin.H{"error": err.Error()})
+   842→   842→                return
+   843→   843→        }
+   844→   844→        quiz := Quiz{ID: uuid.New().String(), Title: req.Title, Description: req.Description, Category: req.Category, QuestionCount: len(req.Questions)}
+   845→   845→        DB.Create(&quiz)
+   846→   846→        for i, q := range req.Questions {
+   847→   847→                qq := QuizQuestion{ID: uuid.New().String(), QuizID: quiz.ID, Question: q.Question, OptionA: q.OptionA, OptionB: q.OptionB, OptionC: q.OptionC, OptionD: q.OptionD, Correct: q.Correct, Index: i}
+   848→   848→                DB.Create(&qq)
+   849→   849→        }
+   850→   850→        c.JSON(201, gin.H{"quiz": quiz})
+   851→   851→}
+   852→   852→
+   853→   853→func AdminGetStudentsHandler(c *gin.Context) {
+   854→   854→        var users []User
+   855→   855→        DB.Where("role = ?", "USER").Order("created_at desc").Find(&users)
+   856→   856→        var result []gin.H
+   857→   857→        for _, u := range users {
+   858→   858→                var enrollCount int64
+   859→   859→                DB.Model(&Enrollment{}).Where("user_id = ?", u.ID).Count(&enrollCount)
+   860→   860→                var quizCount int64
+   861→   861→                DB.Model(&QuizAttempt{}).Where("user_id = ?", u.ID).Count(&quizCount)
+   862→   862→                var examCount int64
+   863→   863→                DB.Model(&ExamAttempt{}).Where("user_id = ?", u.ID).Count(&examCount)
+   864→   864→                result = append(result, gin.H{"userId": u.ID, "name": u.FirstName + " " + u.LastName, "email": u.Email, "phone": u.Phone, "enrollments": enrollCount, "quizAttempts": quizCount, "examAttempts": examCount, "createdAt": u.CreatedAt})
+   865→   865→        }
+   866→   866→        c.JSON(200, gin.H{"students": result})
+   867→   867→}
+   868→   868→
+   869→   869→func AdminGetFeedbackHandler(c *gin.Context) {
+   870→   870→        var feedbacks []Feedback
+   871→   871→        DB.Order("created_at desc").Find(&feedbacks)
+   872→   872→        c.JSON(200, gin.H{"feedback": feedbacks})
+   873→   873→}
+   874→   874→
+   875→   875→func AdminGetSurveyResultsHandler(c *gin.Context) {
+   876→   876→        GetSurveyResultsHandler(c)
+   877→   877→}
+   878→   878→
+   879→   879→func AdminExportHandler(c *gin.Context) {
+   880→   880→        var users []User
+   881→   881→        DB.Find(&users)
+   882→   882→        var enrollments []Enrollment
+   883→   883→        DB.Find(&enrollments)
+   884→   884→        var quizAttempts []QuizAttempt
+   885→   885→        DB.Find(&quizAttempts)
+   886→   886→        var examAttempts []ExamAttempt
+   887→   887→        DB.Find(&examAttempts)
+   888→   888→        var feedbacks []Feedback
+   889→   889→        DB.Find(&feedbacks)
+   890→   890→        var surveys []SurveyResponse
+   891→   891→        DB.Find(&surveys)
+   892→   892→
+   893→   893→        c.JSON(200, gin.H{
+   894→   894→                "users": users, "enrollments": enrollments, "quizAttempts": quizAttempts,
+   895→   895→                "examAttempts": examAttempts, "feedback": feedbacks, "surveys": surveys,
+   896→   896→                "exportedAt": time.Now().Format(time.RFC3339),
+   897→   897→        })
+   898→   898→}
+   899→   899→
+   900→   900→func AdminStartExamHandler(c *gin.Context) {
+   901→   901→        id := c.Param("id")
+   902→   902→        DB.Model(&Exam{}).Where("id = ?", id).Update("is_active", true)
+   903→   903→        c.JSON(200, gin.H{"message": "Шалгалт идэвхжлээ"})
+   904→   904→}
+   905→   905→
+   906→   906→// Keep backward compatibility for unused old routes
+   907→   907→func SeedQuizzesHandler(c *gin.Context) {
+   908→   908→        c.JSON(200, gin.H{"message": "Quizzes already seeded from database"})
+   909→   909→}
+   910→   910→

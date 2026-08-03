@@ -816,6 +816,29 @@ func AdminGetCoursesHandler(c *gin.Context) {
         c.JSON(200, gin.H{"courses": result})
 }
 
+func AdminGetCourseEnrollmentsHandler(c *gin.Context) {
+        courseID := c.Param("id")
+        var enrollments []Enrollment
+        DB.Where("course_id = ?", courseID).Order("created_at desc").Find(&enrollments)
+
+        var result []gin.H
+        for _, e := range enrollments {
+                var user User
+                DB.Where("id = ?", e.UserID).First(&user)
+                result = append(result, gin.H{
+                        "enrollmentId": e.ID,
+                        "userId":       user.ID,
+                        "firstName":    user.FirstName,
+                        "lastName":     user.LastName,
+                        "email":        user.Email,
+                        "phone":        user.Phone,
+                        "paid":         e.Paid,
+                        "createdAt":    e.CreatedAt,
+                })
+        }
+        c.JSON(200, gin.H{"enrollments": result, "total": len(result)})
+}
+
 func AdminCreateCourseHandler(c *gin.Context) {
         var req AdminCreateCourseRequest
         if err := c.ShouldBindJSON(&req); err != nil {

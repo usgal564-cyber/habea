@@ -1,6 +1,6 @@
 
-import { useState, useEffect } from "react";
-import { motion } from "framer-motion";
+import React, { useState, useEffect } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -9,13 +9,38 @@ import { useAuthStore } from "@/hooks/use-auth";
 import { toast } from "sonner";
 import {
   Shield, Download, CheckCircle, XCircle,
-  Loader2, Database, FileSpreadsheet,
+  Loader2, Database, FileSpreadsheet, ChevronDown, Phone, Mail, User,
 } from "lucide-react";
 
 export default function AdminPage() {
   const { user, token } = useAuthStore();
   const [loading, setLoading] = useState(true);
   const [dashboard, setDashboard] = useState<any>(null);
+  const [expandedCourseId, setExpandedCourseId] = useState<string | null>(null);
+  const [courseEnrollments, setCourseEnrollments] = useState<any[]>([]);
+  const [enrollLoading, setEnrollLoading] = useState(false);
+
+  const fetchCourseEnrollments = async (courseId: string) => {
+    if (expandedCourseId === courseId) {
+      setExpandedCourseId(null);
+      setCourseEnrollments([]);
+      return;
+    }
+    setExpandedCourseId(courseId);
+    setEnrollLoading(true);
+    try {
+      const res = await fetch(`/api/admin/courses/${courseId}/enrollments`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      setCourseEnrollments(data.enrollments || []);
+    } catch {
+      setCourseEnrollments([]);
+      toast.error("Алдаа");
+    } finally {
+      setEnrollLoading(false);
+    }
+  };
 
   useEffect(() => {
     if (!token) { setLoading(false); return; }
@@ -149,7 +174,7 @@ export default function AdminPage() {
                 <CardHeader className="bg-gradient-to-r from-emerald-50 to-green-50 rounded-t-xl border-b pb-4">
                   <div>
                     <CardTitle className="text-lg">Сургалтанд бүртгэлтэй</CardTitle>
-                    <CardDescription>Нийт {totalEnrollments} бүртгэл</CardDescription>
+                    <CardDescription>Нийт {totalEnrollments} бүртгэл — Сургалт дээр дарж бүртгэгдсэн хүмүүсийн мэдээллийг харна уу</CardDescription>
                   </div>
                 </CardHeader>
                 <CardContent className="p-0">
@@ -169,12 +194,86 @@ export default function AdminPage() {
                         </TableHeader>
                         <TableBody>
                           {dashboard.courseStats.map((c: any, i: number) => (
-                            <TableRow key={i}>
-                              <TableCell className="font-medium">{c.title}</TableCell>
-                              <TableCell className="text-center">
-                                <Badge className="bg-emerald-100 text-emerald-800 font-semibold">{c.enrolled} хүн</Badge>
-                              </TableCell>
-                            </TableRow>
+                            <React.Fragment key={i}>
+                              <TableRow
+                                className="cursor-pointer hover:bg-emerald-50/60 transition-colors"
+                                onClick={() => fetchCourseEnrollments(c.courseId)}
+                              >
+                                <TableCell className="font-medium">{c.title}</TableCell>
+                                <TableCell className="text-center">
+                                  <div className="flex items-center justify-center gap-2">
+                                    <Badge className="bg-emerald-100 text-emerald-800 font-semibold">{c.enrolled} хүн</Badge>
+                                    <ChevronDown
+                                      className={`w-4 h-4 text-gray-400 transition-transform duration-200 ${expandedCourseId === c.courseId ? "rotate-180" : ""}`}
+                                    />
+                                  </div>
+                                </TableCell>
+                              </TableRow>
+                              {/* Expanded detail row */}
+                              {expandedCourseId === c.courseId && (
+                                <TableRow>
+                                  <TableCell colSpan={2} className="p-0">
+                                    <div className="bg-emerald-50/40 border-t border-emerald-100">
+                                      {enrollLoading ? (
+                                        <div className="flex items-center justify-center py-8">
+                                          <Loader2 className="w-5 h-5 text-brand-500 animate-spin mr-2" />
+                                          <span className="text-sm text-muted-foreground">Ачааллаж байна...</span>
+                                        </div>
+                                      ) : courseEnrollments.length === 0 ? (
+                                        <div className="text-center py-8">
+                                          <p className="text-muted-foreground text-sm">Бүртгэгдсэн хүн байхгүй</p>
+                                        </div>
+                                      ) : (
+                                        <div className="p-4">
+                                          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                                            {courseEnrollments.map((en: any, ei: number) => (
+                                              <motion.div
+                                                key={ei}
+                                                initial={{ opacity: 0, y: 8 }}
+                                                animate={{ opacity: 1, y: 0 }}
+                                                transition={{ delay: ei * 0.04 }}
+                                                className="bg-white rounded-xl border border-emerald-100 p-4 hover:shadow-sm transition-shadow"
+                                              >
+                                                <div className="flex items-start gap-3">
+                                                  <div className="w-9 h-9 rounded-full bg-emerald-100 flex items-center justify-center shrink-0">
+                                                    <User className="w-4 h-4 text-emerald-700" />
+                                                  </div>
+                                                  <div className="min-w-0 flex-1">
+                                                    <p className="font-semibold text-sm text-gray-900 truncate">
+                                                      {en.lastName || ""} {en.firstName || ""}
+                                                    </p>
+                                                    <div className="mt-2 space-y-1.5">
+                                                      <div className="flex items-center gap-2 text-xs text-gray-600">
+                                                        <Phone className="w-3 h-3 text-emerald-500 shrink-0" />
+                                                        <span className="truncate">{en.phone || "—"}</span>
+                                                      </div>
+                                                      <div className="flex items-center gap-2 text-xs text-gray-600">
+                                                        <Mail className="w-3 h-3 text-emerald-500 shrink-0" />
+                                                        <span className="truncate">{en.email || "—"}</span>
+                                                      </div>
+                                                    </div>
+                                                    <div className="flex items-center justify-between mt-2 pt-2 border-t border-gray-50">
+                                                      <span className="text-[11px] text-muted-foreground">
+                                                        {en.createdAt ? new Date(en.createdAt).toLocaleDateString("mn-MN") : "—"}
+                                                      </span>
+                                                      {en.paid ? (
+                                                        <Badge className="bg-emerald-100 text-emerald-700 text-[10px] px-1.5 py-0">Төлсөн</Badge>
+                                                      ) : (
+                                                        <Badge className="bg-amber-100 text-amber-700 text-[10px] px-1.5 py-0">Төлөөгүй</Badge>
+                                                      )}
+                                                    </div>
+                                                  </div>
+                                                </div>
+                                              </motion.div>
+                                            ))}
+                                          </div>
+                                        </div>
+                                      )}
+                                    </div>
+                                  </TableCell>
+                                </TableRow>
+                              )}
+                            </React.Fragment>
                           ))}
                         </TableBody>
                       </Table>

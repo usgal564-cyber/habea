@@ -333,7 +333,7 @@ function CourseCard({
 
 /* ─── Enrollment Dialog (Multi-step) ──────────────────── */
 
-type EnrollStep = "info" | "anket" | "payment" | "confirmed";
+type EnrollStep = "register" | "info" | "payment" | "confirmed";
 
 function EnrollmentDialog({
   course,
@@ -344,48 +344,82 @@ function EnrollmentDialog({
   onClose: () => void;
   onConfirmed: () => void;
 }) {
-  const { user, token } = useAuthStore();
-  const [step, setStep] = useState<EnrollStep>("info");
+  const { user, token, setAuth } = useAuthStore();
+  const [step, setStep] = useState<EnrollStep>(user ? "info" : "register");
   const [loading, setLoading] = useState(false);
 
-  // Anket fields
-  const [organization, setOrganization] = useState("");
-  const [position, setPosition] = useState("");
-  const [experience, setExperience] = useState("");
-  const [goal, setGoal] = useState("");
+  // Registration fields (for non-logged-in users)
+  const [regLastName, setRegLastName] = useState("");
+  const [regFirstName, setRegFirstName] = useState("");
+  const [regPhone, setRegPhone] = useState("");
+  const [regEmail, setRegEmail] = useState("");
+  const [regPassword, setRegPassword] = useState("");
+  const [regConfirmPassword, setRegConfirmPassword] = useState("");
 
   const categoryKey = course.category.toLowerCase();
   const price = course.price || COURSE_PRICES[categoryKey] || 30000;
   const schedule = COURSE_SCHEDULES[course.title];
 
-  // Step 1: Check login & show course info
-  const handleStepInfo = () => {
-    if (!user || !token) {
-      toast.error("Нэвтрэх шаардлагатай", { description: "Сургалтад бүртгүүлэхийн тулд нэвтэрнө үү." });
+  // Step 1: Register (if not logged in)
+  const handleRegister = async () => {
+    if (!regLastName.trim() || !regFirstName.trim()) {
+      toast.error("Овог, нэр оруулна уу");
       return;
     }
-    setStep("anket");
-  };
+    if (!regPhone.trim()) {
+      toast.error("Утасны дугаар оруулна уу");
+      return;
+    }
+    if (!regEmail.trim()) {
+      toast.error("Имэйл оруулна уу");
+      return;
+    }
+    if (regPassword.length < 6) {
+      toast.error("Нууц үг дор хаяж 6 тэмдэгт байх ёстой");
+      return;
+    }
+    if (regPassword !== regConfirmPassword) {
+      toast.error("Нууц үг таарахгүй байна");
+      return;
+    }
 
-  // Step 2: Fill anket & register
-  const handleAnket = async () => {
     setLoading(true);
     try {
-      // First register for the course
-      const res = await fetch(`/api/courses/${course.id}/register`, {
+      const res = await fetch("/api/auth/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          firstName: regFirstName,
+          lastName: regLastName,
+          email: regEmail,
+          phone: regPhone,
+          password: regPassword,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data.error || "Бүртгэл амжилтгүй");
+        return;
+      }
+      // Auto-login after registration
+      if (data.user && data.token) {
+        setAuth(data.user, data.token);
+      }
+      toast.success("Амжилттай бүртгэгдлээ!");
+      // Now register for the course automatically
+      const enrollRes = await fetch(`/api/courses/${course.id}/register`, {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${token}`,
+          Authorization: `Bearer ${data.token}`,
           "Content-Type": "application/json",
         },
       });
-      const data = await res.json();
-
-      if (res.ok) {
-        toast.success("Бүртгэл амжилттай!");
+      const enrollData = await enrollRes.json();
+      if (enrollRes.ok) {
+        toast.success("Сургалтад бүртгэгдлээ!");
         setStep("payment");
       } else {
-        toast.error("Бүртгэл амжилтгүй", { description: data.error || "Алдаа гарлаа" });
+        toast.error(enrollData.error || "Сургалтад бүртгэхэд алдаа гарлаа");
       }
     } catch {
       toast.error("Холболтын алдаа");
@@ -394,14 +428,41 @@ function EnrollmentDialog({
     }
   };
 
-  // Step 3: Payment
-  const handlePayment = async () => {
+  // Step: Login & enroll (for already logged-in users)
+  const handleEnrollCourse = async () => {
+    if (!user || !token) return;
     setLoading(true);
     try {
-      const res = await fetch("/api/courses/payment", {
+      const res = await fetch(`/api/courses/${course.id}/register`, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      });
+      const data = await res.json();
+      if (res.ok) {
+        toast.success("Сургалтад бүртгэгдлээ!");
+        setStep("payment");
+      } else {
+        toast.error(data.error || "Сургалтад бүртгэхэд алдаа");
+      }
+    } catch {
+      toast.error("Холболтын алдаа");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Step: Payment
+  const handlePayment = async () => {
+    setLoading(true);
+    try {
+      const currentToken = useAuthStore.getState().token;
+      const res = await fetch("/api/courses/payment", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${currentToken}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({ courseId: course.id }),
@@ -421,12 +482,18 @@ function EnrollmentDialog({
     }
   };
 
-  const stepLabels = [
-    { id: "info", label: "Мэдээлэл", icon: <ClipboardList className="w-4 h-4" /> },
-    { id: "anket", label: "Анкет", icon: <FileText className="w-4 h-4" /> },
-    { id: "payment", label: "Төлбөр", icon: <CreditCard className="w-4 h-4" /> },
-    { id: "confirmed", label: "Баталгаа", icon: <CheckCircle2 className="w-4 h-4" /> },
-  ];
+  // Dynamic step labels based on login state
+  const stepLabels = user
+    ? [
+        { id: "info", label: "Мэдээлэл", icon: <ClipboardList className="w-4 h-4" /> },
+        { id: "payment", label: "Төлбөр", icon: <CreditCard className="w-4 h-4" /> },
+        { id: "confirmed", label: "Баталгаа", icon: <CheckCircle2 className="w-4 h-4" /> },
+      ]
+    : [
+        { id: "register", label: "Бүртгэл", icon: <UserPlus className="w-4 h-4" /> },
+        { id: "payment", label: "Төлбөр", icon: <CreditCard className="w-4 h-4" /> },
+        { id: "confirmed", label: "Баталгаа", icon: <CheckCircle2 className="w-4 h-4" /> },
+      ];
 
   const currentStepIdx = stepLabels.findIndex((s) => s.id === step);
 
@@ -460,7 +527,7 @@ function EnrollmentDialog({
               {/* Active line */}
               <div
                 className="absolute top-[18px] left-[45px] h-[2px] bg-white transition-all duration-500"
-                style={{ width: currentStepIdx > 0 ? `calc(${currentStepIdx * 100}% / 3 + ${currentStepIdx * 20}px / 3)` : "0%" }}
+                style={{ width: currentStepIdx > 0 ? `calc(${currentStepIdx * 100}% / ${stepLabels.length - 1} + ${currentStepIdx * 20}px / ${stepLabels.length - 1})` : "0%" }}
               />
               {/* Steps */}
               {stepLabels.map((s, i) => (
@@ -488,7 +555,57 @@ function EnrollmentDialog({
         {/* Content */}
         <div className="p-6">
           <AnimatePresence mode="wait">
-            {/* Step 1: Course Info */}
+            {/* Step: Register (for non-logged-in users) */}
+            {step === "register" && (
+              <motion.div key="register" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-4">
+                <div className="text-center mb-2">
+                  <div className="w-12 h-12 rounded-xl bg-brand-100 flex items-center justify-center mx-auto mb-3">
+                    <UserPlus className="w-6 h-6 text-brand-600" />
+                  </div>
+                  <h4 className="font-bold text-brand-900">Бүртгүүлэх</h4>
+                  <p className="text-sm text-muted-foreground">Сургалтад бүртгүүлэхийн тулд мэдээллээ оруулна уу</p>
+                </div>
+
+                <div className="space-y-3">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <Label className="text-sm">Овог *</Label>
+                      <Input value={regLastName} onChange={(e) => setRegLastName(e.target.value)} placeholder="Овог" className="mt-1" />
+                    </div>
+                    <div>
+                      <Label className="text-sm">Нэр *</Label>
+                      <Input value={regFirstName} onChange={(e) => setRegFirstName(e.target.value)} placeholder="Нэр" className="mt-1" />
+                    </div>
+                  </div>
+                  <div>
+                    <Label className="text-sm">Утасны дугаар *</Label>
+                    <Input value={regPhone} onChange={(e) => setRegPhone(e.target.value)} placeholder="+976 XXXX XXXX" className="mt-1" />
+                  </div>
+                  <div>
+                    <Label className="text-sm">Имэйл *</Label>
+                    <Input type="email" value={regEmail} onChange={(e) => setRegEmail(e.target.value)} placeholder="email@example.com" className="mt-1" />
+                  </div>
+                  <div>
+                    <Label className="text-sm">Нууц үг *</Label>
+                    <Input type="password" value={regPassword} onChange={(e) => setRegPassword(e.target.value)} placeholder="Дор хаяж 6 тэмдэгт" className="mt-1" />
+                  </div>
+                  <div>
+                    <Label className="text-sm">Нууц үг давтах *</Label>
+                    <Input type="password" value={regConfirmPassword} onChange={(e) => setRegConfirmPassword(e.target.value)} placeholder="Дахин оруулна уу" className="mt-1" />
+                  </div>
+                </div>
+
+                <Button onClick={handleRegister} className="w-full bg-brand-600 hover:bg-brand-700 text-white py-3" disabled={loading}>
+                  {loading ? (
+                    <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Бүртгэж байна...</>
+                  ) : (
+                    <><UserPlus className="w-4 h-4 mr-2" /> Бүртгүүлэх</>
+                  )}
+                </Button>
+              </motion.div>
+            )}
+
+            {/* Step: Course Info (for logged-in users) */}
             {step === "info" && (
               <motion.div key="info" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-4">
                 <div className="bg-brand-50 rounded-xl p-4 space-y-3">
@@ -549,55 +666,17 @@ function EnrollmentDialog({
                   </div>
                 )}
 
-                <Button onClick={handleStepInfo} className="w-full bg-brand-600 hover:bg-brand-700 text-white py-3">
-                  {user && token ? (
-                    <>
-                      Анкет бөглөх <ArrowRight className="w-4 h-4 ml-2" />
-                    </>
+                <Button onClick={handleEnrollCourse} className="w-full bg-brand-600 hover:bg-brand-700 text-white py-3" disabled={loading}>
+                  {loading ? (
+                    <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Бүртгэж байна...</>
                   ) : (
-                    <>
-                      <UserPlus className="w-4 h-4 mr-2" />
-                      Нэвтрэх/Бүртгүүлэх
-                    </>
+                    <><CheckCircle2 className="w-4 h-4 mr-2" /> Бүртгүүлэх</>
                   )}
                 </Button>
               </motion.div>
             )}
 
-            {/* Step 2: Anket */}
-            {step === "anket" && (
-              <motion.div key="anket" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-4">
-                <h4 className="font-semibold text-brand-900">Бүртгэлийн анкет</h4>
-                <div className="space-y-3">
-                  <div>
-                    <Label>Байгууллагын нэр</Label>
-                    <Input value={organization} onChange={(e) => setOrganization(e.target.value)} placeholder="Ажиллаж байгаа байгууллага" />
-                  </div>
-                  <div>
-                    <Label>Албан тушаал</Label>
-                    <Input value={position} onChange={(e) => setPosition(e.target.value)} placeholder="Албан тушаал" />
-                  </div>
-                  <div>
-                    <Label>Ажлын туршлага</Label>
-                    <Input value={experience} onChange={(e) => setExperience(e.target.value)} placeholder="Жишээ: 3 жил" />
-                  </div>
-                  <div>
-                    <Label>Сургалтад бүртгүүлэх зорилго</Label>
-                    <Textarea value={goal} onChange={(e) => setGoal(e.target.value)} placeholder="Ямар зорилготой сургалтад хамрагдах вэ?" rows={3} />
-                  </div>
-                </div>
-                <div className="flex gap-3">
-                  <Button variant="outline" onClick={() => setStep("info")} className="flex-1">
-                    <ArrowLeft className="w-4 h-4 mr-1" /> Буцах
-                  </Button>
-                  <Button onClick={handleAnket} className="flex-1 bg-brand-600 hover:bg-brand-700 text-white" disabled={loading}>
-                    {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Бүртгүүлэх"}
-                  </Button>
-                </div>
-              </motion.div>
-            )}
-
-            {/* Step 3: Payment */}
+            {/* Step: Payment */}
             {step === "payment" && (
               <motion.div key="payment" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-4">
                 <div className="text-center">
@@ -630,7 +709,7 @@ function EnrollmentDialog({
                 </div>
 
                 <div className="flex gap-3">
-                  <Button variant="outline" onClick={() => setStep("anket")} className="flex-1">
+                  <Button variant="outline" onClick={() => setStep(user ? "info" : "register")} className="flex-1">
                     <ArrowLeft className="w-4 h-4 mr-1" /> Буцах
                   </Button>
                   <Button onClick={handlePayment} className="flex-1 bg-brand-600 hover:bg-brand-700 text-white" disabled={loading}>
@@ -647,7 +726,7 @@ function EnrollmentDialog({
               </motion.div>
             )}
 
-            {/* Step 4: Confirmed */}
+            {/* Step: Confirmed */}
             {step === "confirmed" && (
               <motion.div key="confirmed" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="space-y-4 text-center">
                 <motion.div
