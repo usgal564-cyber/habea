@@ -145,28 +145,28 @@ function QuizSelection({ onSelect }: { onSelect: (quiz: QuizListItem) => void })
   };
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: -20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.5 }}
-    >
-      {/* Header */}
-      <div className="mb-8 text-center">
-        <div className="mb-3 inline-flex items-center gap-2 rounded-full bg-brand-50 px-4 py-1.5 text-sm font-medium text-brand-700">
-          <Brain className="size-4" />
-          Мэдлэг сорих
-        </div>
-        <h2 className="text-3xl font-bold tracking-tight text-brand-900 sm:text-4xl">
-          Сорилууд
-        </h2>
-        <p className="mx-auto mt-3 max-w-2xl text-muted-foreground">
-          ХАБЭА-ын бүх чиглэлээр мэдлэг сорих сорилууд. Төлбөр төлсний дараа сорил өгөх боломжтой.
-        </p>
-        <div className="mt-3 inline-flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-full px-4 py-1.5 text-sm text-amber-800">
-          <CreditCard className="size-4" />
-          Сорил бүрд: {QUIZ_PRICE.toLocaleString()}₮
+    <>
+      {/* Hero Banner */}
+      <div className="bg-gradient-to-b from-brand-900 to-brand-800 py-16 px-4">
+        <div className="max-w-4xl mx-auto text-center">
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
+            <div className="inline-flex items-center gap-2 bg-brand-700/50 px-4 py-2 rounded-full mb-6">
+              <Brain className="w-4 h-4 text-brand-300" />
+              <span className="text-brand-200 text-sm font-medium">Мэдлэг сорих</span>
+            </div>
+            <h1 className="text-3xl lg:text-4xl font-bold text-white mb-4">Сорилууд</h1>
+            <p className="text-brand-200 text-lg max-w-2xl mx-auto">
+              ХАБЭА-ын бүх чиглэлээр мэдлэг сорих сорилууд. Төлбөр төлсний дараа сорил өгөх боломжтой.
+            </p>
+            <div className="mt-4 inline-flex items-center gap-2 bg-amber-500/20 border border-amber-400/30 rounded-full px-4 py-1.5 text-sm text-amber-200">
+              <CreditCard className="size-4" />
+              Сорил бүрд: {QUIZ_PRICE.toLocaleString()}₮
+            </div>
+          </motion.div>
         </div>
       </div>
+
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 -mt-8">
 
       {/* Admin: Create Quiz Section */}
       {isAdmin && (
@@ -339,7 +339,8 @@ function QuizSelection({ onSelect }: { onSelect: (quiz: QuizListItem) => void })
           </p>
         </div>
       )}
-    </motion.div>
+      </div>
+    </>
   );
 }
 

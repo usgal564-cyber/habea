@@ -22,6 +22,8 @@ import {
   UserPlus,
   ClipboardList,
   Banknote,
+  Plus,
+  XCircle,
 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -692,6 +694,26 @@ export default function TrainingPage() {
   const [selectedCourse, setSelectedCourse] = useState<Course | null>(null);
   const [showEnrollDialog, setShowEnrollDialog] = useState(false);
 
+  // Admin states
+  const isAdmin = user && (user.role === "ADMIN" || user.role === "MANAGER" || user.role === "TEACHER");
+  const [showAdminCreate, setShowAdminCreate] = useState(false);
+  const [adminTitle, setAdminTitle] = useState("");
+  const [adminCategory, setAdminCategory] = useState("staff");
+  const [adminDescription, setAdminDescription] = useState("");
+  const [adminDuration, setAdminDuration] = useState("");
+  const [adminPrice, setAdminPrice] = useState("");
+  const [adminMaxStudents, setAdminMaxStudents] = useState("");
+  const [adminSchedule, setAdminSchedule] = useState("");
+  const [adminLocation, setAdminLocation] = useState("");
+  const [adminCreating, setAdminCreating] = useState(false);
+
+  const refreshCourses = useCallback(() => {
+    fetch("/api/courses")
+      .then(r => r.json())
+      .then(d => { if (d.courses && d.courses.length > 0) setCourses(d.courses); else setCourses(FALLBACK_COURSES); })
+      .catch(() => setCourses(FALLBACK_COURSES));
+  }, []);
+
   useEffect(() => {
     async function fetchCourses() {
       try {
@@ -731,25 +753,122 @@ export default function TrainingPage() {
 
   return (
     <section className="w-full">
-      {/* Header */}
-      <motion.div
-        initial={{ opacity: 0, y: -20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5 }}
-        className="mb-8 text-center"
-      >
-        <div className="mb-3 inline-flex items-center gap-2 rounded-full bg-brand-50 px-4 py-1.5 text-sm font-medium text-brand-700">
-          <ShieldCheck className="size-4" />
-          Мэргэжлийн сургалт
+      {/* Hero Banner */}
+      <div className="bg-gradient-to-b from-brand-900 to-brand-800 py-16 px-4">
+        <div className="max-w-4xl mx-auto text-center">
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
+            <div className="inline-flex items-center gap-2 bg-brand-700/50 px-4 py-2 rounded-full mb-6">
+              <ShieldCheck className="w-4 h-4 text-brand-300" />
+              <span className="text-brand-200 text-sm font-medium">Мэргэжлийн сургалт</span>
+            </div>
+            <h1 className="text-3xl lg:text-4xl font-bold text-white mb-4">Сургалтууд</h1>
+            <p className="text-brand-200 text-lg max-w-2xl mx-auto">
+              ХАБЭА-ын бүх чиглэлээр мэргэжлийн сургалт, семинар зохион байгуулдаг.
+            </p>
+          </motion.div>
         </div>
-        <h2 className="text-3xl font-bold tracking-tight text-brand-900 sm:text-4xl">
-          Сургалтууд
-        </h2>
-        <p className="mx-auto mt-3 max-w-2xl text-muted-foreground">
-          ХАБЭА-ын бүх чиглэлээр мэргэжлийн сургалт, семинар зохион байгуулдаг.
-          Сургалтад бүртгүүлэх → Анкет бөглөх → Төлбөр төлөх → Хичээлийн хуваарь харах
-        </p>
-      </motion.div>
+      </div>
+
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 -mt-8">
+
+      {/* Admin: Create Course Section */}
+      {isAdmin && (
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="mb-8">
+          <Card className="border-brand-200 shadow-lg">
+            <CardHeader className="bg-brand-50 rounded-t-xl">
+              <CardTitle className="text-lg text-brand-900 flex items-center gap-2">
+                <ShieldCheck className="w-5 h-5" /> Админ: Шинэ сургалт нэмэх
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-5">
+              {!showAdminCreate ? (
+                <Button variant="outline" onClick={() => setShowAdminCreate(true)} className="w-full border-dashed border-2 border-brand-300 text-brand-700 hover:bg-brand-50 hover:border-brand-400">
+                  <Plus className="w-4 h-4 mr-2" /> Сургалт нэмэх
+                </Button>
+              ) : (
+                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="font-bold text-brand-900">Сургалтын мэдээлэл</h3>
+                    <Button size="sm" variant="ghost" onClick={() => setShowAdminCreate(false)} className="text-muted-foreground"><XCircle className="w-4 h-4" /></Button>
+                  </div>
+                  <div className="grid sm:grid-cols-2 gap-4 mb-4">
+                    <div>
+                      <label className="text-sm font-medium text-gray-700 mb-1 block">Сургалтын нэр</label>
+                      <Input value={adminTitle} onChange={e => setAdminTitle(e.target.value)} placeholder="Жишээ: Ажлын байраны аюулгүй байдал" />
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium text-gray-700 mb-1 block">Ангилал</label>
+                      <select value={adminCategory} onChange={e => setAdminCategory(e.target.value)} className="w-full border rounded-lg px-3 py-2 text-sm">
+                        <option value="staff">Ажилтны сургалт</option>
+                        <option value="personal">Хувь хүний сургалт</option>
+                        <option value="iso">ISO сургалт</option>
+                      </select>
+                    </div>
+                    <div className="sm:col-span-2">
+                      <label className="text-sm font-medium text-gray-700 mb-1 block">Тайлбар</label>
+                      <Textarea value={adminDescription} onChange={e => setAdminDescription(e.target.value)} placeholder="Сургалтын дэлгэрэнгүй тайлбар" rows={2} />
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium text-gray-700 mb-1 block">Хугацаа</label>
+                      <Input value={adminDuration} onChange={e => setAdminDuration(e.target.value)} placeholder="Жишээ: 16 цаг / 2 хоног" />
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium text-gray-700 mb-1 block">Үнэ (₮)</label>
+                      <Input type="number" value={adminPrice} onChange={e => setAdminPrice(e.target.value)} placeholder="30000" />
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium text-gray-700 mb-1 block">Оюутны тоо</label>
+                      <Input type="number" value={adminMaxStudents} onChange={e => setAdminMaxStudents(e.target.value)} placeholder="20" />
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium text-gray-700 mb-1 block">Хуваарь</label>
+                      <Input value={adminSchedule} onChange={e => setAdminSchedule(e.target.value)} placeholder="Жишээ: Даваа-Пүрэв 09:00-17:00" />
+                    </div>
+                    <div className="sm:col-span-2">
+                      <label className="text-sm font-medium text-gray-700 mb-1 block">Байршил</label>
+                      <Input value={adminLocation} onChange={e => setAdminLocation(e.target.value)} placeholder="Жишээ: Улаанбаатар, БЗД" />
+                    </div>
+                  </div>
+                  <Button onClick={async () => {
+                    if (!adminTitle.trim()) { toast.error("Сургалтын нэр оруулна уу"); return; }
+                    if (!adminDescription.trim()) { toast.error("Тайлбар оруулна уу"); return; }
+                    setAdminCreating(true);
+                    try {
+                      const res = await fetch("/api/admin/courses", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+                        body: JSON.stringify({
+                          title: adminTitle,
+                          category: adminCategory,
+                          description: adminDescription,
+                          duration: adminDuration || "16 цаг",
+                          price: parseFloat(adminPrice) || 30000,
+                          maxStudents: parseInt(adminMaxStudents) || 20,
+                          schedule: adminSchedule,
+                          location: adminLocation,
+                        }),
+                      });
+                      const data = await res.json();
+                      if (!res.ok) { toast.error(data.error || "Алдаа"); return; }
+                      toast.success(`Сургалт нэмэгдлээ: ${adminTitle}`);
+                      setAdminTitle(""); setAdminCategory("staff"); setAdminDescription("");
+                      setAdminDuration(""); setAdminPrice(""); setAdminMaxStudents("");
+                      setAdminSchedule(""); setAdminLocation("");
+                      setShowAdminCreate(false);
+                      setIsLoading(true);
+                      refreshCourses();
+                      setTimeout(() => setIsLoading(false), 500);
+                    } catch { toast.error("Алдаа"); }
+                    finally { setAdminCreating(false); }
+                  }} disabled={adminCreating || !adminTitle.trim()} className="w-full bg-brand-600 hover:bg-brand-700 text-white">
+                    {adminCreating ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Үүсгэж байна...</> : <><Plus className="w-4 h-4 mr-2" /> Сургалт нэмэх</>}
+                  </Button>
+                </motion.div>
+              )}
+            </CardContent>
+          </Card>
+        </motion.div>
+      )}
 
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
@@ -828,6 +947,7 @@ export default function TrainingPage() {
           />
         )}
       </AnimatePresence>
+      </div>
     </section>
   );
 }

@@ -26,3 +26,20 @@ Stage Summary:
   - Quiz page: Admin section-д шууд сорил үүсгэх form
   - Бүх үүсэлт DB руу хадгалагдана (refresh хийхэд алга болохгүй)
   - Үүссэн шалгалтуудын жагсаалт харагдана
+
+---
+Task ID: 2
+Agent: Main Agent
+Task: Сургалт, Сорилууд хуудаснуудад gradient hero banner нэмж бусад хуудастай ижил загвартай болгох
+
+Work Log:
+- training-page.tsx: Text-center header-ийг арилгаж, gradient hero banner нэмсэн (bg-gradient-to-b from-brand-900 to-brand-800 py-16)
+- quiz-page.tsx: QuizSelection component-д text-center header-ийг арилгаж, gradient hero banner нэмсэн (адил загвартай)
+- Хоёр хуудсын контент хэсгийг -mt-8 margin-тай болгож, banner доор overlap хийв
+- Бусад хуудас (Шалгалт, Зөвлөх үйлчилгээ, Санал хүсэлт, Сэтгэл ханамж) бүгд адил gradient hero banner-тэй байсан
+- Одоо бүх хуудас нэгэн төрлийн consistent загвартай боллоо
+
+Stage Summary:
+- Сургалт хуудас: gradient hero banner нэмсэн
+- Сорилууд хуудас: gradient hero banner нэмсэн
+- Бүх хуудас uniform загвартай боллоо
