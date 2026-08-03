@@ -43,6 +43,7 @@ type Course = {
   duration: string;
   price: number | null;
   maxStudents: number | null;
+  startDate?: string | null;
   image?: string | null;
   _count?: { registrations: number };
   schedule?: CourseSchedule;
@@ -286,6 +287,12 @@ function CourseCard({
               <Clock className="size-3.5 text-brand-500" />
               <span>{course.duration}</span>
             </div>
+            {course.startDate && (
+              <div className="flex items-center gap-1.5">
+                <Calendar className="size-3.5 text-brand-500" />
+                <span>{course.startDate}</span>
+              </div>
+            )}
             {course.maxStudents && (
               <div className="flex items-center gap-1.5">
                 <Users className="size-3.5 text-brand-500" />
@@ -702,6 +709,7 @@ export default function TrainingPage() {
   const [adminDescription, setAdminDescription] = useState("");
   const [adminDuration, setAdminDuration] = useState("");
   const [adminPrice, setAdminPrice] = useState("");
+  const [adminStartDate, setAdminStartDate] = useState("");
   const [adminMaxStudents, setAdminMaxStudents] = useState("");
   const [adminSchedule, setAdminSchedule] = useState("");
   const [adminLocation, setAdminLocation] = useState("");
@@ -817,6 +825,10 @@ export default function TrainingPage() {
                       <Input type="number" value={adminPrice} onChange={e => setAdminPrice(e.target.value)} placeholder="30000" />
                     </div>
                     <div>
+                      <label className="text-sm font-medium text-gray-700 mb-1 block">Эхлэх огноо</label>
+                      <Input type="date" value={adminStartDate} onChange={e => setAdminStartDate(e.target.value)} />
+                    </div>
+                    <div>
                       <label className="text-sm font-medium text-gray-700 mb-1 block">Оюутны тоо</label>
                       <Input type="number" value={adminMaxStudents} onChange={e => setAdminMaxStudents(e.target.value)} placeholder="20" />
                     </div>
@@ -844,6 +856,7 @@ export default function TrainingPage() {
                           duration: adminDuration || "16 цаг",
                           price: parseFloat(adminPrice) || 30000,
                           maxStudents: parseInt(adminMaxStudents) || 20,
+                          startDate: adminStartDate || null,
                           schedule: adminSchedule,
                           location: adminLocation,
                         }),
@@ -852,7 +865,8 @@ export default function TrainingPage() {
                       if (!res.ok) { toast.error(data.error || "Алдаа"); return; }
                       toast.success(`Сургалт нэмэгдлээ: ${adminTitle}`);
                       setAdminTitle(""); setAdminCategory("staff"); setAdminDescription("");
-                      setAdminDuration(""); setAdminPrice(""); setAdminMaxStudents("");
+                      setAdminDuration(""); setAdminPrice(""); setAdminStartDate("");
+                      setAdminMaxStudents("");
                       setAdminSchedule(""); setAdminLocation("");
                       setShowAdminCreate(false);
                       setIsLoading(true);

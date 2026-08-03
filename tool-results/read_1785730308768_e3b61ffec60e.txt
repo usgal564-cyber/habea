@@ -1,0 +1,954 @@
+     1→
+     2→import { useEffect, useState, useCallback } from "react";
+     3→import { motion, AnimatePresence } from "framer-motion";
+     4→import { toast } from "sonner";
+     5→import {
+     6→  BookOpen,
+     7→  Clock,
+     8→  Users,
+     9→  Award,
+    10→  GraduationCap,
+    11→  ShieldCheck,
+    12→  Loader2,
+    13→  CheckCircle2,
+    14→  MapPin,
+    15→  Calendar,
+    16→  ArrowLeft,
+    17→  ArrowRight,
+    18→  FileText,
+    19→  CreditCard,
+    20→  Wallet,
+    21→  Lock,
+    22→  UserPlus,
+    23→  ClipboardList,
+    24→  Banknote,
+    25→  Plus,
+    26→  XCircle,
+    27→} from "lucide-react";
+    28→import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+    29→import { Button } from "@/components/ui/button";
+    30→import { Badge } from "@/components/ui/badge";
+    31→import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+    32→import { Skeleton } from "@/components/ui/skeleton";
+    33→import { Input } from "@/components/ui/input";
+    34→import { Label } from "@/components/ui/label";
+    35→import { Textarea } from "@/components/ui/textarea";
+    36→import { useAuthStore } from "@/hooks/use-auth";
+    37→
+    38→type Course = {
+    39→  id: string;
+    40→  title: string;
+    41→  category: string;
+    42→  description: string;
+    43→  duration: string;
+    44→  price: number | null;
+    45→  maxStudents: number | null;
+    46→  image?: string | null;
+    47→  _count?: { registrations: number };
+    48→  schedule?: CourseSchedule;
+    49→};
+    50→
+    51→type CourseSchedule = {
+    52→  startDate: string;
+    53→  endDate: string;
+    54→  days: string;
+    55→  time: string;
+    56→  location: string;
+    57→  instructor: string;
+    58→};
+    59→
+    60→const COURSE_PRICES: Record<string, number> = {
+    61→  staff: 30000,
+    62→  personal: 25000,
+    63→  iso: 50000,
+    64→};
+    65→
+    66→const COURSE_SCHEDULES: Record<string, CourseSchedule> = {
+    67→  "Ажлын байраны аюулгүй байдалын үндэс": {
+    68→    startDate: "2025-08-01",
+    69→    endDate: "2025-08-08",
+    70→    days: "Даваа - Баасан",
+    71→    time: "09:00 - 17:00",
+    72→    location: "Улаанбаатар, БЗД, 3-р хороо, Бизнес центер, 201 тоот",
+    73→    instructor: "Д. Батбаатар (ХАБЭА эксперт)",
+    74→  },
+    75→  "Гал түймрийн эсрэг тэмцэл": {
+    76→    startDate: "2025-08-15",
+    77→    endDate: "2025-08-22",
+    78→    days: "Даваа - Баасан",
+    79→    time: "10:00 - 18:00",
+    80→    location: "Улаанбаатар, БЗД, Цогцоолбор, 4-р давхар",
+    81→    instructor: "Г. Ууганбаяр (Гал унтраах сургалтын мэргэжилтэн)",
+    82→  },
+    83→  "Анхны тусламж": {
+    84→    startDate: "2025-08-10",
+    85→    endDate: "2025-08-17",
+    86→    days: "Даваа - Баасан",
+    87→    time: "09:00 - 17:00",
+    88→    location: "Улаанбаатар, СБД, Эрүүл мэндийн сургалтын төв",
+    89→    instructor: "Н. Оюунчимэг (Анхны тусламжын багш)",
+    90→  },
+    91→  "ISO 45001 ХАБЭА менежмент": {
+    92→    startDate: "2025-09-01",
+    93→    endDate: "2025-09-20",
+    94→    days: "Даваа - Пүрэв",
+    95→    time: "09:00 - 17:00",
+    96→    location: "Улаанбаатар, ЧД, Конференц танхим, 5-р давхар",
+    97→    instructor: "Т. Мөнхбаатар (ISO сертификацийн аудитор)",
+    98→  },
+    99→};
+   100→
+   101→const CATEGORY_MAP: Record<string, string> = {
+   102→  staff: "Ажилтны сургалт",
+   103→  personal: "Хувь хүний сургалт",
+   104→  iso: "ISO сургалт",
+   105→};
+   106→
+   107→const CATEGORY_ICONS: Record<string, React.ReactNode> = {
+   108→  staff: <Users className="size-5" />,
+   109→  personal: <GraduationCap className="size-5" />,
+   110→  iso: <Award className="size-5" />,
+   111→};
+   112→
+   113→const FALLBACK_COURSES: Course[] = [
+   114→  {
+   115→    id: "staff-1",
+   116→    title: "Ажлын байраны аюулгүй байдалын үндэс",
+   117→    category: "staff",
+   118→    description: "Ажлын байраны аюулгүй байдлын гол зарчмууд, хууль эрх зүйн актууд, ажилтны эрх үүрэг, аюулгүй ажиллагааны дүрмийн талаар сургалт",
+   119→    duration: "16 цаг",
+   120→    price: 30000,
+   121→    maxStudents: 30,
+   122→    _count: { registrations: 0 },
+   123→  },
+   124→  {
+   125→    id: "staff-2",
+   126→    title: "Гал түймрийн эсрэг тэмцэл",
+   127→    category: "staff",
+   128→    description: "Гал түймэр эхлэх шалтгаан, урьдчилан сэргийлэх аргууд, гал унтраах хэрэгсэл ашиглах, яаралтай нөхцөлд авах арга хэмжээ",
+   129→    duration: "8 цаг",
+   130→    price: 30000,
+   131→    maxStudents: 25,
+   132→    _count: { registrations: 0 },
+   133→  },
+   134→  {
+   135→    id: "staff-3",
+   136→    title: "Анхны тусламж",
+   137→    category: "staff",
+   138→    description: "Анхны тусламж үзүүлэх үндсэн мэдлэг, зүрхний массаж, амьсгалын замыг чөлөөлөх, шарх авах, тунадас авах зэрэг",
+   139→    duration: "8 цаг",
+   140→    price: 30000,
+   141→    maxStudents: 20,
+   142→    _count: { registrations: 0 },
+   143→  },
+   144→  {
+   145→    id: "staff-4",
+   146→    title: "Өндөрлөгийн ажил",
+   147→    category: "staff",
+   148→    description: "Өндөрлөгийн ажил гүйцэтгэхэд шаардлагатай хамгаалах хэрэгсэл, аюулгүй ажиллагааны дүрэм",
+   149→    duration: "8 цаг",
+   150→    price: 30000,
+   151→    maxStudents: 15,
+   152→    _count: { registrations: 0 },
+   153→  },
+   154→  {
+   155→    id: "personal-1",
+   156→    title: "Хувийн хамгаалах хэрэгсэл",
+   157→    category: "personal",
+   158→    description: "Хувийн хамгаалах хэрэгсэлүүдийн төрөл, зориулалт, зөв ашиглах арга",
+   159→    duration: "4 цаг",
+   160→    price: 25000,
+   161→    maxStudents: 30,
+   162→    _count: { registrations: 0 },
+   163→  },
+   164→  {
+   165→    id: "personal-2",
+   166→    title: "Цахилгааны аюулгүй байдал",
+   167→    category: "personal",
+   168→    description: "Цахилгааны гэнэтийн осол, цахилгаан гэдэс, хамгаалах хэрэгсэл ашиглах",
+   169→    duration: "8 цаг",
+   170→    price: 25000,
+   171→    maxStudents: 25,
+   172→    _count: { registrations: 0 },
+   173→  },
+   174→  {
+   175→    id: "personal-3",
+   176→    title: "Хортой бодисын аюулгүй байдал",
+   177→    category: "personal",
+   178→    description: "Хортой бодис танилт, аюулгүй ажиллагааны дүрэм, хадгалах тээвэрлэх",
+   179→    duration: "8 цаг",
+   180→    price: 25000,
+   181→    maxStudents: 20,
+   182→    _count: { registrations: 0 },
+   183→  },
+   184→  {
+   185→    id: "iso-1",
+   186→    title: "ISO 45001 ХАБЭА менежмент",
+   187→    category: "iso",
+   188→    description: "ISO 45001:2018 стандартын шаардлага, хэрэгжилт, дотоод аудит, менежментийн системийг бий болгох",
+   189→    duration: "40 цаг",
+   190→    price: 50000,
+   191→    maxStudents: 20,
+   192→    _count: { registrations: 0 },
+   193→  },
+   194→  {
+   195→    id: "iso-2",
+   196→    title: "ISO 14001 Байгаль орчин",
+   197→    category: "iso",
+   198→    description: "ISO 14001:2015 байгаль орчны менежментийн систем, нөлөөллийн үнэлгээ",
+   199→    duration: "32 цаг",
+   200→    price: 50000,
+   201→    maxStudents: 20,
+   202→    _count: { registrations: 0 },
+   203→  },
+   204→  {
+   205→    id: "iso-3",
+   206→    title: "ISO 9001 Чанарын менежмент",
+   207→    category: "iso",
+   208→    description: "ISO 9001:2015 чанарын менежментийн систем, үйл явцын хандлага, тогтмол сайжруулалт",
+   209→    duration: "32 цаг",
+   210→    price: 50000,
+   211→    maxStudents: 20,
+   212→    _count: { registrations: 0 },
+   213→  },
+   214→];
+   215→
+   216→const containerVariants = {
+   217→  hidden: { opacity: 0 },
+   218→  visible: { opacity: 1, transition: { staggerChildren: 0.08 } },
+   219→};
+   220→
+   221→const itemVariants = {
+   222→  hidden: { opacity: 0, y: 20 },
+   223→  visible: { opacity: 1, y: 0, transition: { duration: 0.4, ease: "easeOut" } },
+   224→};
+   225→
+   226→function CourseCardSkeleton() {
+   227→  return (
+   228→    <Card className="overflow-hidden">
+   229→      <CardHeader className="pb-3">
+   230→        <div className="flex items-start justify-between gap-2">
+   231→          <div className="flex-1 space-y-2">
+   232→            <Skeleton className="h-5 w-3/4" />
+   233→            <Skeleton className="h-4 w-full" />
+   234→          </div>
+   235→          <Skeleton className="h-6 w-16 rounded-full" />
+   236→        </div>
+   237→      </CardHeader>
+   238→      <CardContent className="space-y-3">
+   239→        <Skeleton className="h-4 w-2/3" />
+   240→        <Skeleton className="h-4 w-1/2" />
+   241→        <div className="flex justify-end pt-2">
+   242→          <Skeleton className="h-9 w-28" />
+   243→        </div>
+   244→      </CardContent>
+   245→    </Card>
+   246→  );
+   247→}
+   248→
+   249→function CourseCard({
+   250→  course,
+   251→  onEnroll,
+   252→  isRegistering,
+   253→}: {
+   254→  course: Course;
+   255→  onEnroll: (courseId: string) => void;
+   256→  isRegistering: boolean;
+   257→}) {
+   258→  const categoryKey = course.category.toLowerCase();
+   259→  const icon = CATEGORY_ICONS[categoryKey] || <BookOpen className="size-5" />;
+   260→  const price = course.price || COURSE_PRICES[categoryKey] || 30000;
+   261→
+   262→  return (
+   263→    <motion.div variants={itemVariants} layout>
+   264→      <Card className="group relative overflow-hidden border-brand-100 bg-white transition-all duration-300 hover:border-brand-300 hover:shadow-lg hover:shadow-brand-100/50">
+   265→        <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-brand-500 to-brand-700 opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
+   266→
+   267→        <CardHeader className="pb-3">
+   268→          <div className="flex items-start justify-between gap-3">
+   269→            <div className="flex-1 space-y-1.5">
+   270→              <CardTitle className="text-lg leading-tight text-brand-900 group-hover:text-brand-700 transition-colors">
+   271→                {course.title}
+   272→              </CardTitle>
+   273→              <CardDescription className="line-clamp-2 text-sm leading-relaxed">
+   274→                {course.description}
+   275→              </CardDescription>
+   276→            </div>
+   277→            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-brand-50 text-brand-600 transition-colors group-hover:bg-brand-100">
+   278→              {icon}
+   279→            </div>
+   280→          </div>
+   281→        </CardHeader>
+   282→
+   283→        <CardContent className="space-y-4">
+   284→          <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
+   285→            <div className="flex items-center gap-1.5">
+   286→              <Clock className="size-3.5 text-brand-500" />
+   287→              <span>{course.duration}</span>
+   288→            </div>
+   289→            {course.maxStudents && (
+   290→              <div className="flex items-center gap-1.5">
+   291→                <Users className="size-3.5 text-brand-500" />
+   292→                <span>Макс: {course.maxStudents}</span>
+   293→              </div>
+   294→            )}
+   295→            {course._count?.registrations !== undefined && (
+   296→              <Badge variant="secondary" className="text-xs bg-brand-50 text-brand-700 hover:bg-brand-100">
+   297→                {course._count.registrations} бүртгүүлсэн
+   298→              </Badge>
+   299→            )}
+   300→          </div>
+   301→
+   302→          <div className="flex items-center justify-between pt-1">
+   303→            <div className="text-lg font-bold text-brand-700">
+   304→              {price.toLocaleString()}₮
+   305→            </div>
+   306→
+   307→            <Button
+   308→              size="sm"
+   309→              className="bg-brand-600 text-white hover:bg-brand-700 focus-visible:ring-brand-500"
+   310→              onClick={() => onEnroll(course.id)}
+   311→              disabled={isRegistering}
+   312→            >
+   313→              {isRegistering ? (
+   314→                <Loader2 className="size-4 animate-spin" />
+   315→              ) : (
+   316→                <Lock className="size-4" />
+   317→              )}
+   318→              Бүртгүүлэх
+   319→            </Button>
+   320→          </div>
+   321→        </CardContent>
+   322→      </Card>
+   323→    </motion.div>
+   324→  );
+   325→}
+   326→
+   327→/* ─── Enrollment Dialog (Multi-step) ──────────────────── */
+   328→
+   329→type EnrollStep = "info" | "anket" | "payment" | "confirmed";
+   330→
+   331→function EnrollmentDialog({
+   332→  course,
+   333→  onClose,
+   334→  onConfirmed,
+   335→}: {
+   336→  course: Course;
+   337→  onClose: () => void;
+   338→  onConfirmed: () => void;
+   339→}) {
+   340→  const { user, token } = useAuthStore();
+   341→  const [step, setStep] = useState<EnrollStep>("info");
+   342→  const [loading, setLoading] = useState(false);
+   343→
+   344→  // Anket fields
+   345→  const [organization, setOrganization] = useState("");
+   346→  const [position, setPosition] = useState("");
+   347→  const [experience, setExperience] = useState("");
+   348→  const [goal, setGoal] = useState("");
+   349→
+   350→  const categoryKey = course.category.toLowerCase();
+   351→  const price = course.price || COURSE_PRICES[categoryKey] || 30000;
+   352→  const schedule = COURSE_SCHEDULES[course.title];
+   353→
+   354→  // Step 1: Check login & show course info
+   355→  const handleStepInfo = () => {
+   356→    if (!user || !token) {
+   357→      toast.error("Нэвтрэх шаардлагатай", { description: "Сургалтад бүртгүүлэхийн тулд нэвтэрнө үү." });
+   358→      return;
+   359→    }
+   360→    setStep("anket");
+   361→  };
+   362→
+   363→  // Step 2: Fill anket & register
+   364→  const handleAnket = async () => {
+   365→    setLoading(true);
+   366→    try {
+   367→      // First register for the course
+   368→      const res = await fetch(`/api/courses/${course.id}/register`, {
+   369→        method: "POST",
+   370→        headers: {
+   371→          Authorization: `Bearer ${token}`,
+   372→          "Content-Type": "application/json",
+   373→        },
+   374→      });
+   375→      const data = await res.json();
+   376→
+   377→      if (res.ok) {
+   378→        toast.success("Бүртгэл амжилттай!");
+   379→        setStep("payment");
+   380→      } else {
+   381→        toast.error("Бүртгэл амжилтгүй", { description: data.error || "Алдаа гарлаа" });
+   382→      }
+   383→    } catch {
+   384→      toast.error("Холболтын алдаа");
+   385→    } finally {
+   386→      setLoading(false);
+   387→    }
+   388→  };
+   389→
+   390→  // Step 3: Payment
+   391→  const handlePayment = async () => {
+   392→    setLoading(true);
+   393→    try {
+   394→      const res = await fetch("/api/courses/payment", {
+   395→        method: "POST",
+   396→        headers: {
+   397→          Authorization: `Bearer ${token}`,
+   398→          "Content-Type": "application/json",
+   399→        },
+   400→        body: JSON.stringify({ courseId: course.id }),
+   401→      });
+   402→      const data = await res.json();
+   403→
+   404→      if (res.ok) {
+   405→        toast.success("Төлбөр амжилттай!");
+   406→        setStep("confirmed");
+   407→      } else {
+   408→        toast.error("Төлбөр амжилтгүй", { description: data.error });
+   409→      }
+   410→    } catch {
+   411→      toast.error("Холболтын алдаа");
+   412→    } finally {
+   413→      setLoading(false);
+   414→    }
+   415→  };
+   416→
+   417→  const stepLabels = [
+   418→    { id: "info", label: "Мэдээлэл", icon: <ClipboardList className="w-4 h-4" /> },
+   419→    { id: "anket", label: "Анкет", icon: <FileText className="w-4 h-4" /> },
+   420→    { id: "payment", label: "Төлбөр", icon: <CreditCard className="w-4 h-4" /> },
+   421→    { id: "confirmed", label: "Баталгаа", icon: <CheckCircle2 className="w-4 h-4" /> },
+   422→  ];
+   423→
+   424→  const currentStepIdx = stepLabels.findIndex((s) => s.id === step);
+   425→
+   426→  return (
+   427→    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+   428→      <motion.div
+   429→        initial={{ opacity: 0, scale: 0.95 }}
+   430→        animate={{ opacity: 1, scale: 1 }}
+   431→        className="bg-white rounded-2xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto"
+   432→      >
+   433→        {/* Header */}
+   434→        <div className="bg-gradient-to-r from-brand-700 to-brand-900 p-6 rounded-t-2xl">
+   435→          <div className="flex items-center justify-between">
+   436→            <div>
+   437→              <h3 className="text-xl font-bold text-white">{course.title}</h3>
+   438→              <p className="text-brand-200 text-sm mt-1">{COURSE_PRICES[categoryKey] ? "Төлбөртэй сургалт" : "Сургалтад бүртгүүлэх"}</p>
+   439→            </div>
+   440→            <button
+   441→              onClick={onClose}
+   442→              className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-colors"
+   443→            >
+   444→              ✕
+   445→            </button>
+   446→          </div>
+   447→
+   448→          {/* Step indicator */}
+   449→          <div className="mt-5">
+   450→            <div className="flex items-center justify-between relative">
+   451→              {/* Background line */}
+   452→              <div className="absolute top-[18px] left-[45px] right-[45px] h-[2px] bg-white/20" />
+   453→              {/* Active line */}
+   454→              <div
+   455→                className="absolute top-[18px] left-[45px] h-[2px] bg-white transition-all duration-500"
+   456→                style={{ width: currentStepIdx > 0 ? `calc(${currentStepIdx * 100}% / 3 + ${currentStepIdx * 20}px / 3)` : "0%" }}
+   457→              />
+   458→              {/* Steps */}
+   459→              {stepLabels.map((s, i) => (
+   460→                <div key={s.id} className="flex flex-col items-center gap-1.5 relative z-10">
+   461→                  <div
+   462→                    className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-medium transition-all ${
+   463→                      i <= currentStepIdx
+   464→                        ? "bg-white text-brand-700 shadow-sm"
+   465→                        : "bg-white/20 text-white/60"
+   466→                    }`}
+   467→                  >
+   468→                    {s.icon}
+   469→                  </div>
+   470→                  <span className={`text-[10px] font-medium transition-colors ${
+   471→                    i <= currentStepIdx ? "text-white/90" : "text-white/40"
+   472→                  }`}>
+   473→                    {s.label}
+   474→                  </span>
+   475→                </div>
+   476→              ))}
+   477→            </div>
+   478→          </div>
+   479→        </div>
+   480→
+   481→        {/* Content */}
+   482→        <div className="p-6">
+   483→          <AnimatePresence mode="wait">
+   484→            {/* Step 1: Course Info */}
+   485→            {step === "info" && (
+   486→              <motion.div key="info" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-4">
+   487→                <div className="bg-brand-50 rounded-xl p-4 space-y-3">
+   488→                  <div className="flex items-center gap-2 text-sm">
+   489→                    <Clock className="w-4 h-4 text-brand-600" />
+   490→                    <span className="text-muted-foreground">Хугацаа:</span>
+   491→                    <span className="font-medium text-brand-900">{course.duration}</span>
+   492→                  </div>
+   493→                  <div className="flex items-center gap-2 text-sm">
+   494→                    <Banknote className="w-4 h-4 text-brand-600" />
+   495→                    <span className="text-muted-foreground">Үнэ:</span>
+   496→                    <span className="font-bold text-brand-900">{price.toLocaleString()}₮</span>
+   497→                  </div>
+   498→                  {course.maxStudents && (
+   499→                    <div className="flex items-center gap-2 text-sm">
+   500→                      <Users className="w-4 h-4 text-brand-600" />
+   501→                      <span className="text-muted-foreground">Суудлын тоо:</span>
+   502→                      <span className="font-medium text-brand-900">{course.maxStudents}</span>
+   503→                    </div>
+   504→                  )}
+   505→                </div>
+   506→
+   507→                {schedule && (
+   508→                  <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 space-y-3">
+   509→                    <h4 className="font-semibold text-amber-900 text-sm flex items-center gap-2">
+   510→                      <Calendar className="w-4 h-4" /> Хичээлийн хуваарь
+   511→                    </h4>
+   512→                    <div className="grid grid-cols-2 gap-2 text-sm">
+   513→                      <div>
+   514→                        <p className="text-muted-foreground">Эхлэх:</p>
+   515→                        <p className="font-medium">{schedule.startDate}</p>
+   516→                      </div>
+   517→                      <div>
+   518→                        <p className="text-muted-foreground">Дуусах:</p>
+   519→                        <p className="font-medium">{schedule.endDate}</p>
+   520→                      </div>
+   521→                      <div>
+   522→                        <p className="text-muted-foreground">Өдөр:</p>
+   523→                        <p className="font-medium">{schedule.days}</p>
+   524→                      </div>
+   525→                      <div>
+   526→                        <p className="text-muted-foreground">Цаг:</p>
+   527→                        <p className="font-medium">{schedule.time}</p>
+   528→                      </div>
+   529→                    </div>
+   530→                    <div className="flex items-start gap-2 text-sm">
+   531→                      <MapPin className="w-4 h-4 text-brand-600 shrink-0 mt-0.5" />
+   532→                      <div>
+   533→                        <p className="text-muted-foreground">Байршил:</p>
+   534→                        <p className="font-medium">{schedule.location}</p>
+   535→                      </div>
+   536→                    </div>
+   537→                    <div className="flex items-center gap-2 text-sm">
+   538→                      <UserPlus className="w-4 h-4 text-brand-600" />
+   539→                      <span className="text-muted-foreground">Багш:</span>
+   540→                      <span className="font-medium">{schedule.instructor}</span>
+   541→                    </div>
+   542→                  </div>
+   543→                )}
+   544→
+   545→                <Button onClick={handleStepInfo} className="w-full bg-brand-600 hover:bg-brand-700 text-white py-3">
+   546→                  {user && token ? (
+   547→                    <>
+   548→                      Анкет бөглөх <ArrowRight className="w-4 h-4 ml-2" />
+   549→                    </>
+   550→                  ) : (
+   551→                    <>
+   552→                      <UserPlus className="w-4 h-4 mr-2" />
+   553→                      Нэвтрэх/Бүртгүүлэх
+   554→                    </>
+   555→                  )}
+   556→                </Button>
+   557→              </motion.div>
+   558→            )}
+   559→
+   560→            {/* Step 2: Anket */}
+   561→            {step === "anket" && (
+   562→              <motion.div key="anket" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-4">
+   563→                <h4 className="font-semibold text-brand-900">Бүртгэлийн анкет</h4>
+   564→                <div className="space-y-3">
+   565→                  <div>
+   566→                    <Label>Байгууллагын нэр</Label>
+   567→                    <Input value={organization} onChange={(e) => setOrganization(e.target.value)} placeholder="Ажиллаж байгаа байгууллага" />
+   568→                  </div>
+   569→                  <div>
+   570→                    <Label>Албан тушаал</Label>
+   571→                    <Input value={position} onChange={(e) => setPosition(e.target.value)} placeholder="Албан тушаал" />
+   572→                  </div>
+   573→                  <div>
+   574→                    <Label>Ажлын туршлага</Label>
+   575→                    <Input value={experience} onChange={(e) => setExperience(e.target.value)} placeholder="Жишээ: 3 жил" />
+   576→                  </div>
+   577→                  <div>
+   578→                    <Label>Сургалтад бүртгүүлэх зорилго</Label>
+   579→                    <Textarea value={goal} onChange={(e) => setGoal(e.target.value)} placeholder="Ямар зорилготой сургалтад хамрагдах вэ?" rows={3} />
+   580→                  </div>
+   581→                </div>
+   582→                <div className="flex gap-3">
+   583→                  <Button variant="outline" onClick={() => setStep("info")} className="flex-1">
+   584→                    <ArrowLeft className="w-4 h-4 mr-1" /> Буцах
+   585→                  </Button>
+   586→                  <Button onClick={handleAnket} className="flex-1 bg-brand-600 hover:bg-brand-700 text-white" disabled={loading}>
+   587→                    {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Бүртгүүлэх"}
+   588→                  </Button>
+   589→                </div>
+   590→              </motion.div>
+   591→            )}
+   592→
+   593→            {/* Step 3: Payment */}
+   594→            {step === "payment" && (
+   595→              <motion.div key="payment" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-4">
+   596→                <div className="text-center">
+   597→                  <div className="w-16 h-16 rounded-2xl bg-amber-100 flex items-center justify-center mx-auto mb-4">
+   598→                    <Wallet className="w-8 h-8 text-amber-700" />
+   599→                  </div>
+   600→                  <h4 className="font-bold text-xl text-brand-900">Төлбөр төлөх</h4>
+   601→                </div>
+   602→
+   603→                <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+   604→                  <div className="flex justify-between items-center">
+   605→                    <span className="text-muted-foreground">Сургалт:</span>
+   606→                    <span className="font-medium">{course.title}</span>
+   607→                  </div>
+   608→                  <div className="flex justify-between items-center mt-2">
+   609→                    <span className="text-muted-foreground">Төлбөрийн дүн:</span>
+   610→                    <span className="text-xl font-bold text-amber-800">{price.toLocaleString()}₮</span>
+   611→                  </div>
+   612→                </div>
+   613→
+   614→                <div className="bg-gray-50 rounded-xl p-4 text-sm text-muted-foreground space-y-2">
+   615→                  <p className="flex items-center gap-2">
+   616→                    <ShieldCheck className="w-4 h-4 text-brand-600" />
+   617→                    Төлбөр төлсний дараа сургалтад баталгаажна
+   618→                  </p>
+   619→                  <p className="flex items-center gap-2">
+   620→                    <CreditCard className="w-4 h-4 text-brand-600" />
+   621→                    Сургалт дуусмагц сертификат олгогдоно
+   622→                  </p>
+   623→                </div>
+   624→
+   625→                <div className="flex gap-3">
+   626→                  <Button variant="outline" onClick={() => setStep("anket")} className="flex-1">
+   627→                    <ArrowLeft className="w-4 h-4 mr-1" /> Буцах
+   628→                  </Button>
+   629→                  <Button onClick={handlePayment} className="flex-1 bg-brand-600 hover:bg-brand-700 text-white" disabled={loading}>
+   630→                    {loading ? (
+   631→                      <Loader2 className="w-4 h-4 animate-spin" />
+   632→                    ) : (
+   633→                      <>
+   634→                        <CreditCard className="w-4 h-4 mr-1" />
+   635→                        {price.toLocaleString()}₮ төлөх
+   636→                      </>
+   637→                    )}
+   638→                  </Button>
+   639→                </div>
+   640→              </motion.div>
+   641→            )}
+   642→
+   643→            {/* Step 4: Confirmed */}
+   644→            {step === "confirmed" && (
+   645→              <motion.div key="confirmed" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="space-y-4 text-center">
+   646→                <motion.div
+   647→                  initial={{ scale: 0 }}
+   648→                  animate={{ scale: 1 }}
+   649→                  transition={{ type: "spring", delay: 0.2 }}
+   650→                  className="w-20 h-20 rounded-full bg-green-100 flex items-center justify-center mx-auto"
+   651→                >
+   652→                  <CheckCircle2 className="w-10 h-10 text-green-600" />
+   653→                </motion.div>
+   654→                <h4 className="text-xl font-bold text-brand-900">Амжилттай бүртгэгдлээ!</h4>
+   655→                <p className="text-muted-foreground">Сургалтад амжилттай бүртгэгдлээ. Дараах мэдээллийг хадгална уу:</p>
+   656→
+   657→                {schedule && (
+   658→                  <div className="bg-brand-50 rounded-xl p-4 text-left space-y-2">
+   659→                    <div className="flex items-center gap-2 text-sm">
+   660→                      <Calendar className="w-4 h-4 text-brand-600" />
+   661→                      <span className="font-medium">{schedule.startDate} - {schedule.endDate}</span>
+   662→                    </div>
+   663→                    <div className="flex items-center gap-2 text-sm">
+   664→                      <Clock className="w-4 h-4 text-brand-600" />
+   665→                      <span>{schedule.days} | {schedule.time}</span>
+   666→                    </div>
+   667→                    <div className="flex items-start gap-2 text-sm">
+   668→                      <MapPin className="w-4 h-4 text-brand-600 shrink-0 mt-0.5" />
+   669→                      <span>{schedule.location}</span>
+   670→                    </div>
+   671→                  </div>
+   672→                )}
+   673→
+   674→                <Button onClick={() => { onConfirmed(); onClose(); }} className="w-full bg-brand-600 hover:bg-brand-700 text-white">
+   675→                  Дуусгах
+   676→                </Button>
+   677→              </motion.div>
+   678→            )}
+   679→          </AnimatePresence>
+   680→        </div>
+   681→      </motion.div>
+   682→    </div>
+   683→  );
+   684→}
+   685→
+   686→/* ─── Main Component ──────────────────────────────────── */
+   687→
+   688→export default function TrainingPage() {
+   689→  const { user, token } = useAuthStore();
+   690→  const [courses, setCourses] = useState<Course[]>([]);
+   691→  const [isLoading, setIsLoading] = useState(true);
+   692→  const [registeringId, setRegisteringId] = useState<string | null>(null);
+   693→  const [activeTab, setActiveTab] = useState("staff");
+   694→  const [selectedCourse, setSelectedCourse] = useState<Course | null>(null);
+   695→  const [showEnrollDialog, setShowEnrollDialog] = useState(false);
+   696→
+   697→  // Admin states
+   698→  const isAdmin = user && (user.role === "ADMIN" || user.role === "MANAGER" || user.role === "TEACHER");
+   699→  const [showAdminCreate, setShowAdminCreate] = useState(false);
+   700→  const [adminTitle, setAdminTitle] = useState("");
+   701→  const [adminCategory, setAdminCategory] = useState("staff");
+   702→  const [adminDescription, setAdminDescription] = useState("");
+   703→  const [adminDuration, setAdminDuration] = useState("");
+   704→  const [adminPrice, setAdminPrice] = useState("");
+   705→  const [adminMaxStudents, setAdminMaxStudents] = useState("");
+   706→  const [adminSchedule, setAdminSchedule] = useState("");
+   707→  const [adminLocation, setAdminLocation] = useState("");
+   708→  const [adminCreating, setAdminCreating] = useState(false);
+   709→
+   710→  const refreshCourses = useCallback(() => {
+   711→    fetch("/api/courses")
+   712→      .then(r => r.json())
+   713→      .then(d => { if (d.courses && d.courses.length > 0) setCourses(d.courses); else setCourses(FALLBACK_COURSES); })
+   714→      .catch(() => setCourses(FALLBACK_COURSES));
+   715→  }, []);
+   716→
+   717→  useEffect(() => {
+   718→    async function fetchCourses() {
+   719→      try {
+   720→        const res = await fetch("/api/courses");
+   721→        const data = await res.json();
+   722→        if (data.courses && data.courses.length > 0) {
+   723→          setCourses(data.courses);
+   724→        } else {
+   725→          setCourses(FALLBACK_COURSES);
+   726→        }
+   727→      } catch {
+   728→        setCourses(FALLBACK_COURSES);
+   729→      } finally {
+   730→        setIsLoading(false);
+   731→      }
+   732→    }
+   733→    fetchCourses();
+   734→  }, []);
+   735→
+   736→  const handleEnroll = useCallback((courseId: string) => {
+   737→    const course = courses.find((c) => c.id === courseId);
+   738→    if (course) {
+   739→      setSelectedCourse(course);
+   740→      setShowEnrollDialog(true);
+   741→    }
+   742→  }, [courses]);
+   743→
+   744→  const handleConfirmed = useCallback(() => {
+   745→    setShowEnrollDialog(false);
+   746→    setSelectedCourse(null);
+   747→  }, []);
+   748→
+   749→  const getFilteredCourses = (category: string): Course[] => {
+   750→    const key = category.toLowerCase();
+   751→    return courses.filter((c) => c.category.toLowerCase() === key);
+   752→  };
+   753→
+   754→  return (
+   755→    <section className="w-full">
+   756→      {/* Hero Banner */}
+   757→      <div className="bg-gradient-to-b from-brand-900 to-brand-800 py-16 px-4">
+   758→        <div className="max-w-4xl mx-auto text-center">
+   759→          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
+   760→            <div className="inline-flex items-center gap-2 bg-brand-700/50 px-4 py-2 rounded-full mb-6">
+   761→              <ShieldCheck className="w-4 h-4 text-brand-300" />
+   762→              <span className="text-brand-200 text-sm font-medium">Мэргэжлийн сургалт</span>
+   763→            </div>
+   764→            <h1 className="text-3xl lg:text-4xl font-bold text-white mb-4">Сургалтууд</h1>
+   765→            <p className="text-brand-200 text-lg max-w-2xl mx-auto">
+   766→              ХАБЭА-ын бүх чиглэлээр мэргэжлийн сургалт, семинар зохион байгуулдаг.
+   767→            </p>
+   768→          </motion.div>
+   769→        </div>
+   770→      </div>
+   771→
+   772→      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 -mt-8">
+   773→
+   774→      {/* Admin: Create Course Section */}
+   775→      {isAdmin && (
+   776→        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="mb-8">
+   777→          <Card className="border-brand-200 shadow-lg">
+   778→            <CardHeader className="bg-brand-50 rounded-t-xl">
+   779→              <CardTitle className="text-lg text-brand-900 flex items-center gap-2">
+   780→                <ShieldCheck className="w-5 h-5" /> Админ: Шинэ сургалт нэмэх
+   781→              </CardTitle>
+   782→            </CardHeader>
+   783→            <CardContent className="p-5">
+   784→              {!showAdminCreate ? (
+   785→                <Button variant="outline" onClick={() => setShowAdminCreate(true)} className="w-full border-dashed border-2 border-brand-300 text-brand-700 hover:bg-brand-50 hover:border-brand-400">
+   786→                  <Plus className="w-4 h-4 mr-2" /> Сургалт нэмэх
+   787→                </Button>
+   788→              ) : (
+   789→                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+   790→                  <div className="flex items-center justify-between mb-4">
+   791→                    <h3 className="font-bold text-brand-900">Сургалтын мэдээлэл</h3>
+   792→                    <Button size="sm" variant="ghost" onClick={() => setShowAdminCreate(false)} className="text-muted-foreground"><XCircle className="w-4 h-4" /></Button>
+   793→                  </div>
+   794→                  <div className="grid sm:grid-cols-2 gap-4 mb-4">
+   795→                    <div>
+   796→                      <label className="text-sm font-medium text-gray-700 mb-1 block">Сургалтын нэр</label>
+   797→                      <Input value={adminTitle} onChange={e => setAdminTitle(e.target.value)} placeholder="Жишээ: Ажлын байраны аюулгүй байдал" />
+   798→                    </div>
+   799→                    <div>
+   800→                      <label className="text-sm font-medium text-gray-700 mb-1 block">Ангилал</label>
+   801→                      <select value={adminCategory} onChange={e => setAdminCategory(e.target.value)} className="w-full border rounded-lg px-3 py-2 text-sm">
+   802→                        <option value="staff">Ажилтны сургалт</option>
+   803→                        <option value="personal">Хувь хүний сургалт</option>
+   804→                        <option value="iso">ISO сургалт</option>
+   805→                      </select>
+   806→                    </div>
+   807→                    <div className="sm:col-span-2">
+   808→                      <label className="text-sm font-medium text-gray-700 mb-1 block">Тайлбар</label>
+   809→                      <Textarea value={adminDescription} onChange={e => setAdminDescription(e.target.value)} placeholder="Сургалтын дэлгэрэнгүй тайлбар" rows={2} />
+   810→                    </div>
+   811→                    <div>
+   812→                      <label className="text-sm font-medium text-gray-700 mb-1 block">Хугацаа</label>
+   813→                      <Input value={adminDuration} onChange={e => setAdminDuration(e.target.value)} placeholder="Жишээ: 16 цаг / 2 хоног" />
+   814→                    </div>
+   815→                    <div>
+   816→                      <label className="text-sm font-medium text-gray-700 mb-1 block">Үнэ (₮)</label>
+   817→                      <Input type="number" value={adminPrice} onChange={e => setAdminPrice(e.target.value)} placeholder="30000" />
+   818→                    </div>
+   819→                    <div>
+   820→                      <label className="text-sm font-medium text-gray-700 mb-1 block">Оюутны тоо</label>
+   821→                      <Input type="number" value={adminMaxStudents} onChange={e => setAdminMaxStudents(e.target.value)} placeholder="20" />
+   822→                    </div>
+   823→                    <div>
+   824→                      <label className="text-sm font-medium text-gray-700 mb-1 block">Хуваарь</label>
+   825→                      <Input value={adminSchedule} onChange={e => setAdminSchedule(e.target.value)} placeholder="Жишээ: Даваа-Пүрэв 09:00-17:00" />
+   826→                    </div>
+   827→                    <div className="sm:col-span-2">
+   828→                      <label className="text-sm font-medium text-gray-700 mb-1 block">Байршил</label>
+   829→                      <Input value={adminLocation} onChange={e => setAdminLocation(e.target.value)} placeholder="Жишээ: Улаанбаатар, БЗД" />
+   830→                    </div>
+   831→                  </div>
+   832→                  <Button onClick={async () => {
+   833→                    if (!adminTitle.trim()) { toast.error("Сургалтын нэр оруулна уу"); return; }
+   834→                    if (!adminDescription.trim()) { toast.error("Тайлбар оруулна уу"); return; }
+   835→                    setAdminCreating(true);
+   836→                    try {
+   837→                      const res = await fetch("/api/admin/courses", {
+   838→                        method: "POST",
+   839→                        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+   840→                        body: JSON.stringify({
+   841→                          title: adminTitle,
+   842→                          category: adminCategory,
+   843→                          description: adminDescription,
+   844→                          duration: adminDuration || "16 цаг",
+   845→                          price: parseFloat(adminPrice) || 30000,
+   846→                          maxStudents: parseInt(adminMaxStudents) || 20,
+   847→                          schedule: adminSchedule,
+   848→                          location: adminLocation,
+   849→                        }),
+   850→                      });
+   851→                      const data = await res.json();
+   852→                      if (!res.ok) { toast.error(data.error || "Алдаа"); return; }
+   853→                      toast.success(`Сургалт нэмэгдлээ: ${adminTitle}`);
+   854→                      setAdminTitle(""); setAdminCategory("staff"); setAdminDescription("");
+   855→                      setAdminDuration(""); setAdminPrice(""); setAdminMaxStudents("");
+   856→                      setAdminSchedule(""); setAdminLocation("");
+   857→                      setShowAdminCreate(false);
+   858→                      setIsLoading(true);
+   859→                      refreshCourses();
+   860→                      setTimeout(() => setIsLoading(false), 500);
+   861→                    } catch { toast.error("Алдаа"); }
+   862→                    finally { setAdminCreating(false); }
+   863→                  }} disabled={adminCreating || !adminTitle.trim()} className="w-full bg-brand-600 hover:bg-brand-700 text-white">
+   864→                    {adminCreating ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Үүсгэж байна...</> : <><Plus className="w-4 h-4 mr-2" /> Сургалт нэмэх</>}
+   865→                  </Button>
+   866→                </motion.div>
+   867→              )}
+   868→            </CardContent>
+   869→          </Card>
+   870→        </motion.div>
+   871→      )}
+   872→
+   873→      {/* Tabs */}
+   874→      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+   875→        <div className="flex justify-center mb-8">
+   876→          <TabsList className="bg-brand-50 p-1 h-auto">
+   877→            <TabsTrigger
+   878→              value="staff"
+   879→              className="rounded-md px-4 py-2.5 text-sm font-medium data-[state=active]:bg-brand-600 data-[state=active]:text-white data-[state=active]:shadow-sm transition-all"
+   880→            >
+   881→              <Users className="size-4 mr-1.5" />
+   882→              Ажилтны сургалт
+   883→            </TabsTrigger>
+   884→            <TabsTrigger
+   885→              value="personal"
+   886→              className="rounded-md px-4 py-2.5 text-sm font-medium data-[state=active]:bg-brand-600 data-[state=active]:text-white data-[state=active]:shadow-sm transition-all"
+   887→            >
+   888→              <GraduationCap className="size-4 mr-1.5" />
+   889→              Хувь хүний сургалт
+   890→            </TabsTrigger>
+   891→            <TabsTrigger
+   892→              value="iso"
+   893→              className="rounded-md px-4 py-2.5 text-sm font-medium data-[state=active]:bg-brand-600 data-[state=active]:text-white data-[state=active]:shadow-sm transition-all"
+   894→            >
+   895→              <Award className="size-4 mr-1.5" />
+   896→              ISO сургалт
+   897→            </TabsTrigger>
+   898→          </TabsList>
+   899→        </div>
+   900→
+   901→        {["staff", "personal", "iso"].map((cat) => (
+   902→          <TabsContent key={cat} value={cat}>
+   903→            {isLoading ? (
+   904→              <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+   905→                {Array.from({ length: 3 }).map((_, i) => (
+   906→                  <CourseCardSkeleton key={i} />
+   907→                ))}
+   908→              </div>
+   909→            ) : (
+   910→              <motion.div
+   911→                variants={containerVariants}
+   912→                initial="hidden"
+   913→                animate="visible"
+   914→                className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
+   915→              >
+   916→                {getFilteredCourses(cat).length > 0 ? (
+   917→                  getFilteredCourses(cat).map((course) => (
+   918→                    <CourseCard
+   919→                      key={course.id}
+   920→                      course={course}
+   921→                      onEnroll={handleEnroll}
+   922→                      isRegistering={registeringId === course.id}
+   923→                    />
+   924→                  ))
+   925→                ) : (
+   926→                  <div className="col-span-full flex flex-col items-center justify-center py-16 text-center">
+   927→                    <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-brand-50">
+   928→                      <BookOpen className="size-8 text-brand-400" />
+   929→                    </div>
+   930→                    <h3 className="text-lg font-semibold text-brand-900">Сургалт олдсонгүй</h3>
+   931→                    <p className="mt-1 text-sm text-muted-foreground">Энэ чиглэлээр одоогоор сургалт байхгүй байна.</p>
+   932→                  </div>
+   933→                )}
+   934→              </motion.div>
+   935→            )}
+   936→          </TabsContent>
+   937→        ))}
+   938→      </Tabs>
+   939→
+   940→      {/* Enrollment Dialog */}
+   941→      <AnimatePresence>
+   942→        {showEnrollDialog && selectedCourse && (
+   943→          <EnrollmentDialog
+   944→            course={selectedCourse}
+   945→            onClose={() => setShowEnrollDialog(false)}
+   946→            onConfirmed={handleConfirmed}
+   947→          />
+   948→        )}
+   949→      </AnimatePresence>
+   950→      </div>
+   951→    </section>
+   952→  );
+   953→}
+   954→

@@ -77,8 +77,9 @@ export default function ExamPage() {
   ]);
   const [customCreating, setCustomCreating] = useState(false);
 
-  const totalPages = Math.ceil(questions.length / QUESTIONS_PER_PAGE);
-  const currentQuestions = questions.slice((currentPage - 1) * QUESTIONS_PER_PAGE, currentPage * QUESTIONS_PER_PAGE);
+  const safeQuestions = questions || [];
+  const totalPages = Math.ceil(safeQuestions.length / QUESTIONS_PER_PAGE);
+  const currentQuestions = safeQuestions.slice((currentPage - 1) * QUESTIONS_PER_PAGE, currentPage * QUESTIONS_PER_PAGE);
 
   useEffect(() => {
     if (!timerActive || timeLeft <= 0) return;
@@ -131,8 +132,9 @@ export default function ExamPage() {
       const res = await fetch(`/api/exam?examId=${examInfo.id}`, { headers: { Authorization: `Bearer ${token}` } });
       const data = await res.json();
       if (!res.ok) { toast.error(data.error); setState("enter-code"); return; }
-      setQuestions(data.questions);
-      setTimeLeft((data.questions.length > 0 ? examInfo.duration : 30) * 60);
+      const q = data.questions || [];
+      setQuestions(q);
+      setTimeLeft((q.length > 0 ? examInfo.duration : 30) * 60);
       setTimerActive(true);
       setState("taking");
     } catch { toast.error("Асуулт ачааллахад алдаа"); }
@@ -140,10 +142,10 @@ export default function ExamPage() {
   };
 
   const handleSubmitExam = useCallback(async () => {
-    if (!examInfo || !token || questions.length === 0) return;
+    if (!examInfo || !token || !(questions || []).length) return;
     setTimerActive(false); setLoading(true);
     try {
-      const answerArray = questions.map((q) => answers[q.id] ?? -1);
+      const answerArray = (questions || []).map((q) => answers[q.id] ?? -1);
       const res = await fetch("/api/exam", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }, body: JSON.stringify({ action: "submit", examId: examInfo.id, answers: answerArray }) });
       const data = await res.json();
       if (!res.ok) { toast.error(data.error); return; }
@@ -497,7 +499,7 @@ export default function ExamPage() {
             </Card>
 
             {/* Created items list */}
-            {(adminExams.length > 0 || adminQuizzes.length > 0) && (
+            {((adminExams || []).length > 0 || (adminQuizzes || []).length > 0) && (
               <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="mt-6">
                 <Card className="border-brand-200">
                   <CardHeader className="bg-brand-50 rounded-t-xl">
@@ -506,10 +508,10 @@ export default function ExamPage() {
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="p-4 space-y-3 max-h-80 overflow-y-auto">
-                    {adminExams.length > 0 && (
+                    {(adminExams || []).length > 0 && (
                       <div>
-                        <p className="text-xs font-semibold text-brand-600 uppercase mb-2">Шалгалтууд ({adminExams.length})</p>
-                        {adminExams.slice(0, 10).map((e: any) => (
+                        <p className="text-xs font-semibold text-brand-600 uppercase mb-2">Шалгалтууд ({(adminExams || []).length})</p>
+                        {(adminExams || []).slice(0, 10).map((e: any) => (
                           <div key={e.id} className="flex items-center justify-between p-3 rounded-xl bg-gray-50 hover:bg-brand-50 transition-colors mb-2">
                             <div className="min-w-0 flex-1">
                               <p className="text-sm font-medium text-brand-900 truncate">{e.title}</p>
@@ -526,10 +528,10 @@ export default function ExamPage() {
                         ))}
                       </div>
                     )}
-                    {adminQuizzes.length > 0 && (
+                    {(adminQuizzes || []).length > 0 && (
                       <div>
-                        <p className="text-xs font-semibold text-amber-600 uppercase mb-2">Сорилууд ({adminQuizzes.length})</p>
-                        {adminQuizzes.slice(0, 10).map((q: any) => (
+                        <p className="text-xs font-semibold text-amber-600 uppercase mb-2">Сорилууд ({(adminQuizzes || []).length})</p>
+                        {(adminQuizzes || []).slice(0, 10).map((q: any) => (
                           <div key={q.id} className="flex items-center justify-between p-3 rounded-xl bg-gray-50 hover:bg-amber-50 transition-colors mb-2">
                             <div className="min-w-0 flex-1">
                               <p className="text-sm font-medium text-brand-900 truncate">{q.title}</p>
@@ -577,7 +579,7 @@ export default function ExamPage() {
               </Card>
 
               {/* Exam History */}
-              {examHistory.length > 0 && (
+              {(examHistory || []).length > 0 && (
                 <div className="mt-8">
                   <h3 className="text-lg font-bold text-brand-900 mb-4 flex items-center gap-2">
                     <Eye className="w-5 h-5" /> Шалгалтын түүх
@@ -649,15 +651,15 @@ export default function ExamPage() {
                       <span className="text-sm text-muted-foreground">Хуудас {currentPage}/{totalPages}</span>
                     </div>
                   </div>
-                  <Progress value={(answeredCount / questions.length) * 100} className="h-2" />
-                  <p className="text-xs text-muted-foreground mt-1">Хариулсан: {answeredCount}/{questions.length}</p>
+                  <Progress value={(answeredCount / (questions || []).length) * 100} className="h-2" />
+                  <p className="text-xs text-muted-foreground mt-1">Хариулсан: {answeredCount}/{(questions || []).length}</p>
                 </CardHeader>
                 <CardContent>
                   {loading ? (
                     <div className="text-center py-16"><Loader2 className="w-12 h-12 text-brand-500 animate-spin mx-auto mb-4" /><p className="text-muted-foreground">Асуултууд ачааллаж байна...</p></div>
                   ) : (
                     <div className="space-y-6">
-                      {currentQuestions.map((q, idx) => {
+                      {(currentQuestions || []).map((q, idx) => {
                         const gi = (currentPage - 1) * QUESTIONS_PER_PAGE + idx;
                         return (
                           <motion.div key={q.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: idx * 0.03 }} className="bg-gray-50 rounded-xl p-4">

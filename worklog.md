@@ -43,3 +43,42 @@ Stage Summary:
 - Сургалт хуудас: gradient hero banner нэмсэн
 - Сорилууд хуудас: gradient hero banner нэмсэн
 - Бүх хуудас uniform загвартай боллоо
+---
+Task ID: 1
+Agent: Main Agent
+Task: Fix exam-page.tsx null crash on page load
+
+Work Log:
+- Analyzed screenshot showing "Cannot read properties of null (reading 'length')" error at exam-page.tsx:79
+- Identified that API responses could return null arrays (questions, adminExams, adminQuizzes, examHistory)
+- Added null safety guards to all `.length` accesses in exam-page.tsx:
+  - `questions.length` → `(questions || []).length` and `safeQuestions` variable
+  - `adminExams.length` → `(adminExams || []).length`
+  - `adminQuizzes.length` → `(adminQuizzes || []).length`
+  - `examHistory.length` → `(examHistory || []).length`
+  - `currentQuestions.map` → `(currentQuestions || []).map`
+  - `data.questions` assignment → `const q = data.questions || []; setQuestions(q);`
+
+Stage Summary:
+- Fixed potential null crash by adding defensive null checks on all array .length accesses
+- No new TypeScript errors introduced
+---
+Task ID: 2
+Agent: Main Agent
+Task: Add price and date fields to training creation form
+
+Work Log:
+- Added `adminStartDate` state to training-page.tsx
+- Added "Эхлэх огноо" (Start date) date input field to the admin training creation form
+- Added `startDate` to API POST payload for `/api/admin/courses`
+- Added `StartDate` field to Go `Course` model in models.go
+- Added `StartDate` field to `AdminCreateCourseRequest` in handlers.go
+- Updated `AdminCreateCourseHandler` to include `StartDate` when creating course
+- Added `startDate` to TypeScript `Course` type definition
+- Added start date display on course cards with Calendar icon
+- Reset `adminStartDate` after form submission
+
+Stage Summary:
+- Training creation form now has price (already existed) and start date fields
+- Backend updated to persist start date to DB
+- Course cards display start date when available

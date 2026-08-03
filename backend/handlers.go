@@ -127,6 +127,7 @@ type AdminCreateCourseRequest struct {
         Price       float64 `json:"price"`
         Schedule    string  `json:"schedule"`
         Location    string  `json:"location"`
+        StartDate   string  `json:"startDate"`
         MaxStudents *int    `json:"maxStudents"`
 }
 
@@ -823,7 +824,7 @@ func AdminCreateCourseHandler(c *gin.Context) {
         }
         max := 30
         if req.MaxStudents != nil { max = *req.MaxStudents }
-        course := Course{ID: uuid.New().String(), Title: req.Title, Category: req.Category, Description: req.Description, Duration: req.Duration, Price: req.Price, Schedule: req.Schedule, Location: req.Location, MaxStudents: max}
+        course := Course{ID: uuid.New().String(), Title: req.Title, Category: req.Category, Description: req.Description, Duration: req.Duration, Price: req.Price, Schedule: req.Schedule, Location: req.Location, StartDate: req.StartDate, MaxStudents: max}
         DB.Create(&course)
         c.JSON(201, gin.H{"course": course})
 }
