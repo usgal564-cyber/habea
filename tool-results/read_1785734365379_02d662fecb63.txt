@@ -1,0 +1,504 @@
+     1→
+     2→import { useState, useEffect } from "react";
+     3→import { motion } from "framer-motion";
+     4→import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+     5→import { Button } from "@/components/ui/button";
+     6→import { Badge } from "@/components/ui/badge";
+     7→import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+     8→import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+     9→import { useAuthStore } from "@/hooks/use-auth";
+    10→import { toast } from "sonner";
+    11→import {
+    12→  Shield, Users, BookOpen, ClipboardList, Download,
+    13→  GraduationCap, Brain, FileText, Star, CheckCircle, XCircle,
+    14→  Loader2, TrendingUp, MessageSquare, Database, FileSpreadsheet,
+    15→} from "lucide-react";
+    16→
+    17→export default function AdminPage() {
+    18→  const { user, token } = useAuthStore();
+    19→  const [loading, setLoading] = useState(true);
+    20→  const [dashboard, setDashboard] = useState<any>(null);
+    21→
+    22→  useEffect(() => {
+    23→    if (!token) { setLoading(false); return; }
+    24→    fetch("/api/admin/dashboard", { headers: { Authorization: `Bearer ${token}` } })
+    25→      .then(r => { if (!r.ok) throw new Error(); return r.json(); })
+    26→      .then(data => { setDashboard(data); setLoading(false); })
+    27→      .catch(() => { setLoading(false); });
+    28→  }, [token]);
+    29→
+    30→  if (!user || !token) {
+    31→    return (
+    32→      <div className="min-h-screen">
+    33→        <div className="bg-gradient-to-b from-brand-900 to-brand-800 py-16 px-4">
+    34→          <div className="max-w-4xl mx-auto text-center">
+    35→            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
+    36→              <div className="inline-flex items-center gap-2 bg-brand-700/50 px-4 py-2 rounded-full mb-6">
+    37→                <Shield className="w-4 h-4 text-brand-300" />
+    38→                <span className="text-brand-200 text-sm font-medium">Админ хэсэг</span>
+    39→              </div>
+    40→              <h1 className="text-3xl lg:text-4xl font-bold text-white mb-4">Админ Хяналтын Самбар</h1>
+    41→              <p className="text-brand-200 text-lg">Нэвтрэх шаардлагатай</p>
+    42→            </motion.div>
+    43→          </div>
+    44→        </div>
+    45→        <div className="max-w-2xl mx-auto px-4 -mt-8">
+    46→          <Card className="shadow-xl text-center p-12">
+    47→            <Shield className="w-16 h-16 text-brand-300 mx-auto mb-4" />
+    48→            <h2 className="text-xl font-bold text-brand-900 mb-2">Нэвтрэх шаардлагатай</h2>
+    49→            <p className="text-muted-foreground">Админ хяналтын самбар руу нэвтрэхийн тулд админ кодоор нэвтэрнө үү.</p>
+    50→          </Card>
+    51→        </div>
+    52→      </div>
+    53→    );
+    54→  }
+    55→
+    56→  if (loading) {
+    57→    return (
+    58→      <div className="min-h-screen flex items-center justify-center">
+    59→        <div className="text-center">
+    60→          <Loader2 className="w-12 h-12 text-brand-500 animate-spin mx-auto mb-4" />
+    61→          <p className="text-muted-foreground">Ачааллаж байна...</p>
+    62→        </div>
+    63→      </div>
+    64→    );
+    65→  }
+    66→
+    67→  const totalUsers = dashboard?.totalUsers || 0;
+    68→  const totalEnrollments = dashboard?.totalEnrollments || 0;
+    69→  const totalQuizAttempts = dashboard?.totalQuizAttempts || 0;
+    70→  const totalExamAttempts = dashboard?.totalExamAttempts || 0;
+    71→  const totalFeedback = dashboard?.totalFeedback || 0;
+    72→  const totalSurveys = dashboard?.totalSurveys || 0;
+    73→
+    74→  return (
+    75→    <div className="min-h-screen bg-gray-50/50">
+    76→      {/* Header */}
+    77→      <div className="bg-gradient-to-br from-brand-900 via-brand-800 to-brand-900 py-10 lg:py-14 px-4">
+    78→        <div className="max-w-6xl mx-auto">
+    79→          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
+    80→            <div className="flex items-center gap-3 mb-4">
+    81→              <div className="w-12 h-12 rounded-xl bg-brand-700/60 flex items-center justify-center">
+    82→                <Shield className="w-6 h-6 text-brand-200" />
+    83→              </div>
+    84→              <div>
+    85→                <h1 className="text-2xl lg:text-3xl font-bold text-white">Хяналтын Самбар</h1>
+    86→                <p className="text-brand-300 text-sm">
+    87→                  {user?.email || "Админ"} · {user?.role === "ADMIN" ? "Админ" : user?.role === "MANAGER" ? "Менежер" : "Багш"}
+    88→                </p>
+    89→              </div>
+    90→            </div>
+    91→          </motion.div>
+    92→        </div>
+    93→      </div>
+    94→
+    95→      <div className="max-w-6xl mx-auto px-4 -mt-6 pb-16">
+    96→
+    97→        {/* Stat Cards */}
+    98→        <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 lg:gap-5 mb-8">
+    99→          {[
+   100→            { label: "Нийт хэрэглэгч", value: totalUsers, icon: Users, accent: "bg-blue-500", lightBg: "bg-blue-50", textColor: "text-blue-700" },
+   101→            { label: "Сургалт бүртгэл", value: totalEnrollments, icon: GraduationCap, accent: "bg-emerald-500", lightBg: "bg-emerald-50", textColor: "text-emerald-700" },
+   102→            { label: "Тест өгөлт", value: totalQuizAttempts, icon: Brain, accent: "bg-violet-500", lightBg: "bg-violet-50", textColor: "text-violet-700" },
+   103→            { label: "Шалгалт өгөлт", value: totalExamAttempts, icon: ClipboardList, accent: "bg-orange-500", lightBg: "bg-orange-50", textColor: "text-orange-700" },
+   104→            { label: "Санал хүсэлт", value: totalFeedback, icon: MessageSquare, accent: "bg-amber-500", lightBg: "bg-amber-50", textColor: "text-amber-700" },
+   105→            { label: "Судалгаа", value: totalSurveys, icon: FileText, accent: "bg-rose-500", lightBg: "bg-rose-50", textColor: "text-rose-700" },
+   106→          ].map((stat, i) => {
+   107→            const Icon = stat.icon;
+   108→            return (
+   109→              <motion.div
+   110→                key={i}
+   111→                initial={{ opacity: 0, y: 20 }}
+   112→                animate={{ opacity: 1, y: 0 }}
+   113→                transition={{ delay: i * 0.06 }}
+   114→              >
+   115→                <Card className="overflow-hidden border-0 shadow-sm hover:shadow-md transition-all duration-300 group">
+   116→                  <CardContent className="p-4 lg:p-5">
+   117→                    <div className="flex items-start justify-between">
+   118→                      <div>
+   119→                        <p className="text-3xl lg:text-4xl font-extrabold text-gray-900 group-hover:scale-105 transition-transform origin-left">
+   120→                          {stat.value}
+   121→                        </p>
+   122→                        <p className="text-xs lg:text-sm text-muted-foreground mt-1 font-medium">{stat.label}</p>
+   123→                      </div>
+   124→                      <div className={`w-10 h-10 lg:w-11 lg:h-11 rounded-xl ${stat.lightBg} flex items-center justify-center shrink-0`}>
+   125→                        <Icon className={`w-5 h-5 ${stat.textColor}`} />
+   126→                      </div>
+   127→                    </div>
+   128→                  </CardContent>
+   129→                  <div className={`h-1 w-full ${stat.accent} opacity-60`} />
+   130→                </Card>
+   131→              </motion.div>
+   132→            );
+   133→          })}
+   134→        </div>
+   135→
+   136→        {/* Tabbed Content */}
+   137→        <Tabs defaultValue="enrollments" className="space-y-6">
+   138→          {/* Tab bar */}
+   139→          <TabsList className="bg-white border shadow-sm rounded-xl p-1.5 h-auto flex flex-wrap gap-1">
+   140→            {[
+   141→              { value: "enrollments", label: "Сургалт", icon: <GraduationCap className="w-4 h-4" /> },
+   142→              { value: "quizzes", label: "Тест", icon: <Brain className="w-4 h-4" /> },
+   143→              { value: "exams", label: "Шалгалт", icon: <ClipboardList className="w-4 h-4" /> },
+   144→              { value: "feedback", label: "Санал", icon: <Star className="w-4 h-4" /> },
+   145→              { value: "surveys", label: "Судалгаа", icon: <FileText className="w-4 h-4" /> },
+   146→              { value: "export", label: "Экспорт", icon: <Download className="w-4 h-4" /> },
+   147→            ].map((tab) => (
+   148→              <TabsTrigger
+   149→                key={tab.value}
+   150→                value={tab.value}
+   151→                className="flex items-center gap-1.5 px-3 lg:px-4 py-2 rounded-lg text-sm font-medium data-[state=active]:bg-brand-600 data-[state=active]:text-white data-[state=active]:shadow-sm transition-all"
+   152→              >
+   153→                {tab.icon}
+   154→                <span className="hidden sm:inline">{tab.label}</span>
+   155→              </TabsTrigger>
+   156→            ))}
+   157→          </TabsList>
+   158→
+   159→          {/* ── Enrollments Tab ── */}
+   160→          <TabsContent value="enrollments">
+   161→            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+   162→              <Card className="border-0 shadow-sm">
+   163→                <CardHeader className="bg-gradient-to-r from-emerald-50 to-green-50 rounded-t-xl border-b">
+   164→                  <div className="flex items-center gap-3">
+   165→                    <div className="w-10 h-10 rounded-lg bg-emerald-100 flex items-center justify-center">
+   166→                      <GraduationCap className="w-5 h-5 text-emerald-700" />
+   167→                    </div>
+   168→                    <div>
+   169→                      <CardTitle className="text-lg">Сургалтанд бүртгэлтэй</CardTitle>
+   170→                      <CardDescription>Нийт {totalEnrollments} бүртгэл</CardDescription>
+   171→                    </div>
+   172→                  </div>
+   173→                </CardHeader>
+   174→                <CardContent className="p-0">
+   175→                  {(!dashboard?.courseStats || dashboard.courseStats.length === 0) ? (
+   176→                    <div className="text-center py-16">
+   177→                      <GraduationCap className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+   178→                      <p className="text-muted-foreground font-medium">Одоогоор бүртгэл байхгүй байна</p>
+   179→                    </div>
+   180→                  ) : (
+   181→                    <div className="overflow-x-auto">
+   182→                      <Table>
+   183→                        <TableHeader>
+   184→                          <TableRow className="hover:bg-transparent">
+   185→                            <TableHead className="font-semibold">Сургалт</TableHead>
+   186→                            <TableHead className="font-semibold text-center">Бүртгэлтэй</TableHead>
+   187→                          </TableRow>
+   188→                        </TableHeader>
+   189→                        <TableBody>
+   190→                          {dashboard.courseStats.map((c: any, i: number) => (
+   191→                            <TableRow key={i}>
+   192→                              <TableCell className="font-medium">{c.title}</TableCell>
+   193→                              <TableCell className="text-center">
+   194→                                <Badge className="bg-emerald-100 text-emerald-800 font-semibold">{c.enrolled} хүн</Badge>
+   195→                              </TableCell>
+   196→                            </TableRow>
+   197→                          ))}
+   198→                        </TableBody>
+   199→                      </Table>
+   200→                    </div>
+   201→                  )}
+   202→                </CardContent>
+   203→              </Card>
+   204→            </motion.div>
+   205→          </TabsContent>
+   206→
+   207→          {/* ── Quizzes Tab ── */}
+   208→          <TabsContent value="quizzes">
+   209→            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+   210→              <Card className="border-0 shadow-sm">
+   211→                <CardHeader className="bg-gradient-to-r from-violet-50 to-purple-50 rounded-t-xl border-b">
+   212→                  <div className="flex items-center gap-3">
+   213→                    <div className="w-10 h-10 rounded-lg bg-violet-100 flex items-center justify-center">
+   214→                      <Brain className="w-5 h-5 text-violet-700" />
+   215→                    </div>
+   216→                    <div>
+   217→                      <CardTitle className="text-lg">Тест өгөлтийн дүн</CardTitle>
+   218→                      <CardDescription>Нийт {totalQuizAttempts} өгөлт</CardDescription>
+   219→                    </div>
+   220→                  </div>
+   221→                </CardHeader>
+   222→                <CardContent className="p-0">
+   223→                  {(!dashboard?.recentQuizResults || dashboard.recentQuizResults.length === 0) ? (
+   224→                    <div className="text-center py-16">
+   225→                      <Brain className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+   226→                      <p className="text-muted-foreground font-medium">Одоогоор тест өгөлт байхгүй байна</p>
+   227→                    </div>
+   228→                  ) : (
+   229→                    <div className="overflow-x-auto">
+   230→                      <Table>
+   231→                        <TableHeader>
+   232→                          <TableRow className="hover:bg-transparent">
+   233→                            <TableHead className="font-semibold">Оюутан</TableHead>
+   234→                            <TableHead className="font-semibold">Тест</TableHead>
+   235→                            <TableHead className="font-semibold text-center">Оноо</TableHead>
+   236→                            <TableHead className="font-semibold text-center">Огноо</TableHead>
+   237→                          </TableRow>
+   238→                        </TableHeader>
+   239→                        <TableBody>
+   240→                          {dashboard.recentQuizResults.map((r: any, i: number) => (
+   241→                            <TableRow key={i}>
+   242→                              <TableCell className="font-medium">{r.userName}</TableCell>
+   243→                              <TableCell className="text-muted-foreground">{r.quizTitle}</TableCell>
+   244→                              <TableCell className="text-center">
+   245→                                <Badge variant={r.score >= r.total * 0.8 ? "default" : "destructive"} className={r.score >= r.total * 0.8 ? "bg-green-100 text-green-800" : ""}>
+   246→                                  {r.score}/{r.total}
+   247→                                </Badge>
+   248→                              </TableCell>
+   249→                              <TableCell className="text-center text-sm text-muted-foreground">
+   250→                                {new Date(r.createdAt).toLocaleDateString("mn-MN")}
+   251→                              </TableCell>
+   252→                            </TableRow>
+   253→                          ))}
+   254→                        </TableBody>
+   255→                      </Table>
+   256→                    </div>
+   257→                  )}
+   258→                </CardContent>
+   259→              </Card>
+   260→            </motion.div>
+   261→          </TabsContent>
+   262→
+   263→          {/* ── Exams Tab ── */}
+   264→          <TabsContent value="exams">
+   265→            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+   266→              <Card className="border-0 shadow-sm">
+   267→                <CardHeader className="bg-gradient-to-r from-orange-50 to-amber-50 rounded-t-xl border-b">
+   268→                  <div className="flex items-center gap-3">
+   269→                    <div className="w-10 h-10 rounded-lg bg-orange-100 flex items-center justify-center">
+   270→                      <ClipboardList className="w-5 h-5 text-orange-700" />
+   271→                    </div>
+   272→                    <div>
+   273→                      <CardTitle className="text-lg">Шалгалтын үр дүн</CardTitle>
+   274→                      <CardDescription>Нийт {totalExamAttempts} өгөлт</CardDescription>
+   275→                    </div>
+   276→                  </div>
+   277→                </CardHeader>
+   278→                <CardContent className="p-0">
+   279→                  {(!dashboard?.recentExamResults || dashboard.recentExamResults.length === 0) ? (
+   280→                    <div className="text-center py-16">
+   281→                      <ClipboardList className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+   282→                      <p className="text-muted-foreground font-medium">Одоогоор шалгалтын үр дүн байхгүй байна</p>
+   283→                    </div>
+   284→                  ) : (
+   285→                    <div className="overflow-x-auto">
+   286→                      <Table>
+   287→                        <TableHeader>
+   288→                          <TableRow className="hover:bg-transparent">
+   289→                            <TableHead className="font-semibold">Оюутан</TableHead>
+   290→                            <TableHead className="font-semibold">Шалгалт</TableHead>
+   291→                            <TableHead className="font-semibold">Код</TableHead>
+   292→                            <TableHead className="font-semibold text-center">Оноо</TableHead>
+   293→                            <TableHead className="font-semibold text-center">Дүн</TableHead>
+   294→                            <TableHead className="font-semibold text-center">Огноо</TableHead>
+   295→                          </TableRow>
+   296→                        </TableHeader>
+   297→                        <TableBody>
+   298→                          {dashboard.recentExamResults.map((r: any, i: number) => (
+   299→                            <TableRow key={i}>
+   300→                              <TableCell className="font-medium">{r.userName}</TableCell>
+   301→                              <TableCell className="text-muted-foreground">{r.examTitle}</TableCell>
+   302→                              <TableCell>
+   303→                                <Badge variant="outline" className="font-mono text-xs">{r.examCode}</Badge>
+   304→                              </TableCell>
+   305→                              <TableCell className="text-center font-medium">{r.score}/{r.total}</TableCell>
+   306→                              <TableCell className="text-center">
+   307→                                {r.passed ? (
+   308→                                  <CheckCircle className="w-5 h-5 text-green-600 mx-auto" />
+   309→                                ) : (
+   310→                                  <XCircle className="w-5 h-5 text-red-500 mx-auto" />
+   311→                                )}
+   312→                              </TableCell>
+   313→                              <TableCell className="text-center text-sm text-muted-foreground">
+   314→                                {new Date(r.createdAt).toLocaleDateString("mn-MN")}
+   315→                              </TableCell>
+   316→                            </TableRow>
+   317→                          ))}
+   318→                        </TableBody>
+   319→                      </Table>
+   320→                    </div>
+   321→                  )}
+   322→                </CardContent>
+   323→              </Card>
+   324→            </motion.div>
+   325→          </TabsContent>
+   326→
+   327→          {/* ── Feedback Tab ── */}
+   328→          <TabsContent value="feedback">
+   329→            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+   330→              <Card className="border-0 shadow-sm">
+   331→                <CardHeader className="bg-gradient-to-r from-amber-50 to-yellow-50 rounded-t-xl border-b">
+   332→                  <div className="flex items-center gap-3">
+   333→                    <div className="w-10 h-10 rounded-lg bg-amber-100 flex items-center justify-center">
+   334→                      <Star className="w-5 h-5 text-amber-700" />
+   335→                    </div>
+   336→                    <div>
+   337→                      <CardTitle className="text-lg">Ирсэн санал хүсэлт</CardTitle>
+   338→                      <CardDescription>Нийт {totalFeedback} санал</CardDescription>
+   339→                    </div>
+   340→                  </div>
+   341→                </CardHeader>
+   342→                <CardContent className="p-4 lg:p-6">
+   343→                  {(!dashboard?.recentFeedback || dashboard.recentFeedback.length === 0) ? (
+   344→                    <div className="text-center py-16">
+   345→                      <MessageSquare className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+   346→                      <p className="text-muted-foreground font-medium">Одоогоор санал хүсэлт ирээгүй байна</p>
+   347→                    </div>
+   348→                  ) : (
+   349→                    <div className="space-y-3 max-h-[480px] overflow-y-auto pr-1">
+   350→                      {dashboard.recentFeedback.map((f: any, i: number) => (
+   351→                        <div key={i} className="border rounded-xl p-4 hover:bg-gray-50/80 transition-colors">
+   352→                          <div className="flex items-start justify-between gap-3 mb-2">
+   353→                            <div className="flex items-center gap-3 min-w-0">
+   354→                              <div className="w-9 h-9 rounded-full bg-brand-100 flex items-center justify-center text-sm font-bold text-brand-700 shrink-0">
+   355→                                {f.name?.charAt(0) || "?"}
+   356→                              </div>
+   357→                              <div className="min-w-0">
+   358→                                <p className="font-medium text-sm truncate">{f.name}</p>
+   359→                                <p className="text-xs text-muted-foreground">{new Date(f.createdAt).toLocaleDateString("mn-MN")}</p>
+   360→                              </div>
+   361→                            </div>
+   362→                            <div className="flex items-center gap-0.5 shrink-0">
+   363→                              {Array.from({ length: 5 }, (_, s) => (
+   364→                                <Star key={s} className={`w-3.5 h-3.5 ${s < (f.rating || 0) ? "text-amber-400 fill-amber-400" : "text-gray-200"}`} />
+   365→                              ))}
+   366→                            </div>
+   367→                          </div>
+   368→                          <p className="text-sm text-gray-700 leading-relaxed pl-12">{f.message}</p>
+   369→                        </div>
+   370→                      ))}
+   371→                    </div>
+   372→                  )}
+   373→                </CardContent>
+   374→              </Card>
+   375→            </motion.div>
+   376→          </TabsContent>
+   377→
+   378→          {/* ── Surveys Tab ── */}
+   379→          <TabsContent value="surveys">
+   380→            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+   381→              <Card className="border-0 shadow-sm">
+   382→                <CardHeader className="bg-gradient-to-r from-rose-50 to-pink-50 rounded-t-xl border-b">
+   383→                  <div className="flex items-center gap-3">
+   384→                    <div className="w-10 h-10 rounded-lg bg-rose-100 flex items-center justify-center">
+   385→                      <FileText className="w-5 h-5 text-rose-700" />
+   386→                    </div>
+   387→                    <div>
+   388→                      <CardTitle className="text-lg">Ирсэн судалгаа</CardTitle>
+   389→                      <CardDescription>Нийт {totalSurveys} судалгаа</CardDescription>
+   390→                    </div>
+   391→                  </div>
+   392→                </CardHeader>
+   393→                <CardContent className="p-4 lg:p-6">
+   394→                  {(!dashboard?.recentSurveys || dashboard.recentSurveys.length === 0) ? (
+   395→                    <div className="text-center py-16">
+   396→                      <FileText className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+   397→                      <p className="text-muted-foreground font-medium">Одоогоор судалгаа ирээгүй байна</p>
+   398→                    </div>
+   399→                  ) : (
+   400→                    <div className="space-y-3 max-h-[480px] overflow-y-auto pr-1">
+   401→                      {dashboard.recentSurveys.map((s: any, i: number) => (
+   402→                        <div key={i} className="border rounded-xl p-4 hover:bg-gray-50/80 transition-colors">
+   403→                          <div className="flex items-center justify-between gap-3">
+   404→                            <div className="flex items-center gap-3 min-w-0">
+   405→                              <div className="w-9 h-9 rounded-full bg-rose-100 flex items-center justify-center text-sm font-bold text-rose-700 shrink-0">
+   406→                                {s.name?.charAt(0) || "?"}
+   407→                              </div>
+   408→                              <div className="min-w-0">
+   409→                                <p className="font-medium text-sm truncate">{s.name}</p>
+   410→                                <p className="text-xs text-muted-foreground">{s.email}</p>
+   411→                              </div>
+   412→                            </div>
+   413→                            <div className="flex items-center gap-2 shrink-0">
+   414→                              <span className="text-xs text-muted-foreground">{new Date(s.createdAt).toLocaleDateString("mn-MN")}</span>
+   415→                              <Badge className="bg-rose-100 text-rose-800 text-xs">Судалгаа</Badge>
+   416→                            </div>
+   417→                          </div>
+   418→                        </div>
+   419→                      ))}
+   420→                    </div>
+   421→                  )}
+   422→                </CardContent>
+   423→              </Card>
+   424→            </motion.div>
+   425→          </TabsContent>
+   426→
+   427→          {/* ── Export Tab ── */}
+   428→          <TabsContent value="export">
+   429→            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+   430→              <Card className="border-0 shadow-sm">
+   431→                <CardHeader className="bg-gradient-to-r from-gray-50 to-slate-50 rounded-t-xl border-b">
+   432→                  <div className="flex items-center gap-3">
+   433→                    <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center">
+   434→                      <Database className="w-5 h-5 text-gray-700" />
+   435→                    </div>
+   436→                    <div>
+   437→                      <CardTitle className="text-lg">Мэдээлэл татаж авах</CardTitle>
+   438→                      <CardDescription>Бүх өгөгдлийг нэгтгэж татаж авах боломжтой</CardDescription>
+   439→                    </div>
+   440→                  </div>
+   441→                </CardHeader>
+   442→                <CardContent className="p-6">
+   443→                  <div className="grid sm:grid-cols-2 gap-4">
+   444→                    <button
+   445→                      onClick={() => {
+   446→                        window.open("/api/admin/exam-attempts/export?token=" + token, "_blank");
+   447→                      }}
+   448→                      className="group flex flex-col items-center gap-4 p-6 rounded-xl border-2 border-dashed border-gray-200 hover:border-brand-400 hover:bg-brand-50/50 transition-all duration-300"
+   449→                    >
+   450→                      <div className="w-14 h-14 rounded-2xl bg-brand-100 flex items-center justify-center group-hover:scale-110 transition-transform">
+   451→                        <FileSpreadsheet className="w-7 h-7 text-brand-700" />
+   452→                      </div>
+   453→                      <div className="text-center">
+   454→                        <p className="font-semibold text-gray-900">Шалгалтын үр дүн</p>
+   455→                        <p className="text-xs text-muted-foreground mt-0.5">CSV форматаар</p>
+   456→                      </div>
+   457→                      <div className="flex items-center gap-1.5 text-brand-700 text-sm font-medium opacity-0 group-hover:opacity-100 transition-opacity">
+   458→                        <Download className="w-4 h-4" />
+   459→                        Татах
+   460→                      </div>
+   461→                    </button>
+   462→
+   463→                    <button
+   464→                      onClick={async () => {
+   465→                        try {
+   466→                          const r = await fetch("/api/admin/export", { headers: { Authorization: `Bearer ${token}` } });
+   467→                          const d = await r.json();
+   468→                          const blob = new Blob([JSON.stringify(d, null, 2)], { type: "application/json" });
+   469→                          const url = URL.createObjectURL(blob);
+   470→                          const a = document.createElement("a");
+   471→                          a.href = url;
+   472→                          a.download = "habea_export.json";
+   473→                          a.click();
+   474→                          URL.revokeObjectURL(url);
+   475→                          toast.success("Татаж авлаа");
+   476→                        } catch {
+   477→                          toast.error("Алдаа");
+   478→                        }
+   479→                      }}
+   480→                      className="group flex flex-col items-center gap-4 p-6 rounded-xl border-2 border-dashed border-gray-200 hover:border-amber-400 hover:bg-amber-50/50 transition-all duration-300"
+   481→                    >
+   482→                      <div className="w-14 h-14 rounded-2xl bg-amber-100 flex items-center justify-center group-hover:scale-110 transition-transform">
+   483→                        <Database className="w-7 h-7 text-amber-700" />
+   484→                      </div>
+   485→                      <div className="text-center">
+   486→                        <p className="font-semibold text-gray-900">Бүх өгөгдөл</p>
+   487→                        <p className="text-xs text-muted-foreground mt-0.5">JSON форматаар</p>
+   488→                      </div>
+   489→                      <div className="flex items-center gap-1.5 text-amber-700 text-sm font-medium opacity-0 group-hover:opacity-100 transition-opacity">
+   490→                        <Download className="w-4 h-4" />
+   491→                        Татах
+   492→                      </div>
+   493→                    </button>
+   494→                  </div>
+   495→                </CardContent>
+   496→              </Card>
+   497→            </motion.div>
+   498→          </TabsContent>
+   499→        </Tabs>
+   500→      </div>
+   501→    </div>
+   502→  );
+   503→}
+   504→

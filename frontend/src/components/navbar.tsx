@@ -94,7 +94,7 @@ function DropdownMenu({
         )}
       >
         {group.groupIcon}
-        <span className="hidden xl:inline">{group.groupLabel}</span>
+        <span>{group.groupLabel}</span>
         <ChevronDown
           className={cn(
             "w-3.5 h-3.5 transition-transform duration-200",
@@ -217,7 +217,7 @@ export function Navbar({ currentPage, onNavigate, onAuthClick, user, onLogout }:
                     )}
                   >
                     {item.icon}
-                    <span className="hidden xl:inline">{item.label}</span>
+                    <span>{item.label}</span>
                     {isActive && (
                       <div className="absolute bottom-0 left-2 right-2 h-0.5 bg-brand-400 rounded-full" />
                     )}
@@ -266,7 +266,7 @@ export function Navbar({ currentPage, onNavigate, onAuthClick, user, onLogout }:
                     )}
                   >
                     {item.icon}
-                    <span className="hidden xl:inline">
+                    <span>
                       {isProfile ? (user?.email?.split("@")[0] || "Профайл") : item.label}
                     </span>
                     {isActive && (
@@ -287,7 +287,7 @@ export function Navbar({ currentPage, onNavigate, onAuthClick, user, onLogout }:
                   className="hidden lg:flex text-brand-200 hover:text-white hover:bg-brand-800/40"
                 >
                   <LogIn className="w-4 h-4 mr-2" />
-                  <span className="hidden xl:inline">Нэвтрэх</span>
+                  <span>Нэвтрэх</span>
                 </Button>
               )}
 
