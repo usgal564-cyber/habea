@@ -128,3 +128,16 @@ Stage Summary:
 - Proper responsive layout (2-col mobile, 3-col desktop for stats)
 - Each section has unique color theme for visual distinction
 - No TypeScript errors introduced
+---
+Task ID: 5
+Agent: Main Agent
+Task: Fix auth being cleared on page refresh
+
+Work Log:
+- Identified root cause: App.tsx useEffect calls `/api/auth/me` on every mount. If backend is down/unreachable, the response is non-200 (502/500), triggering `setAuth(null, null)` which clears the token from state AND localStorage — logging user out on every refresh.
+- Fixed App.tsx: Changed from `if (!res.ok) setAuth(null, null)` to `if (res.status === 401 || res.status === 403) setAuth(null, null)`. Only explicit auth failures clear the token. Server errors and network errors preserve the token.
+- Enhanced use-auth.ts: Extended JWTPayload interface with optional `name`, `firstName`, `lastName`, `phone` fields. Updated `decodeJWT` to extract all available fields from JWT payload for richer refresh state.
+
+Stage Summary:
+- Users will no longer be logged out on page refresh when backend is temporarily unavailable
+- JWT decode on refresh now preserves all available user fields

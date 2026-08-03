@@ -4,6 +4,10 @@ interface JWTPayload {
   userId: string;
   email: string;
   role: string;
+  name?: string;
+  firstName?: string;
+  lastName?: string;
+  phone?: string;
 }
 
 function decodeJWT(token: string): JWTPayload | null {
@@ -18,7 +22,15 @@ function decodeJWT(token: string): JWTPayload | null {
         .join("")
     );
     const payload = JSON.parse(jsonPayload);
-    return { userId: payload.userId, email: payload.email, role: payload.role };
+    return {
+      userId: payload.userId,
+      email: payload.email,
+      role: payload.role,
+      name: payload.name,
+      firstName: payload.firstName,
+      lastName: payload.lastName,
+      phone: payload.phone,
+    };
   } catch {
     return null;
   }

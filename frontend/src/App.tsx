@@ -43,15 +43,20 @@ export default function App() {
   const { user, setAuth, token } = useAuthStore();
 
   useEffect(() => {
-    if (token) {
-      fetch("/api/auth/me", {
-        headers: { Authorization: `Bearer ${token}` },
-      }).then((res) => {
-        if (!res.ok) {
+    if (!token) return;
+    fetch("/api/auth/me", {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((res) => {
+        if (res.status === 401 || res.status === 403) {
+          // Token expired or invalid — clear auth
           setAuth(null, null);
         }
-      }).catch(() => {});
-    }
+        // Other errors (500, 502, network) → keep token, backend may be down
+      })
+      .catch(() => {
+        // Network error — keep token, do NOT log out
+      });
   }, []);
 
   const handleNavigate = (pageId: PageId) => {
