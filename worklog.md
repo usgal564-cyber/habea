@@ -104,3 +104,27 @@ Stage Summary:
 - Navbar now uses dropdown groups instead of 10 items in one row
 - Much cleaner, user-friendly navigation with hover dropdowns
 - Mobile menu also improved with section grouping
+---
+Task ID: 4
+Agent: Main Agent
+Task: Redesign admin page - fix stat cards, tabs, spacing, and overall layout
+
+Work Log:
+- Analyzed two screenshots showing broken admin dashboard design
+- Completely rewrote admin-page.tsx with professional design:
+  - **Header**: Compact gradient header with icon + role info (left-aligned, not centered)
+  - **Stat cards**: 2x3 on mobile, 3x2 on desktop (was 6 columns cramped). Each card has colored bottom accent bar, large number, hover animation
+  - **Tab bar**: White background with rounded corners, flex-wrap for mobile, icons on all tabs, brand-600 active color
+  - **Tab content cards**: Each tab has gradient header (unique color per section), icon, title + count description
+  - **Empty states**: Icon + message centered instead of plain text
+  - **Feedback cards**: Better layout with avatar, star rating, date, proper padding
+  - **Survey cards**: Consistent with feedback design
+  - **Export tab**: Redesigned as two hover-interactive cards with dashed borders, icons, "Татах" button on hover
+  - **Table styling**: Cleaner headers, better spacing
+  - Removed unused imports (TrendingUp, TrendingUp), added new (MessageSquare, Database, FileSpreadsheet)
+
+Stage Summary:
+- Complete admin page redesign with professional, consistent design
+- Proper responsive layout (2-col mobile, 3-col desktop for stats)
+- Each section has unique color theme for visual distinction
+- No TypeScript errors introduced
