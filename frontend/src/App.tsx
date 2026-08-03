@@ -90,7 +90,9 @@ export default function App() {
       <main className="flex-1 pt-16 lg:pt-20">
         {renderPage()}
       </main>
-      <Footer onNavigate={handleNavigate} />
+      {(currentPage === "home" || currentPage === "about") && (
+        <Footer onNavigate={handleNavigate} />
+      )}
       <LoginDialog
         open={authOpen}
         onOpenChange={setAuthOpen}

@@ -64,8 +64,14 @@ export default function ExamPage() {
 
   // Admin: Custom create
   const [showCustomCreate, setShowCustomCreate] = useState(false);
+  const [activeCreateType, setActiveCreateType] = useState<"exam" | "quiz">("exam");
   const [examTitle, setExamTitle] = useState("");
   const [examDuration, setExamDuration] = useState("30");
+  const [quizDescription, setQuizDescription] = useState("");
+
+  // Admin: Created items list
+  const [adminExams, setAdminExams] = useState<any[]>([]);
+  const [adminQuizzes, setAdminQuizzes] = useState<any[]>([]);
   const [adminQuestions, setAdminQuestions] = useState<{ question: string; optionA: string; optionB: string; optionC: string; optionD: string; correct: string }[]>([
     { question: "", optionA: "", optionB: "", optionC: "", optionD: "", correct: "0" },
   ]);
@@ -93,6 +99,17 @@ export default function ExamPage() {
         .catch(() => {});
     }
   }, [token, state]);
+
+  // Admin: fetch created items
+  const fetchAdminItems = useCallback(() => {
+    if (!token || !isAdmin) return;
+    fetch("/api/admin/exams", { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.json()).then(d => setAdminExams(d.exams || [])).catch(() => {});
+    fetch("/api/admin/quizzes", { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.json()).then(d => setAdminQuizzes(d.quizzes || [])).catch(() => {});
+  }, [token, isAdmin]);
+
+  useEffect(() => { fetchAdminItems(); }, [fetchAdminItems]);
 
   const handleVerifyCode = async () => {
     if (!code.trim()) { toast.error("Код оруулна уу"); return; }
@@ -144,11 +161,25 @@ export default function ExamPage() {
   const formatTime = (s: number) => { const m = Math.floor(s / 60); return `${m.toString().padStart(2, "0")}:${(s % 60).toString().padStart(2, "0")}`; };
   const answeredCount = Object.keys(answers).length;
 
-  // Admin: Create exam from template
+  // Admin: Create exam/quiz from template
   const handleCreateFromTemplate = async (template: ExamTemplate) => {
     setCreatingFromTemplate(template.id);
     try {
-      const body = {
+      const isQuiz = template.type === "quiz";
+      const endpoint = isQuiz ? "/api/admin/quizzes" : "/api/admin/exams";
+      const body = isQuiz ? {
+        title: template.title,
+        description: template.description,
+        category: template.category || "",
+        questions: template.questions.map(q => ({
+          question: q.question,
+          optionA: q.optionA,
+          optionB: q.optionB,
+          optionC: q.optionC,
+          optionD: q.optionD,
+          correct: q.correct,
+        })),
+      } : {
         title: template.title,
         duration: template.duration,
         questions: template.questions.map(q => ({
@@ -160,16 +191,22 @@ export default function ExamPage() {
           correct: q.correct,
         })),
       };
-      const res = await fetch("/api/admin/exams", {
+      const res = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify(body),
       });
       const data = await res.json();
       if (!res.ok) { toast.error(data.error || "Алдаа"); setCreatingFromTemplate(null); return; }
-      setCreatedCode(data.exam.code);
-      setCreatedTitle(template.title);
-      toast.success(`Шалгалт үүссэн! Код: ${data.exam.code}`);
+      if (isQuiz) {
+        setCreatedCode("QUIZ");
+        toast.success(`Сорил үүссэн: ${template.title}`);
+      } else {
+        setCreatedCode(data.exam.code);
+        setCreatedTitle(template.title);
+        toast.success(`Шалгалт үүссэн! Код: ${data.exam.code}`);
+      }
+      fetchAdminItems();
       setTimeout(() => { setCreatingFromTemplate(null); setCreatedCode(""); setCreatedTitle(""); }, 5000);
     } catch { toast.error("Алдаа"); setCreatingFromTemplate(null); }
   };
@@ -181,22 +218,47 @@ export default function ExamPage() {
 
   // Admin: Custom create
   const handleCustomCreate = async () => {
-    if (!examTitle.trim()) { toast.error("Шалгалтын нэр оруулна уу"); return; }
+    if (!examTitle.trim()) { toast.error(activeCreateType === "exam" ? "Шалгалтын нэр оруулна уу" : "Сорилын нэр оруулна уу"); return; }
     const valid = adminQuestions.filter(q => q.question.trim() && q.optionA.trim() && q.optionB.trim() && q.optionC.trim() && q.optionD.trim());
     if (valid.length < 1) { toast.error("Дор хаяж 1 асуулт оруулна уу"); return; }
     setCustomCreating(true);
     try {
-      const body = { title: examTitle, duration: parseInt(examDuration) || 30, questions: valid.map(q => ({ ...q, correct: parseInt(q.correct) })) };
-      const res = await fetch("/api/admin/exams", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }, body: JSON.stringify(body) });
+      const isQuiz = activeCreateType === "quiz";
+      const endpoint = isQuiz ? "/api/admin/quizzes" : "/api/admin/exams";
+      const body = isQuiz ? {
+        title: examTitle,
+        description: quizDescription,
+        category: "",
+        questions: valid.map(q => ({ ...q, correct: parseInt(q.correct) })),
+      } : {
+        title: examTitle,
+        duration: parseInt(examDuration) || 30,
+        questions: valid.map(q => ({ ...q, correct: parseInt(q.correct) })),
+      };
+      const res = await fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }, body: JSON.stringify(body) });
       const data = await res.json();
       if (!res.ok) { toast.error(data.error || "Алдаа"); return; }
-      setCreatedCode(data.exam.code);
-      setCreatedTitle(examTitle);
-      toast.success(`Шалгалт үүссэн! Код: ${data.exam.code}`);
-      setExamTitle(""); setExamDuration("30"); setAdminQuestions([{ question: "", optionA: "", optionB: "", optionC: "", optionD: "", correct: "0" }]);
+      if (isQuiz) {
+        setCreatedCode("QUIZ");
+        setCreatedTitle(examTitle);
+        toast.success(`Сорил үүссэн: ${examTitle}`);
+      } else {
+        setCreatedCode(data.exam.code);
+        setCreatedTitle(examTitle);
+        toast.success(`Шалгалт үүссэн! Код: ${data.exam.code}`);
+      }
+      fetchAdminItems();
+      setExamTitle(""); setExamDuration("30"); setQuizDescription("");
+      setAdminQuestions([{ question: "", optionA: "", optionB: "", optionC: "", optionD: "", correct: "0" }]);
       setShowCustomCreate(false);
     } catch { toast.error("Алдаа"); }
     finally { setCustomCreating(false); }
+  };
+
+  const resetCustomForm = () => {
+    setExamTitle(""); setExamDuration("30"); setQuizDescription("");
+    setAdminQuestions([{ question: "", optionA: "", optionB: "", optionC: "", optionD: "", correct: "0" }]);
+    setActiveCreateType("exam");
   };
 
   const copyCode = (c: string) => {
@@ -237,18 +299,24 @@ export default function ExamPage() {
                     <div className="text-center">
                       <CheckCircle className="w-8 h-8 text-green-600 mx-auto mb-2" />
                       <p className="text-green-800 font-medium">{createdTitle}</p>
-                      <p className="text-green-700 text-sm mt-1">Шалгалт үүслээ! Код:</p>
-                      <div className="flex items-center justify-center gap-2 mt-2">
-                        <span className="text-2xl font-bold tracking-[0.3em] text-green-900 font-mono">{createdCode}</span>
-                        <Button size="sm" variant="outline" className="text-green-700 border-green-300 hover:bg-green-100" onClick={() => copyCode(createdCode)}>
-                          <Copy className="w-4 h-4" />
-                        </Button>
-                      </div>
+                      {createdCode === "QUIZ" ? (
+                        <p className="text-green-700 text-sm mt-1">Сорил амжилттай үүслээ! Сорилууд хуудаснаас харагдана.</p>
+                      ) : (
+                        <>
+                          <p className="text-green-700 text-sm mt-1">Шалгалт үүслээ! Код:</p>
+                          <div className="flex items-center justify-center gap-2 mt-2">
+                            <span className="text-2xl font-bold tracking-[0.3em] text-green-900 font-mono">{createdCode}</span>
+                            <Button size="sm" variant="outline" className="text-green-700 border-green-300 hover:bg-green-100" onClick={() => copyCode(createdCode)}>
+                              <Copy className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        </>
+                      )}
                     </div>
                   </motion.div>
                 )}
 
-                <Tabs defaultValue="exam" className="w-full">
+                <Tabs defaultValue="exam" className="w-full" onValueChange={(v) => setActiveCreateType(v as "exam" | "quiz")}>
                   <TabsList className="grid w-full grid-cols-2 mb-6">
                     <TabsTrigger value="exam" className="gap-1.5">
                       <FileEdit className="w-4 h-4" />
@@ -357,24 +425,31 @@ export default function ExamPage() {
 
                 {/* Custom Create Toggle */}
                 {!showCustomCreate ? (
-                  <Button variant="outline" onClick={() => setShowCustomCreate(true)} className="w-full border-dashed border-2 border-brand-300 text-brand-700 hover:bg-brand-50 hover:border-brand-400">
+                  <Button variant="outline" onClick={() => { setShowCustomCreate(true); resetCustomForm(); }} className="w-full border-dashed border-2 border-brand-300 text-brand-700 hover:bg-brand-50 hover:border-brand-400">
                     <Plus className="w-4 h-4 mr-2" /> Шинээр үүсгэх
                   </Button>
                 ) : (
                   <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} className="border-2 border-brand-200 rounded-xl p-5 bg-brand-50/30">
                     <div className="flex items-center justify-between mb-4">
-                      <h3 className="font-bold text-brand-900 flex items-center gap-2"><FileEdit className="w-4 h-4" /> Шинэ шалгалт үүсгэх</h3>
-                      <Button size="sm" variant="ghost" onClick={() => setShowCustomCreate(false)} className="text-muted-foreground"><XCircle className="w-4 h-4" /></Button>
+                      <h3 className="font-bold text-brand-900 flex items-center gap-2"><FileEdit className="w-4 h-4" /> {activeCreateType === "exam" ? "Шинэ шалгалт" : "Шинэ сорил"} үүсгэх</h3>
+                      <Button size="sm" variant="ghost" onClick={() => { setShowCustomCreate(false); resetCustomForm(); }} className="text-muted-foreground"><XCircle className="w-4 h-4" /></Button>
                     </div>
                     <div className="grid sm:grid-cols-2 gap-4 mb-4">
                       <div>
-                        <Label>Шалгалтын нэр</Label>
-                        <Input value={examTitle} onChange={e => setExamTitle(e.target.value)} placeholder="Жишээ: ХАБЭА үндсэн шалгалт" />
+                        <Label>{activeCreateType === "exam" ? "Шалгалтын нэр" : "Сорилын нэр"}</Label>
+                        <Input value={examTitle} onChange={e => setExamTitle(e.target.value)} placeholder={activeCreateType === "exam" ? "Жишээ: ХАБЭА үндсэн шалгалт" : "Жишээ: Гал түймэрээс сэргийлэх"} />
                       </div>
-                      <div>
-                        <Label>Хугацаа (минут)</Label>
-                        <Input type="number" value={examDuration} onChange={e => setExamDuration(e.target.value)} placeholder="30" />
-                      </div>
+                      {activeCreateType === "exam" ? (
+                        <div>
+                          <Label>Хугацаа (минут)</Label>
+                          <Input type="number" value={examDuration} onChange={e => setExamDuration(e.target.value)} placeholder="30" />
+                        </div>
+                      ) : (
+                        <div>
+                          <Label>Тайлбар</Label>
+                          <Input value={quizDescription} onChange={e => setQuizDescription(e.target.value)} placeholder="Сорилын тайлбар" />
+                        </div>
+                      )}
                     </div>
 
                     <div className="space-y-3 max-h-96 overflow-y-auto pr-1">
@@ -414,12 +489,63 @@ export default function ExamPage() {
                     </div>
 
                     <Button onClick={handleCustomCreate} disabled={customCreating || !examTitle.trim()} className="w-full mt-4 bg-brand-600 hover:bg-brand-700">
-                      {customCreating ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Үүсгэж байна...</> : <><Plus className="w-4 h-4 mr-2" /> Шалгалт үүсгэх</>}
+                      {customCreating ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Үүсгэж байна...</> : <><Plus className="w-4 h-4 mr-2" />{activeCreateType === "exam" ? "Шалгалт" : "Сорил"} үүсгэх</>}
                     </Button>
                   </motion.div>
                 )}
               </CardContent>
             </Card>
+
+            {/* Created items list */}
+            {(adminExams.length > 0 || adminQuizzes.length > 0) && (
+              <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="mt-6">
+                <Card className="border-brand-200">
+                  <CardHeader className="bg-brand-50 rounded-t-xl">
+                    <CardTitle className="text-lg text-brand-900 flex items-center gap-2">
+                      <Eye className="w-5 h-5" /> Үүссэн шалгалтууд, сорилууд
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="p-4 space-y-3 max-h-80 overflow-y-auto">
+                    {adminExams.length > 0 && (
+                      <div>
+                        <p className="text-xs font-semibold text-brand-600 uppercase mb-2">Шалгалтууд ({adminExams.length})</p>
+                        {adminExams.slice(0, 10).map((e: any) => (
+                          <div key={e.id} className="flex items-center justify-between p-3 rounded-xl bg-gray-50 hover:bg-brand-50 transition-colors mb-2">
+                            <div className="min-w-0 flex-1">
+                              <p className="text-sm font-medium text-brand-900 truncate">{e.title}</p>
+                              <p className="text-xs text-muted-foreground">{e.questionCount} асуулт · {e.duration} мин</p>
+                            </div>
+                            <div className="flex items-center gap-2 ml-3 shrink-0">
+                              <Badge variant={e.isActive ? "default" : "secondary"} className={e.isActive ? "bg-green-100 text-green-800" : ""}>
+                                {e.isActive ? "Идэвхтэй" : "Идэвхгүй"}
+                              </Badge>
+                              <span className="text-sm font-mono font-bold tracking-wider text-brand-700 bg-brand-100 px-2 py-1 rounded">{e.code}</span>
+                              <Button size="sm" variant="ghost" onClick={() => copyCode(e.code)}><Copy className="w-3.5 h-3.5" /></Button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {adminQuizzes.length > 0 && (
+                      <div>
+                        <p className="text-xs font-semibold text-amber-600 uppercase mb-2">Сорилууд ({adminQuizzes.length})</p>
+                        {adminQuizzes.slice(0, 10).map((q: any) => (
+                          <div key={q.id} className="flex items-center justify-between p-3 rounded-xl bg-gray-50 hover:bg-amber-50 transition-colors mb-2">
+                            <div className="min-w-0 flex-1">
+                              <p className="text-sm font-medium text-brand-900 truncate">{q.title}</p>
+                              <p className="text-xs text-muted-foreground">{q.questionCount} асуулт</p>
+                            </div>
+                            <Badge variant="secondary" className="bg-amber-100 text-amber-800 ml-3 shrink-0">
+                              <ClipboardList className="w-3 h-3 mr-1" /> Сорил
+                            </Badge>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </motion.div>
+            )}
           </motion.div>
         )}
 

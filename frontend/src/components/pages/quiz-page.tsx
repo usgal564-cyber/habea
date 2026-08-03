@@ -18,12 +18,14 @@ import {
   CreditCard,
   ShieldCheck,
   Wallet,
+  Plus,
 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Input } from "@/components/ui/input";
 import { useAuthStore } from "@/hooks/use-auth";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
@@ -98,6 +100,23 @@ function QuizSelection({ onSelect }: { onSelect: (quiz: QuizListItem) => void })
   const [isLoading, setIsLoading] = useState(true);
   const { user, token } = useAuthStore();
 
+  // Admin states
+  const isAdmin = user && (user.role === "ADMIN" || user.role === "MANAGER" || user.role === "TEACHER");
+  const [showAdminCreate, setShowAdminCreate] = useState(false);
+  const [adminTitle, setAdminTitle] = useState("");
+  const [adminDesc, setAdminDesc] = useState("");
+  const [adminQuestions, setAdminQuestions] = useState<{ question: string; optionA: string; optionB: string; optionC: string; optionD: string; correct: string }[]>([
+    { question: "", optionA: "", optionB: "", optionC: "", optionD: "", correct: "0" },
+  ]);
+  const [adminCreating, setAdminCreating] = useState(false);
+
+  const refreshQuizzes = useCallback(() => {
+    fetch("/api/quiz")
+      .then(r => r.json())
+      .then(d => { if (d.quizzes) setQuizzes(d.quizzes.map((q: QuizListItem) => ({ ...q, price: QUIZ_PRICE }))); })
+      .catch(() => {});
+  }, []);
+
   useEffect(() => {
     async function fetchQuizzes() {
       try {
@@ -148,6 +167,105 @@ function QuizSelection({ onSelect }: { onSelect: (quiz: QuizListItem) => void })
           Сорил бүрд: {QUIZ_PRICE.toLocaleString()}₮
         </div>
       </div>
+
+      {/* Admin: Create Quiz Section */}
+      {isAdmin && (
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="mb-8">
+          <Card className="border-amber-200 shadow-lg">
+            <CardHeader className="bg-amber-50 rounded-t-xl">
+              <CardTitle className="text-lg text-amber-900 flex items-center gap-2">
+                <ShieldCheck className="w-5 h-5" /> Админ: Шинэ сорил үүсгэх
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-5">
+              {!showAdminCreate ? (
+                <Button variant="outline" onClick={() => setShowAdminCreate(true)} className="w-full border-dashed border-2 border-amber-300 text-amber-700 hover:bg-amber-50 hover:border-amber-400">
+                  <Plus className="w-4 h-4 mr-2" /> Сорил нэмэх
+                </Button>
+              ) : (
+                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="font-bold text-amber-900">Сорилын мэдээлэл</h3>
+                    <Button size="sm" variant="ghost" onClick={() => setShowAdminCreate(false)} className="text-muted-foreground"><XCircle className="w-4 h-4" /></Button>
+                  </div>
+                  <div className="grid sm:grid-cols-2 gap-4 mb-4">
+                    <div>
+                      <label className="text-sm font-medium text-gray-700 mb-1 block">Сорилын нэр</label>
+                      <Input value={adminTitle} onChange={e => setAdminTitle(e.target.value)} placeholder="Жишээ: Гал түймэрээс сэргийлэх" />
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium text-gray-700 mb-1 block">Тайлбар</label>
+                      <Input value={adminDesc} onChange={e => setAdminDesc(e.target.value)} placeholder="Сорилын товч тайлбар" />
+                    </div>
+                  </div>
+
+                  <div className="space-y-3 max-h-96 overflow-y-auto pr-1 mb-4">
+                    <div className="flex items-center justify-between">
+                      <label className="text-sm font-semibold text-gray-700">Асуултууд ({adminQuestions.length})</label>
+                      <Button type="button" size="sm" variant="outline" onClick={() => setAdminQuestions([...adminQuestions, { question: "", optionA: "", optionB: "", optionC: "", optionD: "", correct: "0" }])}><Plus className="w-4 h-4 mr-1" /> Асуулт нэмэх</Button>
+                    </div>
+                    {adminQuestions.map((q, i) => (
+                      <div key={i} className="bg-white rounded-xl p-4 space-y-3 border">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm font-bold text-amber-700">Асуулт {i + 1}</span>
+                          <Button type="button" size="sm" variant="ghost" onClick={() => { if (adminQuestions.length > 1) setAdminQuestions(adminQuestions.filter((_, idx) => idx !== i)); }} className="text-red-500 hover:text-red-700">
+                            <RotateCcw className="w-3.5 h-3.5" />
+                          </Button>
+                        </div>
+                        <Input value={q.question} onChange={e => { const nq = [...adminQuestions]; nq[i] = { ...nq[i], question: e.target.value }; setAdminQuestions(nq); }} placeholder="Асуултын текст" />
+                        <div className="grid grid-cols-2 gap-2">
+                          <Input value={q.optionA} onChange={e => { const nq = [...adminQuestions]; nq[i] = { ...nq[i], optionA: e.target.value }; setAdminQuestions(nq); }} placeholder="A) Хариулт" />
+                          <Input value={q.optionB} onChange={e => { const nq = [...adminQuestions]; nq[i] = { ...nq[i], optionB: e.target.value }; setAdminQuestions(nq); }} placeholder="B) Хариулт" />
+                          <Input value={q.optionC} onChange={e => { const nq = [...adminQuestions]; nq[i] = { ...nq[i], optionC: e.target.value }; setAdminQuestions(nq); }} placeholder="C) Хариулт" />
+                          <Input value={q.optionD} onChange={e => { const nq = [...adminQuestions]; nq[i] = { ...nq[i], optionD: e.target.value }; setAdminQuestions(nq); }} placeholder="D) Хариулт" />
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm">Зөв хариулт:</span>
+                          <select value={q.correct} onChange={e => { const nq = [...adminQuestions]; nq[i] = { ...nq[i], correct: e.target.value }; setAdminQuestions(nq); }} className="border rounded-lg px-3 py-1.5 text-sm">
+                            <option value="0">A</option>
+                            <option value="1">B</option>
+                            <option value="2">C</option>
+                            <option value="3">D</option>
+                          </select>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <Button onClick={async () => {
+                    if (!adminTitle.trim()) { toast.error("Сорилын нэр оруулна уу"); return; }
+                    const valid = adminQuestions.filter(q => q.question.trim() && q.optionA.trim() && q.optionB.trim() && q.optionC.trim() && q.optionD.trim());
+                    if (valid.length < 1) { toast.error("Дор хаяж 1 асуулт оруулна уу"); return; }
+                    setAdminCreating(true);
+                    try {
+                      const res = await fetch("/api/admin/quizzes", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+                        body: JSON.stringify({
+                          title: adminTitle,
+                          description: adminDesc,
+                          category: "",
+                          questions: valid.map(q => ({ ...q, correct: parseInt(q.correct) })),
+                        }),
+                      });
+                      const data = await res.json();
+                      if (!res.ok) { toast.error(data.error || "Алдаа"); return; }
+                      toast.success(`Сорил үүссэн: ${adminTitle}`);
+                      setAdminTitle(""); setAdminDesc("");
+                      setAdminQuestions([{ question: "", optionA: "", optionB: "", optionC: "", optionD: "", correct: "0" }]);
+                      setShowAdminCreate(false);
+                      refreshQuizzes();
+                    } catch { toast.error("Алдаа"); }
+                    finally { setAdminCreating(false); }
+                  }} disabled={adminCreating || !adminTitle.trim()} className="w-full bg-amber-600 hover:bg-amber-700 text-white">
+                    {adminCreating ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Үүсгэж байна...</> : <><Plus className="w-4 h-4 mr-2" /> Сорил үүсгэх</>}
+                  </Button>
+                </motion.div>
+              )}
+            </CardContent>
+          </Card>
+        </motion.div>
+      )}
 
       {/* Quiz Grid */}
       {isLoading ? (

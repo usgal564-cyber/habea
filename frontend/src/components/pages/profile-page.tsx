@@ -507,8 +507,8 @@ export default function ProfilePage() {
           </motion.div>
         )}
 
-        {/* Logout Button - subtle, at the bottom */}
-        <motion.div variants={itemVariants} className="pt-4 flex justify-center">
+        {/* Logout Button */}
+        <motion.div variants={itemVariants} className="pt-6 pb-8 flex justify-center">
           <Button
             onClick={() => {
               logout();
