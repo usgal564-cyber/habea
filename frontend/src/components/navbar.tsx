@@ -1,5 +1,5 @@
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   Menu,
   X,
@@ -7,6 +7,14 @@ import {
   LogIn,
   LogOut,
   User,
+  ChevronDown,
+  BookOpen,
+  Brain,
+  ClipboardCheck,
+  MessageSquare,
+  Star,
+  Briefcase,
+  Info,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -20,18 +28,122 @@ interface NavbarProps {
   onLogout: () => void;
 }
 
-const navItems: { id: PageId; label: string; adminOnly?: boolean; authOnly?: boolean }[] = [
-  { id: "home", label: "Нүүр" },
-  { id: "about", label: "Бидний тухай" },
-  { id: "training", label: "Сургалт" },
-  { id: "quiz", label: "Мэдлэг сорих" },
-  { id: "exam", label: "Шалгалт" },
-  { id: "consulting", label: "Зөвлөх үйлчилгээ" },
-  { id: "feedback", label: "Санал хүсэлт" },
-  { id: "survey", label: "Сэтгэл ханамж" },
-  { id: "profile", label: "Профайл", authOnly: true },
-  { id: "admin", label: "Админ хэсэг", adminOnly: true },
+type NavItem = { id: PageId; label: string; icon?: React.ReactNode; adminOnly?: boolean; authOnly?: boolean };
+type NavGroup = { groupLabel: string; groupIcon: React.ReactNode; items: NavItem[] };
+
+const mainLinks: NavItem[] = [
+  { id: "home", label: "Нүүр", icon: <Shield className="w-4 h-4" /> },
+  { id: "about", label: "Бидний тухай", icon: <Info className="w-4 h-4" /> },
 ];
+
+const learningGroup: NavGroup = {
+  groupLabel: "Сургалт, сорил, шалгалт",
+  groupIcon: <BookOpen className="w-4 h-4" />,
+  items: [
+    { id: "training", label: "Сургалтууд", icon: <BookOpen className="w-4 h-4" /> },
+    { id: "quiz", label: "Мэдлэг сорих", icon: <Brain className="w-4 h-4" /> },
+    { id: "exam", label: "Шалгалт", icon: <ClipboardCheck className="w-4 h-4" /> },
+  ],
+};
+
+const servicesGroup: NavGroup = {
+  groupLabel: "Үйлчилгээ",
+  groupIcon: <Briefcase className="w-4 h-4" />,
+  items: [
+    { id: "consulting", label: "Зөвлөх үйлчилгээ", icon: <Briefcase className="w-4 h-4" /> },
+    { id: "feedback", label: "Санал хүсэлт", icon: <MessageSquare className="w-4 h-4" /> },
+    { id: "survey", label: "Сэтгэл ханамж", icon: <Star className="w-4 h-4" /> },
+  ],
+};
+
+const specialItems: NavItem[] = [
+  { id: "profile", label: "Профайл", icon: <User className="w-4 h-4" />, authOnly: true },
+  { id: "admin", label: "Админ", icon: <Shield className="w-4 h-4" />, adminOnly: true },
+];
+
+function DropdownMenu({
+  group,
+  currentPage,
+  onNavigate,
+}: {
+  group: NavGroup;
+  currentPage: PageId;
+  onNavigate: (pageId: PageId) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isAnyActive = group.items.some((i) => i.id === currentPage);
+
+  const handleMouseEnter = () => {
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    setOpen(true);
+  };
+
+  const handleMouseLeave = () => {
+    timeoutRef.current = setTimeout(() => setOpen(false), 150);
+  };
+
+  return (
+    <div className="relative" onMouseEnter={handleMouseEnter} onMouseLeave={handleMouseLeave}>
+      <button
+        className={cn(
+          "flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200",
+          isAnyActive
+            ? "text-white bg-brand-700/50"
+            : "text-brand-100 hover:text-white hover:bg-brand-800/40"
+        )}
+      >
+        {group.groupIcon}
+        <span className="hidden xl:inline">{group.groupLabel}</span>
+        <ChevronDown
+          className={cn(
+            "w-3.5 h-3.5 transition-transform duration-200",
+            open && "rotate-180"
+          )}
+        />
+      </button>
+
+      {open && (
+        <div className="absolute top-full left-0 mt-1 w-56 bg-brand-950/98 backdrop-blur-lg border border-brand-700/50 rounded-xl shadow-2xl shadow-black/30 py-2 z-50">
+          <p className="px-4 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-brand-400">
+            {group.groupLabel}
+          </p>
+          {group.items.map((item) => {
+            const isActive = currentPage === item.id;
+            return (
+              <button
+                key={item.id}
+                onClick={() => {
+                  onNavigate(item.id);
+                  setOpen(false);
+                }}
+                className={cn(
+                  "flex items-center gap-3 w-full px-4 py-2.5 text-left text-sm transition-all duration-150",
+                  isActive
+                    ? "text-white bg-brand-700/60 font-medium"
+                    : "text-brand-100 hover:text-white hover:bg-brand-800/50"
+                )}
+              >
+                <div
+                  className={cn(
+                    "w-7 h-7 rounded-lg flex items-center justify-center shrink-0",
+                    isActive ? "bg-brand-500 text-white" : "bg-brand-800/60 text-brand-300"
+                  )}
+                >
+                  {item.icon}
+                </div>
+                <span>{item.label}</span>
+                {isActive && (
+                  <div className="ml-auto w-1.5 h-1.5 rounded-full bg-brand-400" />
+                )}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export function Navbar({ currentPage, onNavigate, onAuthClick, user, onLogout }: NavbarProps) {
   const [isScrolled, setIsScrolled] = useState(false);
@@ -45,11 +157,20 @@ export function Navbar({ currentPage, onNavigate, onAuthClick, user, onLogout }:
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
-  const visibleItems = navItems.filter((item) => {
-    if (item.adminOnly && (!user || user.role !== "ADMIN")) return false;
-    if (item.authOnly && !user) return false;
-    return true;
-  });
+  const filterVisible = (items: NavItem[]): NavItem[] =>
+    items.filter((item) => {
+      if (item.adminOnly && (!user || user.role !== "ADMIN")) return false;
+      if (item.authOnly && !user) return false;
+      return true;
+    });
+
+  const visibleMain = filterVisible(mainLinks);
+  const visibleLearningItems = filterVisible(learningGroup.items);
+  const visibleServiceItems = filterVisible(servicesGroup.items);
+  const visibleSpecial = filterVisible(specialItems);
+
+  const hasLearning = visibleLearningItems.length > 0;
+  const hasServices = visibleServiceItems.length > 0;
 
   const handleNavClick = (pageId: PageId) => {
     onNavigate(pageId);
@@ -79,9 +200,56 @@ export function Navbar({ currentPage, onNavigate, onAuthClick, user, onLogout }:
               </div>
             </button>
 
-            {/* Desktop Navigation */}
+            {/* Desktop Navigation - grouped with dropdowns */}
             <nav className="hidden lg:flex items-center gap-1">
-              {visibleItems.map((item) => {
+              {/* Standalone links */}
+              {visibleMain.map((item) => {
+                const isActive = currentPage === item.id;
+                return (
+                  <button
+                    key={item.id}
+                    onClick={() => handleNavClick(item.id)}
+                    className={cn(
+                      "flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 relative",
+                      isActive
+                        ? "text-white bg-brand-700/50"
+                        : "text-brand-100 hover:text-white hover:bg-brand-800/40"
+                    )}
+                  >
+                    {item.icon}
+                    <span className="hidden xl:inline">{item.label}</span>
+                    {isActive && (
+                      <div className="absolute bottom-0 left-2 right-2 h-0.5 bg-brand-400 rounded-full" />
+                    )}
+                  </button>
+                );
+              })}
+
+              {/* Learning dropdown */}
+              {hasLearning && (
+                <DropdownMenu
+                  group={{ ...learningGroup, items: visibleLearningItems }}
+                  currentPage={currentPage}
+                  onNavigate={onNavigate}
+                />
+              )}
+
+              {/* Services dropdown */}
+              {hasServices && (
+                <DropdownMenu
+                  group={{ ...servicesGroup, items: visibleServiceItems }}
+                  currentPage={currentPage}
+                  onNavigate={onNavigate}
+                />
+              )}
+
+              {/* Divider */}
+              {visibleSpecial.length > 0 && (
+                <div className="w-px h-6 bg-brand-700/50 mx-2" />
+              )}
+
+              {/* Special items (Profile, Admin) */}
+              {visibleSpecial.map((item) => {
                 const isActive = currentPage === item.id;
                 const isProfile = item.id === "profile";
                 return (
@@ -89,21 +257,18 @@ export function Navbar({ currentPage, onNavigate, onAuthClick, user, onLogout }:
                     key={item.id}
                     onClick={() => handleNavClick(item.id)}
                     className={cn(
-                      "px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 relative",
+                      "flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 relative",
                       isActive
                         ? "text-white bg-brand-700/50"
-                        : "text-brand-100 hover:text-white hover:bg-brand-800/40",
-                      isProfile && "text-amber-200 hover:text-amber-100"
+                        : isProfile
+                          ? "text-amber-200 hover:text-amber-100 hover:bg-amber-900/30"
+                          : "text-brand-300 hover:text-white hover:bg-brand-800/40"
                     )}
                   >
-                    {isProfile ? (
-                      <span className="flex items-center gap-1.5">
-                        <User className="w-4 h-4" />
-                        {user?.email?.split("@")[0] || "Профайл"}
-                      </span>
-                    ) : (
-                      item.label
-                    )}
+                    {item.icon}
+                    <span className="hidden xl:inline">
+                      {isProfile ? (user?.email?.split("@")[0] || "Профайл") : item.label}
+                    </span>
                     {isActive && (
                       <div className="absolute bottom-0 left-2 right-2 h-0.5 bg-brand-400 rounded-full" />
                     )}
@@ -122,7 +287,7 @@ export function Navbar({ currentPage, onNavigate, onAuthClick, user, onLogout }:
                   className="hidden lg:flex text-brand-200 hover:text-white hover:bg-brand-800/40"
                 >
                   <LogIn className="w-4 h-4 mr-2" />
-                  Нэвтрэх
+                  <span className="hidden xl:inline">Нэвтрэх</span>
                 </Button>
               )}
 
@@ -144,11 +309,12 @@ export function Navbar({ currentPage, onNavigate, onAuthClick, user, onLogout }:
       {isMobileMenuOpen && (
         <div className="fixed inset-0 z-40 lg:hidden">
           <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setIsMobileMenuOpen(false)} />
-          <nav className="absolute right-0 top-0 bottom-0 w-72 bg-brand-950/98 backdrop-blur-lg border-l border-brand-800/50 pt-20 px-4">
+          <nav className="absolute right-0 top-0 bottom-0 w-80 bg-brand-950/98 backdrop-blur-lg border-l border-brand-800/50 pt-20 px-4 overflow-y-auto">
             <div className="flex flex-col gap-1">
-              {visibleItems.map((item) => {
+
+              {/* Main links */}
+              {visibleMain.map((item) => {
                 const isActive = currentPage === item.id;
-                const isProfile = item.id === "profile";
                 return (
                   <button
                     key={item.id}
@@ -162,17 +328,132 @@ export function Navbar({ currentPage, onNavigate, onAuthClick, user, onLogout }:
                   >
                     <div className={cn(
                       "w-8 h-8 rounded-lg flex items-center justify-center",
-                      isProfile ? "bg-amber-700/30 text-amber-300" : isActive ? "bg-brand-500 text-white" : "bg-brand-800/50 text-brand-300"
+                      isActive ? "bg-brand-500 text-white" : "bg-brand-800/50 text-brand-300"
                     )}>
-                      {isProfile ? <User className="w-4 h-4" /> : <Shield className="w-4 h-4" />}
+                      {item.icon}
                     </div>
-                    <span className="font-medium text-sm">
-                      {isProfile ? (user?.email?.split("@")[0] || "Профайл") : item.label}
-                    </span>
+                    <span className="font-medium text-sm">{item.label}</span>
                   </button>
                 );
               })}
 
+              {/* Divider */}
+              {hasLearning && (
+                <div className="pt-3 pb-1">
+                  <p className="px-4 text-[11px] font-semibold uppercase tracking-wider text-brand-400">
+                    Сургалт, сорил, шалгалт
+                  </p>
+                </div>
+              )}
+
+              {/* Learning items */}
+              {visibleLearningItems.map((item) => {
+                const isActive = currentPage === item.id;
+                return (
+                  <button
+                    key={item.id}
+                    onClick={() => handleNavClick(item.id)}
+                    className={cn(
+                      "flex items-center gap-3 px-4 py-3 rounded-xl text-left transition-all duration-200",
+                      isActive
+                        ? "bg-brand-700/50 text-white border border-brand-600/30"
+                        : "text-brand-200 hover:bg-brand-800/40 hover:text-white"
+                    )}
+                  >
+                    <div className={cn(
+                      "w-8 h-8 rounded-lg flex items-center justify-center",
+                      isActive ? "bg-brand-500 text-white" : "bg-brand-800/50 text-brand-300"
+                    )}>
+                      {item.icon}
+                    </div>
+                    <span className="font-medium text-sm">{item.label}</span>
+                    {isActive && (
+                      <div className="ml-auto w-1.5 h-1.5 rounded-full bg-brand-400" />
+                    )}
+                  </button>
+                );
+              })}
+
+              {/* Divider */}
+              {hasServices && (
+                <div className="pt-3 pb-1">
+                  <p className="px-4 text-[11px] font-semibold uppercase tracking-wider text-brand-400">
+                    Үйлчилгээ
+                  </p>
+                </div>
+              )}
+
+              {/* Service items */}
+              {visibleServiceItems.map((item) => {
+                const isActive = currentPage === item.id;
+                return (
+                  <button
+                    key={item.id}
+                    onClick={() => handleNavClick(item.id)}
+                    className={cn(
+                      "flex items-center gap-3 px-4 py-3 rounded-xl text-left transition-all duration-200",
+                      isActive
+                        ? "bg-brand-700/50 text-white border border-brand-600/30"
+                        : "text-brand-200 hover:bg-brand-800/40 hover:text-white"
+                    )}
+                  >
+                    <div className={cn(
+                      "w-8 h-8 rounded-lg flex items-center justify-center",
+                      isActive ? "bg-brand-500 text-white" : "bg-brand-800/50 text-brand-300"
+                    )}>
+                      {item.icon}
+                    </div>
+                    <span className="font-medium text-sm">{item.label}</span>
+                    {isActive && (
+                      <div className="ml-auto w-1.5 h-1.5 rounded-full bg-brand-400" />
+                    )}
+                  </button>
+                );
+              })}
+
+              {/* Divider */}
+              {visibleSpecial.length > 0 && (
+                <div className="pt-3 pb-1 border-t border-brand-800/50 mt-3">
+                  <p className="px-4 text-[11px] font-semibold uppercase tracking-wider text-brand-400">
+                    Хувийн
+                  </p>
+                </div>
+              )}
+
+              {/* Special items */}
+              {visibleSpecial.map((item) => {
+                const isActive = currentPage === item.id;
+                const isProfile = item.id === "profile";
+                return (
+                  <button
+                    key={item.id}
+                    onClick={() => handleNavClick(item.id)}
+                    className={cn(
+                      "flex items-center gap-3 px-4 py-3 rounded-xl text-left transition-all duration-200",
+                      isActive
+                        ? "bg-brand-700/50 text-white border border-brand-600/30"
+                        : isProfile
+                          ? "text-amber-200 hover:bg-amber-900/30 hover:text-amber-100"
+                          : "text-brand-200 hover:bg-brand-800/40 hover:text-white"
+                    )}
+                  >
+                    <div className={cn(
+                      "w-8 h-8 rounded-lg flex items-center justify-center",
+                      isProfile ? "bg-amber-700/30 text-amber-300" : isActive ? "bg-brand-500 text-white" : "bg-brand-800/50 text-brand-300"
+                    )}>
+                      {item.icon}
+                    </div>
+                    <span className="font-medium text-sm">
+                      {isProfile ? (user?.email?.split("@")[0] || "Профайл") : item.label}
+                    </span>
+                    {isActive && (
+                      <div className="ml-auto w-1.5 h-1.5 rounded-full bg-brand-400" />
+                    )}
+                  </button>
+                );
+              })}
+
+              {/* Logout / Login */}
               <div className="mt-4 pt-4 border-t border-brand-800/50">
                 {user ? (
                   <button

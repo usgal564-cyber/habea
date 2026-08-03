@@ -82,3 +82,25 @@ Stage Summary:
 - Training creation form now has price (already existed) and start date fields
 - Backend updated to persist start date to DB
 - Course cards display start date when available
+---
+Task ID: 3
+Agent: Main Agent
+Task: Redesign navbar - group cramped items into dropdown menus
+
+Work Log:
+- Analyzed screenshot showing navbar items displayed on one horizontal line
+- Redesigned navbar.tsx with grouped dropdown navigation:
+  - **Standalone links**: Нүүр, Бидний тухай (always visible)
+  - **Learning dropdown** (hover): Сургалтууд, Мэдлэг сорих, Шалгалт
+  - **Services dropdown** (hover): Зөвлөх үйлчилгээ, Санал хүсэлт, Сэтгэл ханамж
+  - **Special items**: Профайл (auth), Админ (admin) - with divider separator
+- Added DropdownMenu component with hover-to-open behavior (150ms close delay)
+- Each group has category header, icon per item, active state indicator
+- Mobile menu reorganized with section headers and dividers
+- Icons added to all nav items for visual clarity
+- No TypeScript errors introduced
+
+Stage Summary:
+- Navbar now uses dropdown groups instead of 10 items in one row
+- Much cleaner, user-friendly navigation with hover dropdowns
+- Mobile menu also improved with section grouping
