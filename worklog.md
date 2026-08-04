@@ -322,3 +322,23 @@ Stage Summary:
 - New exam-admin-detail page has full management: stop/start toggle, end date, questions view, results view, delete, PDF export
 - Backend route for starting exams added
 - Vite build passes (825KB JS, 149KB CSS)
+
+---
+Task ID: ui-polish
+Agent: Main Agent
+Task: Frontend UI visual polish - fix blue/indigo colors, harmonize hero sections, footer on all pages
+
+Work Log:
+- Fixed blue/indigo colors in exam-admin-detail-page.tsx: replaced `from-blue-50 to-indigo-50` → `from-brand-50 to-emerald-50`, `bg-blue-100` → `bg-brand-100`, `text-blue-600` → `text-brand-600`, `text-blue-700` → `text-brand-700`
+- Fixed blue color in admin-page.tsx stat cards: `from-blue-500 to-blue-600` → `from-brand-500 to-brand-600`
+- Fixed violet color in admin-page.tsx quiz section: `from-violet-500 to-violet-600` → `from-teal-500 to-teal-600`
+- Fixed admin quizzes tab header: `from-violet-50 to-purple-50` → `from-brand-50 to-emerald-50`
+- Harmonized hero sections: exam-page, admin-page, profile-page now all use `bg-gradient-to-br from-brand-800 via-brand-900 to-brand-950` with decorative blur elements
+- Footer now visible on ALL pages (was only home + about)
+- Vite build passes: 826KB JS, 157KB CSS, no errors
+
+Stage Summary:
+- All blue/indigo/violet/purple colors replaced with brand-consistent green/teal/emerald
+- Hero sections unified across exam, admin, profile pages with decorative blur orbs
+- Footer now persistent across all pages for better navigation
+- Code is clean, build passes without TypeScript errors

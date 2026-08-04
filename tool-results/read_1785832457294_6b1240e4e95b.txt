@@ -1,0 +1,1047 @@
+     1→
+     2→import { useEffect, useState, useCallback } from "react";
+     3→import { motion, AnimatePresence } from "framer-motion";
+     4→import { toast } from "sonner";
+     5→import {
+     6→  BookOpen,
+     7→  Clock,
+     8→  Users,
+     9→  Award,
+    10→  GraduationCap,
+    11→  ShieldCheck,
+    12→  Loader2,
+    13→  CheckCircle2,
+    14→  MapPin,
+    15→  Calendar,
+    16→  ArrowLeft,
+    17→  ArrowRight,
+    18→  FileText,
+    19→  CreditCard,
+    20→  Wallet,
+    21→  Lock,
+    22→  UserPlus,
+    23→  ClipboardList,
+    24→  Banknote,
+    25→  Plus,
+    26→  XCircle,
+    27→} from "lucide-react";
+    28→import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+    29→import { Button } from "@/components/ui/button";
+    30→import { Badge } from "@/components/ui/badge";
+    31→import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+    32→import { Skeleton } from "@/components/ui/skeleton";
+    33→import { Input } from "@/components/ui/input";
+    34→import { Label } from "@/components/ui/label";
+    35→import { Textarea } from "@/components/ui/textarea";
+    36→import { useAuthStore } from "@/hooks/use-auth";
+    37→
+    38→type Course = {
+    39→  id: string;
+    40→  title: string;
+    41→  category: string;
+    42→  description: string;
+    43→  duration: string;
+    44→  price: number | null;
+    45→  maxStudents: number | null;
+    46→  startDate?: string | null;
+    47→  image?: string | null;
+    48→  _count?: { registrations: number };
+    49→  schedule?: CourseSchedule;
+    50→};
+    51→
+    52→type CourseSchedule = {
+    53→  startDate: string;
+    54→  endDate: string;
+    55→  days: string;
+    56→  time: string;
+    57→  location: string;
+    58→  instructor: string;
+    59→};
+    60→
+    61→const COURSE_PRICES: Record<string, number> = {
+    62→  staff: 30000,
+    63→  personal: 25000,
+    64→  iso: 50000,
+    65→};
+    66→
+    67→const COURSE_SCHEDULES: Record<string, CourseSchedule> = {
+    68→  "Ажлын байраны аюулгүй байдалын үндэс": {
+    69→    startDate: "2025-08-01",
+    70→    endDate: "2025-08-08",
+    71→    days: "Даваа - Баасан",
+    72→    time: "09:00 - 17:00",
+    73→    location: "Улаанбаатар, БЗД, 3-р хороо, Бизнес центер, 201 тоот",
+    74→    instructor: "Д. Батбаатар (ХАБЭА эксперт)",
+    75→  },
+    76→  "Гал түймрийн эсрэг тэмцэл": {
+    77→    startDate: "2025-08-15",
+    78→    endDate: "2025-08-22",
+    79→    days: "Даваа - Баасан",
+    80→    time: "10:00 - 18:00",
+    81→    location: "Улаанбаатар, БЗД, Цогцоолбор, 4-р давхар",
+    82→    instructor: "Г. Ууганбаяр (Гал унтраах сургалтын мэргэжилтэн)",
+    83→  },
+    84→  "Анхны тусламж": {
+    85→    startDate: "2025-08-10",
+    86→    endDate: "2025-08-17",
+    87→    days: "Даваа - Баасан",
+    88→    time: "09:00 - 17:00",
+    89→    location: "Улаанбаатар, СБД, Эрүүл мэндийн сургалтын төв",
+    90→    instructor: "Н. Оюунчимэг (Анхны тусламжын багш)",
+    91→  },
+    92→  "ISO 45001 ХАБЭА менежмент": {
+    93→    startDate: "2025-09-01",
+    94→    endDate: "2025-09-20",
+    95→    days: "Даваа - Пүрэв",
+    96→    time: "09:00 - 17:00",
+    97→    location: "Улаанбаатар, ЧД, Конференц танхим, 5-р давхар",
+    98→    instructor: "Т. Мөнхбаатар (ISO сертификацийн аудитор)",
+    99→  },
+   100→};
+   101→
+   102→const CATEGORY_MAP: Record<string, string> = {
+   103→  staff: "Ажилтны сургалт",
+   104→  personal: "Хувь хүний сургалт",
+   105→  iso: "ISO сургалт",
+   106→};
+   107→
+   108→const CATEGORY_ICONS: Record<string, React.ReactNode> = {
+   109→  staff: <Users className="size-5" />,
+   110→  personal: <GraduationCap className="size-5" />,
+   111→  iso: <Award className="size-5" />,
+   112→};
+   113→
+   114→const FALLBACK_COURSES: Course[] = [
+   115→  {
+   116→    id: "staff-1",
+   117→    title: "Ажлын байраны аюулгүй байдалын үндэс",
+   118→    category: "staff",
+   119→    description: "Ажлын байраны аюулгүй байдлын гол зарчмууд, хууль эрх зүйн актууд, ажилтны эрх үүрэг, аюулгүй ажиллагааны дүрмийн талаар сургалт",
+   120→    duration: "16 цаг",
+   121→    price: 30000,
+   122→    maxStudents: 30,
+   123→    _count: { registrations: 0 },
+   124→  },
+   125→  {
+   126→    id: "staff-2",
+   127→    title: "Гал түймрийн эсрэг тэмцэл",
+   128→    category: "staff",
+   129→    description: "Гал түймэр эхлэх шалтгаан, урьдчилан сэргийлэх аргууд, гал унтраах хэрэгсэл ашиглах, яаралтай нөхцөлд авах арга хэмжээ",
+   130→    duration: "8 цаг",
+   131→    price: 30000,
+   132→    maxStudents: 25,
+   133→    _count: { registrations: 0 },
+   134→  },
+   135→  {
+   136→    id: "staff-3",
+   137→    title: "Анхны тусламж",
+   138→    category: "staff",
+   139→    description: "Анхны тусламж үзүүлэх үндсэн мэдлэг, зүрхний массаж, амьсгалын замыг чөлөөлөх, шарх авах, тунадас авах зэрэг",
+   140→    duration: "8 цаг",
+   141→    price: 30000,
+   142→    maxStudents: 20,
+   143→    _count: { registrations: 0 },
+   144→  },
+   145→  {
+   146→    id: "staff-4",
+   147→    title: "Өндөрлөгийн ажил",
+   148→    category: "staff",
+   149→    description: "Өндөрлөгийн ажил гүйцэтгэхэд шаардлагатай хамгаалах хэрэгсэл, аюулгүй ажиллагааны дүрэм",
+   150→    duration: "8 цаг",
+   151→    price: 30000,
+   152→    maxStudents: 15,
+   153→    _count: { registrations: 0 },
+   154→  },
+   155→  {
+   156→    id: "personal-1",
+   157→    title: "Хувийн хамгаалах хэрэгсэл",
+   158→    category: "personal",
+   159→    description: "Хувийн хамгаалах хэрэгсэлүүдийн төрөл, зориулалт, зөв ашиглах арга",
+   160→    duration: "4 цаг",
+   161→    price: 25000,
+   162→    maxStudents: 30,
+   163→    _count: { registrations: 0 },
+   164→  },
+   165→  {
+   166→    id: "personal-2",
+   167→    title: "Цахилгааны аюулгүй байдал",
+   168→    category: "personal",
+   169→    description: "Цахилгааны гэнэтийн осол, цахилгаан гэдэс, хамгаалах хэрэгсэл ашиглах",
+   170→    duration: "8 цаг",
+   171→    price: 25000,
+   172→    maxStudents: 25,
+   173→    _count: { registrations: 0 },
+   174→  },
+   175→  {
+   176→    id: "personal-3",
+   177→    title: "Хортой бодисын аюулгүй байдал",
+   178→    category: "personal",
+   179→    description: "Хортой бодис танилт, аюулгүй ажиллагааны дүрэм, хадгалах тээвэрлэх",
+   180→    duration: "8 цаг",
+   181→    price: 25000,
+   182→    maxStudents: 20,
+   183→    _count: { registrations: 0 },
+   184→  },
+   185→  {
+   186→    id: "iso-1",
+   187→    title: "ISO 45001 ХАБЭА менежмент",
+   188→    category: "iso",
+   189→    description: "ISO 45001:2018 стандартын шаардлага, хэрэгжилт, дотоод аудит, менежментийн системийг бий болгох",
+   190→    duration: "40 цаг",
+   191→    price: 50000,
+   192→    maxStudents: 20,
+   193→    _count: { registrations: 0 },
+   194→  },
+   195→  {
+   196→    id: "iso-2",
+   197→    title: "ISO 14001 Байгаль орчин",
+   198→    category: "iso",
+   199→    description: "ISO 14001:2015 байгаль орчны менежментийн систем, нөлөөллийн үнэлгээ",
+   200→    duration: "32 цаг",
+   201→    price: 50000,
+   202→    maxStudents: 20,
+   203→    _count: { registrations: 0 },
+   204→  },
+   205→  {
+   206→    id: "iso-3",
+   207→    title: "ISO 9001 Чанарын менежмент",
+   208→    category: "iso",
+   209→    description: "ISO 9001:2015 чанарын менежментийн систем, үйл явцын хандлага, тогтмол сайжруулалт",
+   210→    duration: "32 цаг",
+   211→    price: 50000,
+   212→    maxStudents: 20,
+   213→    _count: { registrations: 0 },
+   214→  },
+   215→];
+   216→
+   217→const containerVariants = {
+   218→  hidden: { opacity: 0 },
+   219→  visible: { opacity: 1, transition: { staggerChildren: 0.08 } },
+   220→};
+   221→
+   222→const itemVariants = {
+   223→  hidden: { opacity: 0, y: 20 },
+   224→  visible: { opacity: 1, y: 0, transition: { duration: 0.4, ease: "easeOut" } },
+   225→};
+   226→
+   227→function CourseCardSkeleton() {
+   228→  return (
+   229→    <Card className="overflow-hidden">
+   230→      <CardHeader className="pb-3">
+   231→        <div className="flex items-start justify-between gap-2">
+   232→          <div className="flex-1 space-y-2">
+   233→            <Skeleton className="h-5 w-3/4" />
+   234→            <Skeleton className="h-4 w-full" />
+   235→          </div>
+   236→          <Skeleton className="h-6 w-16 rounded-full" />
+   237→        </div>
+   238→      </CardHeader>
+   239→      <CardContent className="space-y-3">
+   240→        <Skeleton className="h-4 w-2/3" />
+   241→        <Skeleton className="h-4 w-1/2" />
+   242→        <div className="flex justify-end pt-2">
+   243→          <Skeleton className="h-9 w-28" />
+   244→        </div>
+   245→      </CardContent>
+   246→    </Card>
+   247→  );
+   248→}
+   249→
+   250→function CourseCard({
+   251→  course,
+   252→  onEnroll,
+   253→  isRegistering,
+   254→}: {
+   255→  course: Course;
+   256→  onEnroll: (courseId: string) => void;
+   257→  isRegistering: boolean;
+   258→}) {
+   259→  const categoryKey = course.category.toLowerCase();
+   260→  const icon = CATEGORY_ICONS[categoryKey] || <BookOpen className="size-5" />;
+   261→  const price = course.price || COURSE_PRICES[categoryKey] || 30000;
+   262→
+   263→  return (
+   264→    <motion.div variants={itemVariants} layout>
+   265→      <Card className="group relative overflow-hidden border-brand-100 bg-white transition-all duration-300 hover:border-brand-300 hover:shadow-lg hover:shadow-brand-100/50">
+   266→        <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-brand-500 to-brand-700 opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
+   267→
+   268→        <CardHeader className="pb-3">
+   269→          <div className="flex items-start justify-between gap-3">
+   270→            <div className="flex-1 space-y-1.5">
+   271→              <CardTitle className="text-lg leading-tight text-brand-900 group-hover:text-brand-700 transition-colors">
+   272→                {course.title}
+   273→              </CardTitle>
+   274→              <CardDescription className="line-clamp-2 text-sm leading-relaxed">
+   275→                {course.description}
+   276→              </CardDescription>
+   277→            </div>
+   278→            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-brand-50 text-brand-600 transition-colors group-hover:bg-brand-100">
+   279→              {icon}
+   280→            </div>
+   281→          </div>
+   282→        </CardHeader>
+   283→
+   284→        <CardContent className="space-y-4">
+   285→          <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
+   286→            <div className="flex items-center gap-1.5">
+   287→              <Clock className="size-3.5 text-brand-500" />
+   288→              <span>{course.duration}</span>
+   289→            </div>
+   290→            {course.startDate && (
+   291→              <div className="flex items-center gap-1.5">
+   292→                <Calendar className="size-3.5 text-brand-500" />
+   293→                <span>{course.startDate}</span>
+   294→              </div>
+   295→            )}
+   296→            {course.maxStudents && (
+   297→              <div className="flex items-center gap-1.5">
+   298→                <Users className="size-3.5 text-brand-500" />
+   299→                <span>Макс: {course.maxStudents}</span>
+   300→              </div>
+   301→            )}
+   302→            {course._count?.registrations !== undefined && (
+   303→              <Badge variant="secondary" className="text-xs bg-brand-50 text-brand-700 hover:bg-brand-100">
+   304→                {course._count.registrations} бүртгүүлсэн
+   305→              </Badge>
+   306→            )}
+   307→          </div>
+   308→
+   309→          <div className="flex items-center justify-between pt-1">
+   310→            <div className="text-lg font-bold text-brand-700">
+   311→              {price.toLocaleString()}₮
+   312→            </div>
+   313→
+   314→            <Button
+   315→              size="sm"
+   316→              className="bg-brand-600 text-white hover:bg-brand-700 focus-visible:ring-brand-500"
+   317→              onClick={() => onEnroll(course.id)}
+   318→              disabled={isRegistering}
+   319→            >
+   320→              {isRegistering ? (
+   321→                <Loader2 className="size-4 animate-spin" />
+   322→              ) : (
+   323→                <Lock className="size-4" />
+   324→              )}
+   325→              Бүртгүүлэх
+   326→            </Button>
+   327→          </div>
+   328→        </CardContent>
+   329→      </Card>
+   330→    </motion.div>
+   331→  );
+   332→}
+   333→
+   334→/* ─── Enrollment Dialog (Multi-step) ──────────────────── */
+   335→
+   336→type EnrollStep = "register" | "info" | "payment" | "confirmed";
+   337→
+   338→function EnrollmentDialog({
+   339→  course,
+   340→  onClose,
+   341→  onConfirmed,
+   342→}: {
+   343→  course: Course;
+   344→  onClose: () => void;
+   345→  onConfirmed: () => void;
+   346→}) {
+   347→  const { user, token, setAuth } = useAuthStore();
+   348→  const [step, setStep] = useState<EnrollStep>(user ? "info" : "register");
+   349→  const [loading, setLoading] = useState(false);
+   350→
+   351→  // Registration fields (for non-logged-in users)
+   352→  const [regLastName, setRegLastName] = useState("");
+   353→  const [regFirstName, setRegFirstName] = useState("");
+   354→  const [regPhone, setRegPhone] = useState("");
+   355→  const [regEmail, setRegEmail] = useState("");
+   356→  const [regPassword, setRegPassword] = useState("");
+   357→  const [regConfirmPassword, setRegConfirmPassword] = useState("");
+   358→
+   359→  const categoryKey = course.category.toLowerCase();
+   360→  const price = course.price || COURSE_PRICES[categoryKey] || 30000;
+   361→  const schedule = COURSE_SCHEDULES[course.title];
+   362→
+   363→  // Step 1: Register (if not logged in)
+   364→  const handleRegister = async () => {
+   365→    if (!regLastName.trim() || !regFirstName.trim()) {
+   366→      toast.error("Овог, нэр оруулна уу");
+   367→      return;
+   368→    }
+   369→    if (!regPhone.trim()) {
+   370→      toast.error("Утасны дугаар оруулна уу");
+   371→      return;
+   372→    }
+   373→    if (!regEmail.trim()) {
+   374→      toast.error("Имэйл оруулна уу");
+   375→      return;
+   376→    }
+   377→    if (regPassword.length < 6) {
+   378→      toast.error("Нууц үг дор хаяж 6 тэмдэгт байх ёстой");
+   379→      return;
+   380→    }
+   381→    if (regPassword !== regConfirmPassword) {
+   382→      toast.error("Нууц үг таарахгүй байна");
+   383→      return;
+   384→    }
+   385→
+   386→    setLoading(true);
+   387→    try {
+   388→      const res = await fetch("/api/auth/register", {
+   389→        method: "POST",
+   390→        headers: { "Content-Type": "application/json" },
+   391→        body: JSON.stringify({
+   392→          firstName: regFirstName,
+   393→          lastName: regLastName,
+   394→          email: regEmail,
+   395→          phone: regPhone,
+   396→          password: regPassword,
+   397→        }),
+   398→      });
+   399→      const data = await res.json();
+   400→      if (!res.ok) {
+   401→        toast.error(data.error || "Бүртгэл амжилтгүй");
+   402→        return;
+   403→      }
+   404→      // Auto-login after registration
+   405→      if (data.user && data.token) {
+   406→        setAuth(data.user, data.token);
+   407→      }
+   408→      toast.success("Амжилттай бүртгэгдлээ!");
+   409→      // Now register for the course automatically
+   410→      const enrollRes = await fetch(`/api/courses/${course.id}/register`, {
+   411→        method: "POST",
+   412→        headers: {
+   413→          Authorization: `Bearer ${data.token}`,
+   414→          "Content-Type": "application/json",
+   415→        },
+   416→      });
+   417→      const enrollData = await enrollRes.json();
+   418→      if (enrollRes.ok) {
+   419→        toast.success("Сургалтад бүртгэгдлээ!");
+   420→        setStep("payment");
+   421→      } else {
+   422→        toast.error(enrollData.error || "Сургалтад бүртгэхэд алдаа гарлаа");
+   423→      }
+   424→    } catch {
+   425→      toast.error("Холболтын алдаа");
+   426→    } finally {
+   427→      setLoading(false);
+   428→    }
+   429→  };
+   430→
+   431→  // Step: Login & enroll (for already logged-in users)
+   432→  const handleEnrollCourse = async () => {
+   433→    if (!user || !token) return;
+   434→    setLoading(true);
+   435→    try {
+   436→      const res = await fetch(`/api/courses/${course.id}/register`, {
+   437→        method: "POST",
+   438→        headers: {
+   439→          Authorization: `Bearer ${token}`,
+   440→          "Content-Type": "application/json",
+   441→        },
+   442→      });
+   443→      const data = await res.json();
+   444→      if (res.ok) {
+   445→        toast.success("Сургалтад бүртгэгдлээ!");
+   446→        setStep("payment");
+   447→      } else {
+   448→        toast.error(data.error || "Сургалтад бүртгэхэд алдаа");
+   449→      }
+   450→    } catch {
+   451→      toast.error("Холболтын алдаа");
+   452→    } finally {
+   453→      setLoading(false);
+   454→    }
+   455→  };
+   456→
+   457→  // Step: Payment
+   458→  const handlePayment = async () => {
+   459→    setLoading(true);
+   460→    try {
+   461→      const currentToken = useAuthStore.getState().token;
+   462→      const res = await fetch("/api/courses/payment", {
+   463→        method: "POST",
+   464→        headers: {
+   465→          Authorization: `Bearer ${currentToken}`,
+   466→          "Content-Type": "application/json",
+   467→        },
+   468→        body: JSON.stringify({ courseId: course.id }),
+   469→      });
+   470→      const data = await res.json();
+   471→
+   472→      if (res.ok) {
+   473→        toast.success("Төлбөр амжилттай!");
+   474→        setStep("confirmed");
+   475→      } else {
+   476→        toast.error("Төлбөр амжилтгүй", { description: data.error });
+   477→      }
+   478→    } catch {
+   479→      toast.error("Холболтын алдаа");
+   480→    } finally {
+   481→      setLoading(false);
+   482→    }
+   483→  };
+   484→
+   485→  // Dynamic step labels based on login state
+   486→  const stepLabels = user
+   487→    ? [
+   488→        { id: "info", label: "Мэдээлэл", icon: <ClipboardList className="w-4 h-4" /> },
+   489→        { id: "payment", label: "Төлбөр", icon: <CreditCard className="w-4 h-4" /> },
+   490→        { id: "confirmed", label: "Баталгаа", icon: <CheckCircle2 className="w-4 h-4" /> },
+   491→      ]
+   492→    : [
+   493→        { id: "register", label: "Бүртгэл", icon: <UserPlus className="w-4 h-4" /> },
+   494→        { id: "payment", label: "Төлбөр", icon: <CreditCard className="w-4 h-4" /> },
+   495→        { id: "confirmed", label: "Баталгаа", icon: <CheckCircle2 className="w-4 h-4" /> },
+   496→      ];
+   497→
+   498→  const currentStepIdx = stepLabels.findIndex((s) => s.id === step);
+   499→
+   500→  return (
+   501→    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+   502→      <motion.div
+   503→        initial={{ opacity: 0, scale: 0.95 }}
+   504→        animate={{ opacity: 1, scale: 1 }}
+   505→        className="bg-white rounded-2xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto"
+   506→      >
+   507→        {/* Header */}
+   508→        <div className="bg-gradient-to-r from-brand-700 to-brand-900 p-6 rounded-t-2xl">
+   509→          <div className="flex items-center justify-between">
+   510→            <div>
+   511→              <h3 className="text-xl font-bold text-white">{course.title}</h3>
+   512→              <p className="text-brand-200 text-sm mt-1">{COURSE_PRICES[categoryKey] ? "Төлбөртэй сургалт" : "Сургалтад бүртгүүлэх"}</p>
+   513→            </div>
+   514→            <button
+   515→              onClick={onClose}
+   516→              className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-colors"
+   517→            >
+   518→              ✕
+   519→            </button>
+   520→          </div>
+   521→
+   522→          {/* Step indicator */}
+   523→          <div className="mt-5">
+   524→            <div className="flex items-center justify-between relative">
+   525→              {/* Background line */}
+   526→              <div className="absolute top-[18px] left-[45px] right-[45px] h-[2px] bg-white/20" />
+   527→              {/* Active line */}
+   528→              <div
+   529→                className="absolute top-[18px] left-[45px] h-[2px] bg-white transition-all duration-500"
+   530→                style={{ width: currentStepIdx > 0 ? `calc(${currentStepIdx * 100}% / ${stepLabels.length - 1} + ${currentStepIdx * 20}px / ${stepLabels.length - 1})` : "0%" }}
+   531→              />
+   532→              {/* Steps */}
+   533→              {stepLabels.map((s, i) => (
+   534→                <div key={s.id} className="flex flex-col items-center gap-1.5 relative z-10">
+   535→                  <div
+   536→                    className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-medium transition-all ${
+   537→                      i <= currentStepIdx
+   538→                        ? "bg-white text-brand-700 shadow-sm"
+   539→                        : "bg-white/20 text-white/60"
+   540→                    }`}
+   541→                  >
+   542→                    {s.icon}
+   543→                  </div>
+   544→                  <span className={`text-[10px] font-medium transition-colors ${
+   545→                    i <= currentStepIdx ? "text-white/90" : "text-white/40"
+   546→                  }`}>
+   547→                    {s.label}
+   548→                  </span>
+   549→                </div>
+   550→              ))}
+   551→            </div>
+   552→          </div>
+   553→        </div>
+   554→
+   555→        {/* Content */}
+   556→        <div className="p-6">
+   557→          <AnimatePresence mode="wait">
+   558→            {/* Step: Register (for non-logged-in users) */}
+   559→            {step === "register" && (
+   560→              <motion.div key="register" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-4">
+   561→                <div className="text-center mb-2">
+   562→                  <div className="w-12 h-12 rounded-xl bg-brand-100 flex items-center justify-center mx-auto mb-3">
+   563→                    <UserPlus className="w-6 h-6 text-brand-600" />
+   564→                  </div>
+   565→                  <h4 className="font-bold text-brand-900">Бүртгүүлэх</h4>
+   566→                  <p className="text-sm text-muted-foreground">Сургалтад бүртгүүлэхийн тулд мэдээллээ оруулна уу</p>
+   567→                </div>
+   568→
+   569→                <div className="space-y-3">
+   570→                  <div className="grid grid-cols-2 gap-3">
+   571→                    <div>
+   572→                      <Label className="text-sm">Овог *</Label>
+   573→                      <Input value={regLastName} onChange={(e) => setRegLastName(e.target.value)} placeholder="Овог" className="mt-1" />
+   574→                    </div>
+   575→                    <div>
+   576→                      <Label className="text-sm">Нэр *</Label>
+   577→                      <Input value={regFirstName} onChange={(e) => setRegFirstName(e.target.value)} placeholder="Нэр" className="mt-1" />
+   578→                    </div>
+   579→                  </div>
+   580→                  <div>
+   581→                    <Label className="text-sm">Утасны дугаар *</Label>
+   582→                    <Input value={regPhone} onChange={(e) => setRegPhone(e.target.value)} placeholder="+976 XXXX XXXX" className="mt-1" />
+   583→                  </div>
+   584→                  <div>
+   585→                    <Label className="text-sm">Имэйл *</Label>
+   586→                    <Input type="email" value={regEmail} onChange={(e) => setRegEmail(e.target.value)} placeholder="email@example.com" className="mt-1" />
+   587→                  </div>
+   588→                  <div>
+   589→                    <Label className="text-sm">Нууц үг *</Label>
+   590→                    <Input type="password" value={regPassword} onChange={(e) => setRegPassword(e.target.value)} placeholder="Дор хаяж 6 тэмдэгт" className="mt-1" />
+   591→                  </div>
+   592→                  <div>
+   593→                    <Label className="text-sm">Нууц үг давтах *</Label>
+   594→                    <Input type="password" value={regConfirmPassword} onChange={(e) => setRegConfirmPassword(e.target.value)} placeholder="Дахин оруулна уу" className="mt-1" />
+   595→                  </div>
+   596→                </div>
+   597→
+   598→                <Button onClick={handleRegister} className="w-full bg-brand-600 hover:bg-brand-700 text-white py-3" disabled={loading}>
+   599→                  {loading ? (
+   600→                    <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Бүртгэж байна...</>
+   601→                  ) : (
+   602→                    <><UserPlus className="w-4 h-4 mr-2" /> Бүртгүүлэх</>
+   603→                  )}
+   604→                </Button>
+   605→              </motion.div>
+   606→            )}
+   607→
+   608→            {/* Step: Course Info (for logged-in users) */}
+   609→            {step === "info" && (
+   610→              <motion.div key="info" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-4">
+   611→                <div className="bg-brand-50 rounded-xl p-4 space-y-3">
+   612→                  <div className="flex items-center gap-2 text-sm">
+   613→                    <Clock className="w-4 h-4 text-brand-600" />
+   614→                    <span className="text-muted-foreground">Хугацаа:</span>
+   615→                    <span className="font-medium text-brand-900">{course.duration}</span>
+   616→                  </div>
+   617→                  <div className="flex items-center gap-2 text-sm">
+   618→                    <Banknote className="w-4 h-4 text-brand-600" />
+   619→                    <span className="text-muted-foreground">Үнэ:</span>
+   620→                    <span className="font-bold text-brand-900">{price.toLocaleString()}₮</span>
+   621→                  </div>
+   622→                  {course.maxStudents && (
+   623→                    <div className="flex items-center gap-2 text-sm">
+   624→                      <Users className="w-4 h-4 text-brand-600" />
+   625→                      <span className="text-muted-foreground">Суудлын тоо:</span>
+   626→                      <span className="font-medium text-brand-900">{course.maxStudents}</span>
+   627→                    </div>
+   628→                  )}
+   629→                </div>
+   630→
+   631→                {schedule && (
+   632→                  <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 space-y-3">
+   633→                    <h4 className="font-semibold text-amber-900 text-sm flex items-center gap-2">
+   634→                      <Calendar className="w-4 h-4" /> Хичээлийн хуваарь
+   635→                    </h4>
+   636→                    <div className="grid grid-cols-2 gap-2 text-sm">
+   637→                      <div>
+   638→                        <p className="text-muted-foreground">Эхлэх:</p>
+   639→                        <p className="font-medium">{schedule.startDate}</p>
+   640→                      </div>
+   641→                      <div>
+   642→                        <p className="text-muted-foreground">Дуусах:</p>
+   643→                        <p className="font-medium">{schedule.endDate}</p>
+   644→                      </div>
+   645→                      <div>
+   646→                        <p className="text-muted-foreground">Өдөр:</p>
+   647→                        <p className="font-medium">{schedule.days}</p>
+   648→                      </div>
+   649→                      <div>
+   650→                        <p className="text-muted-foreground">Цаг:</p>
+   651→                        <p className="font-medium">{schedule.time}</p>
+   652→                      </div>
+   653→                    </div>
+   654→                    <div className="flex items-start gap-2 text-sm">
+   655→                      <MapPin className="w-4 h-4 text-brand-600 shrink-0 mt-0.5" />
+   656→                      <div>
+   657→                        <p className="text-muted-foreground">Байршил:</p>
+   658→                        <p className="font-medium">{schedule.location}</p>
+   659→                      </div>
+   660→                    </div>
+   661→                    <div className="flex items-center gap-2 text-sm">
+   662→                      <UserPlus className="w-4 h-4 text-brand-600" />
+   663→                      <span className="text-muted-foreground">Багш:</span>
+   664→                      <span className="font-medium">{schedule.instructor}</span>
+   665→                    </div>
+   666→                  </div>
+   667→                )}
+   668→
+   669→                <Button onClick={handleEnrollCourse} className="w-full bg-brand-600 hover:bg-brand-700 text-white py-3" disabled={loading}>
+   670→                  {loading ? (
+   671→                    <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Бүртгэж байна...</>
+   672→                  ) : (
+   673→                    <><CheckCircle2 className="w-4 h-4 mr-2" /> Бүртгүүлэх</>
+   674→                  )}
+   675→                </Button>
+   676→              </motion.div>
+   677→            )}
+   678→
+   679→            {/* Step: Payment */}
+   680→            {step === "payment" && (
+   681→              <motion.div key="payment" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-4">
+   682→                <div className="text-center">
+   683→                  <div className="w-16 h-16 rounded-2xl bg-amber-100 flex items-center justify-center mx-auto mb-4">
+   684→                    <Wallet className="w-8 h-8 text-amber-700" />
+   685→                  </div>
+   686→                  <h4 className="font-bold text-xl text-brand-900">Төлбөр төлөх</h4>
+   687→                </div>
+   688→
+   689→                <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+   690→                  <div className="flex justify-between items-center">
+   691→                    <span className="text-muted-foreground">Сургалт:</span>
+   692→                    <span className="font-medium">{course.title}</span>
+   693→                  </div>
+   694→                  <div className="flex justify-between items-center mt-2">
+   695→                    <span className="text-muted-foreground">Төлбөрийн дүн:</span>
+   696→                    <span className="text-xl font-bold text-amber-800">{price.toLocaleString()}₮</span>
+   697→                  </div>
+   698→                </div>
+   699→
+   700→                <div className="bg-gray-50 rounded-xl p-4 text-sm text-muted-foreground space-y-2">
+   701→                  <p className="flex items-center gap-2">
+   702→                    <ShieldCheck className="w-4 h-4 text-brand-600" />
+   703→                    Төлбөр төлсний дараа сургалтад баталгаажна
+   704→                  </p>
+   705→                  <p className="flex items-center gap-2">
+   706→                    <CreditCard className="w-4 h-4 text-brand-600" />
+   707→                    Сургалт дуусмагц сертификат олгогдоно
+   708→                  </p>
+   709→                </div>
+   710→
+   711→                <div className="flex gap-3">
+   712→                  <Button variant="outline" onClick={() => setStep(user ? "info" : "register")} className="flex-1">
+   713→                    <ArrowLeft className="w-4 h-4 mr-1" /> Буцах
+   714→                  </Button>
+   715→                  <Button onClick={handlePayment} className="flex-1 bg-brand-600 hover:bg-brand-700 text-white" disabled={loading}>
+   716→                    {loading ? (
+   717→                      <Loader2 className="w-4 h-4 animate-spin" />
+   718→                    ) : (
+   719→                      <>
+   720→                        <CreditCard className="w-4 h-4 mr-1" />
+   721→                        {price.toLocaleString()}₮ төлөх
+   722→                      </>
+   723→                    )}
+   724→                  </Button>
+   725→                </div>
+   726→              </motion.div>
+   727→            )}
+   728→
+   729→            {/* Step: Confirmed */}
+   730→            {step === "confirmed" && (
+   731→              <motion.div key="confirmed" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="space-y-4 text-center">
+   732→                <motion.div
+   733→                  initial={{ scale: 0 }}
+   734→                  animate={{ scale: 1 }}
+   735→                  transition={{ type: "spring", delay: 0.2 }}
+   736→                  className="w-20 h-20 rounded-full bg-green-100 flex items-center justify-center mx-auto"
+   737→                >
+   738→                  <CheckCircle2 className="w-10 h-10 text-green-600" />
+   739→                </motion.div>
+   740→                <h4 className="text-xl font-bold text-brand-900">Амжилттай бүртгэгдлээ!</h4>
+   741→                <p className="text-muted-foreground">Сургалтад амжилттай бүртгэгдлээ. Дараах мэдээллийг хадгална уу:</p>
+   742→
+   743→                {schedule && (
+   744→                  <div className="bg-brand-50 rounded-xl p-4 text-left space-y-2">
+   745→                    <div className="flex items-center gap-2 text-sm">
+   746→                      <Calendar className="w-4 h-4 text-brand-600" />
+   747→                      <span className="font-medium">{schedule.startDate} - {schedule.endDate}</span>
+   748→                    </div>
+   749→                    <div className="flex items-center gap-2 text-sm">
+   750→                      <Clock className="w-4 h-4 text-brand-600" />
+   751→                      <span>{schedule.days} | {schedule.time}</span>
+   752→                    </div>
+   753→                    <div className="flex items-start gap-2 text-sm">
+   754→                      <MapPin className="w-4 h-4 text-brand-600 shrink-0 mt-0.5" />
+   755→                      <span>{schedule.location}</span>
+   756→                    </div>
+   757→                  </div>
+   758→                )}
+   759→
+   760→                <Button onClick={() => { onConfirmed(); onClose(); }} className="w-full bg-brand-600 hover:bg-brand-700 text-white">
+   761→                  Дуусгах
+   762→                </Button>
+   763→              </motion.div>
+   764→            )}
+   765→          </AnimatePresence>
+   766→        </div>
+   767→      </motion.div>
+   768→    </div>
+   769→  );
+   770→}
+   771→
+   772→/* ─── Main Component ──────────────────────────────────── */
+   773→
+   774→export default function TrainingPage() {
+   775→  const { user, token } = useAuthStore();
+   776→  const [courses, setCourses] = useState<Course[]>([]);
+   777→  const [isLoading, setIsLoading] = useState(true);
+   778→  const [registeringId, setRegisteringId] = useState<string | null>(null);
+   779→  const [activeTab, setActiveTab] = useState("staff");
+   780→  const [selectedCourse, setSelectedCourse] = useState<Course | null>(null);
+   781→  const [showEnrollDialog, setShowEnrollDialog] = useState(false);
+   782→
+   783→  // Admin states
+   784→  const isAdmin = user && (user.role === "ADMIN" || user.role === "MANAGER" || user.role === "TEACHER");
+   785→  const [showAdminCreate, setShowAdminCreate] = useState(false);
+   786→  const [adminTitle, setAdminTitle] = useState("");
+   787→  const [adminCategory, setAdminCategory] = useState("staff");
+   788→  const [adminDescription, setAdminDescription] = useState("");
+   789→  const [adminDuration, setAdminDuration] = useState("");
+   790→  const [adminPrice, setAdminPrice] = useState("");
+   791→  const [adminStartDate, setAdminStartDate] = useState("");
+   792→  const [adminMaxStudents, setAdminMaxStudents] = useState("");
+   793→  const [adminSchedule, setAdminSchedule] = useState("");
+   794→  const [adminLocation, setAdminLocation] = useState("");
+   795→  const [adminCreating, setAdminCreating] = useState(false);
+   796→
+   797→  const refreshCourses = useCallback(() => {
+   798→    fetch("/api/courses")
+   799→      .then(r => r.json())
+   800→      .then(d => { if (d.courses && d.courses.length > 0) setCourses(d.courses); else setCourses(FALLBACK_COURSES); })
+   801→      .catch(() => setCourses(FALLBACK_COURSES));
+   802→  }, []);
+   803→
+   804→  useEffect(() => {
+   805→    async function fetchCourses() {
+   806→      try {
+   807→        const res = await fetch("/api/courses");
+   808→        const data = await res.json();
+   809→        if (data.courses && data.courses.length > 0) {
+   810→          setCourses(data.courses);
+   811→        } else {
+   812→          setCourses(FALLBACK_COURSES);
+   813→        }
+   814→      } catch {
+   815→        setCourses(FALLBACK_COURSES);
+   816→      } finally {
+   817→        setIsLoading(false);
+   818→      }
+   819→    }
+   820→    fetchCourses();
+   821→  }, []);
+   822→
+   823→  const handleEnroll = useCallback((courseId: string) => {
+   824→    const course = courses.find((c) => c.id === courseId);
+   825→    if (course) {
+   826→      setSelectedCourse(course);
+   827→      setShowEnrollDialog(true);
+   828→    }
+   829→  }, [courses]);
+   830→
+   831→  const handleConfirmed = useCallback(() => {
+   832→    setShowEnrollDialog(false);
+   833→    setSelectedCourse(null);
+   834→  }, []);
+   835→
+   836→  const getFilteredCourses = (category: string): Course[] => {
+   837→    const key = category.toLowerCase();
+   838→    return courses.filter((c) => c.category.toLowerCase() === key);
+   839→  };
+   840→
+   841→  return (
+   842→    <section className="w-full">
+   843→      {/* Hero Banner */}
+   844→      <div className="bg-gradient-to-b from-brand-900 to-brand-800 py-16 px-4">
+   845→        <div className="max-w-4xl mx-auto text-center">
+   846→          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
+   847→            <div className="inline-flex items-center gap-2 bg-brand-700/50 px-4 py-2 rounded-full mb-6">
+   848→              <ShieldCheck className="w-4 h-4 text-brand-300" />
+   849→              <span className="text-brand-200 text-sm font-medium">Мэргэжлийн сургалт</span>
+   850→            </div>
+   851→            <h1 className="text-3xl lg:text-4xl font-bold text-white mb-4">Сургалтууд</h1>
+   852→            <p className="text-brand-200 text-lg max-w-2xl mx-auto">
+   853→              ХАБЭА-ын бүх чиглэлээр мэргэжлийн сургалт, семинар зохион байгуулдаг.
+   854→            </p>
+   855→          </motion.div>
+   856→        </div>
+   857→      </div>
+   858→
+   859→      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 -mt-8">
+   860→
+   861→      {/* Admin: Create Course Section */}
+   862→      {isAdmin && (
+   863→        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="mb-8">
+   864→          <Card className="border-brand-200 shadow-lg">
+   865→            <CardHeader className="bg-brand-50 rounded-t-xl">
+   866→              <CardTitle className="text-lg text-brand-900 flex items-center gap-2">
+   867→                <ShieldCheck className="w-5 h-5" /> Админ: Шинэ сургалт нэмэх
+   868→              </CardTitle>
+   869→            </CardHeader>
+   870→            <CardContent className="p-5">
+   871→              {!showAdminCreate ? (
+   872→                <Button variant="outline" onClick={() => setShowAdminCreate(true)} className="w-full border-dashed border-2 border-brand-300 text-brand-700 hover:bg-brand-50 hover:border-brand-400">
+   873→                  <Plus className="w-4 h-4 mr-2" /> Сургалт нэмэх
+   874→                </Button>
+   875→              ) : (
+   876→                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+   877→                  <div className="flex items-center justify-between mb-4">
+   878→                    <h3 className="font-bold text-brand-900">Сургалтын мэдээлэл</h3>
+   879→                    <Button size="sm" variant="ghost" onClick={() => setShowAdminCreate(false)} className="text-muted-foreground"><XCircle className="w-4 h-4" /></Button>
+   880→                  </div>
+   881→                  <div className="grid sm:grid-cols-2 gap-4 mb-4">
+   882→                    <div>
+   883→                      <label className="text-sm font-medium text-gray-700 mb-1 block">Сургалтын нэр</label>
+   884→                      <Input value={adminTitle} onChange={e => setAdminTitle(e.target.value)} placeholder="Жишээ: Ажлын байраны аюулгүй байдал" />
+   885→                    </div>
+   886→                    <div>
+   887→                      <label className="text-sm font-medium text-gray-700 mb-1 block">Ангилал</label>
+   888→                      <select value={adminCategory} onChange={e => setAdminCategory(e.target.value)} className="w-full border rounded-lg px-3 py-2 text-sm">
+   889→                        <option value="staff">Ажилтны сургалт</option>
+   890→                        <option value="personal">Хувь хүний сургалт</option>
+   891→                        <option value="iso">ISO сургалт</option>
+   892→                      </select>
+   893→                    </div>
+   894→                    <div className="sm:col-span-2">
+   895→                      <label className="text-sm font-medium text-gray-700 mb-1 block">Тайлбар</label>
+   896→                      <Textarea value={adminDescription} onChange={e => setAdminDescription(e.target.value)} placeholder="Сургалтын дэлгэрэнгүй тайлбар" rows={2} />
+   897→                    </div>
+   898→                    <div>
+   899→                      <label className="text-sm font-medium text-gray-700 mb-1 block">Хугацаа</label>
+   900→                      <Input value={adminDuration} onChange={e => setAdminDuration(e.target.value)} placeholder="Жишээ: 16 цаг / 2 хоног" />
+   901→                    </div>
+   902→                    <div>
+   903→                      <label className="text-sm font-medium text-gray-700 mb-1 block">Үнэ (₮)</label>
+   904→                      <Input type="number" value={adminPrice} onChange={e => setAdminPrice(e.target.value)} placeholder="30000" />
+   905→                    </div>
+   906→                    <div>
+   907→                      <label className="text-sm font-medium text-gray-700 mb-1 block">Эхлэх огноо</label>
+   908→                      <Input type="date" value={adminStartDate} onChange={e => setAdminStartDate(e.target.value)} />
+   909→                    </div>
+   910→                    <div>
+   911→                      <label className="text-sm font-medium text-gray-700 mb-1 block">Оюутны тоо</label>
+   912→                      <Input type="number" value={adminMaxStudents} onChange={e => setAdminMaxStudents(e.target.value)} placeholder="20" />
+   913→                    </div>
+   914→                    <div>
+   915→                      <label className="text-sm font-medium text-gray-700 mb-1 block">Хуваарь</label>
+   916→                      <Input value={adminSchedule} onChange={e => setAdminSchedule(e.target.value)} placeholder="Жишээ: Даваа-Пүрэв 09:00-17:00" />
+   917→                    </div>
+   918→                    <div className="sm:col-span-2">
+   919→                      <label className="text-sm font-medium text-gray-700 mb-1 block">Байршил</label>
+   920→                      <Input value={adminLocation} onChange={e => setAdminLocation(e.target.value)} placeholder="Жишээ: Улаанбаатар, БЗД" />
+   921→                    </div>
+   922→                  </div>
+   923→                  <Button onClick={async () => {
+   924→                    if (!adminTitle.trim()) { toast.error("Сургалтын нэр оруулна уу"); return; }
+   925→                    if (!adminDescription.trim()) { toast.error("Тайлбар оруулна уу"); return; }
+   926→                    setAdminCreating(true);
+   927→                    try {
+   928→                      const res = await fetch("/api/admin/courses", {
+   929→                        method: "POST",
+   930→                        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+   931→                        body: JSON.stringify({
+   932→                          title: adminTitle,
+   933→                          category: adminCategory,
+   934→                          description: adminDescription,
+   935→                          duration: adminDuration || "16 цаг",
+   936→                          price: parseFloat(adminPrice) || 30000,
+   937→                          maxStudents: parseInt(adminMaxStudents) || 20,
+   938→                          startDate: adminStartDate || null,
+   939→                          schedule: adminSchedule,
+   940→                          location: adminLocation,
+   941→                        }),
+   942→                      });
+   943→                      const data = await res.json();
+   944→                      if (!res.ok) { toast.error(data.error || "Алдаа"); return; }
+   945→                      toast.success(`Сургалт нэмэгдлээ: ${adminTitle}`);
+   946→                      setAdminTitle(""); setAdminCategory("staff"); setAdminDescription("");
+   947→                      setAdminDuration(""); setAdminPrice(""); setAdminStartDate("");
+   948→                      setAdminMaxStudents("");
+   949→                      setAdminSchedule(""); setAdminLocation("");
+   950→                      setShowAdminCreate(false);
+   951→                      setIsLoading(true);
+   952→                      refreshCourses();
+   953→                      setTimeout(() => setIsLoading(false), 500);
+   954→                    } catch { toast.error("Алдаа"); }
+   955→                    finally { setAdminCreating(false); }
+   956→                  }} disabled={adminCreating || !adminTitle.trim()} className="w-full bg-brand-600 hover:bg-brand-700 text-white">
+   957→                    {adminCreating ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Үүсгэж байна...</> : <><Plus className="w-4 h-4 mr-2" /> Сургалт нэмэх</>}
+   958→                  </Button>
+   959→                </motion.div>
+   960→              )}
+   961→            </CardContent>
+   962→          </Card>
+   963→        </motion.div>
+   964→      )}
+   965→
+   966→      {/* Tabs */}
+   967→      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+   968→        <div className="flex justify-center mb-8">
+   969→          <TabsList className="bg-brand-50 p-1 h-auto">
+   970→            <TabsTrigger
+   971→              value="staff"
+   972→              className="rounded-md px-4 py-2.5 text-sm font-medium data-[state=active]:bg-brand-600 data-[state=active]:text-white data-[state=active]:shadow-sm transition-all"
+   973→            >
+   974→              <Users className="size-4 mr-1.5" />
+   975→              Ажилтны сургалт
+   976→            </TabsTrigger>
+   977→            <TabsTrigger
+   978→              value="personal"
+   979→              className="rounded-md px-4 py-2.5 text-sm font-medium data-[state=active]:bg-brand-600 data-[state=active]:text-white data-[state=active]:shadow-sm transition-all"
+   980→            >
+   981→              <GraduationCap className="size-4 mr-1.5" />
+   982→              Хувь хүний сургалт
+   983→            </TabsTrigger>
+   984→            <TabsTrigger
+   985→              value="iso"
+   986→              className="rounded-md px-4 py-2.5 text-sm font-medium data-[state=active]:bg-brand-600 data-[state=active]:text-white data-[state=active]:shadow-sm transition-all"
+   987→            >
+   988→              <Award className="size-4 mr-1.5" />
+   989→              ISO сургалт
+   990→            </TabsTrigger>
+   991→          </TabsList>
+   992→        </div>
+   993→
+   994→        {["staff", "personal", "iso"].map((cat) => (
+   995→          <TabsContent key={cat} value={cat}>
+   996→            {isLoading ? (
+   997→              <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+   998→                {Array.from({ length: 3 }).map((_, i) => (
+   999→                  <CourseCardSkeleton key={i} />
+  1000→                ))}
+  1001→              </div>
+  1002→            ) : (
+  1003→              <motion.div
+  1004→                variants={containerVariants}
+  1005→                initial="hidden"
+  1006→                animate="visible"
+  1007→                className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
+  1008→              >
+  1009→                {getFilteredCourses(cat).length > 0 ? (
+  1010→                  getFilteredCourses(cat).map((course) => (
+  1011→                    <CourseCard
+  1012→                      key={course.id}
+  1013→                      course={course}
+  1014→                      onEnroll={handleEnroll}
+  1015→                      isRegistering={registeringId === course.id}
+  1016→                    />
+  1017→                  ))
+  1018→                ) : (
+  1019→                  <div className="col-span-full flex flex-col items-center justify-center py-16 text-center">
+  1020→                    <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-brand-50">
+  1021→                      <BookOpen className="size-8 text-brand-400" />
+  1022→                    </div>
+  1023→                    <h3 className="text-lg font-semibold text-brand-900">Сургалт олдсонгүй</h3>
+  1024→                    <p className="mt-1 text-sm text-muted-foreground">Энэ чиглэлээр одоогоор сургалт байхгүй байна.</p>
+  1025→                  </div>
+  1026→                )}
+  1027→              </motion.div>
+  1028→            )}
+  1029→          </TabsContent>
+  1030→        ))}
+  1031→      </Tabs>
+  1032→
+  1033→      {/* Enrollment Dialog */}
+  1034→      <AnimatePresence>
+  1035→        {showEnrollDialog && selectedCourse && (
+  1036→          <EnrollmentDialog
+  1037→            course={selectedCourse}
+  1038→            onClose={() => setShowEnrollDialog(false)}
+  1039→            onConfirmed={handleConfirmed}
+  1040→          />
+  1041→        )}
+  1042→      </AnimatePresence>
+  1043→      </div>
+  1044→    </section>
+  1045→  );
+  1046→}
+  1047→

@@ -365,11 +365,11 @@ export default function ExamAdminDetailPage({ examId, onBack }: ExamAdminDetailP
         <Collapsible open={questionsOpen} onOpenChange={setQuestionsOpen}>
           <Card className="border-0 shadow-sm mb-4">
             <CollapsibleTrigger className="w-full">
-              <CardHeader className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-t-xl border-b pb-4 cursor-pointer hover:from-blue-100 hover:to-indigo-100 transition-colors">
+              <CardHeader className="bg-gradient-to-r from-brand-50 to-emerald-50 rounded-t-xl border-b pb-4 cursor-pointer hover:from-brand-100 hover:to-emerald-100 transition-colors">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center">
-                      <FileQuestion className="w-5 h-5 text-blue-600" />
+                    <div className="w-10 h-10 rounded-xl bg-brand-100 flex items-center justify-center">
+                      <FileQuestion className="w-5 h-5 text-brand-600" />
                     </div>
                     <div className="text-left">
                       <CardTitle className="text-base">Асуултууд</CardTitle>
@@ -389,7 +389,7 @@ export default function ExamAdminDetailPage({ examId, onBack }: ExamAdminDetailP
                     questions.map((q, i) => (
                       <div key={q.id || i} className="p-4 hover:bg-gray-50/50 transition-colors">
                         <div className="flex items-start gap-3">
-                          <span className="w-7 h-7 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs font-bold shrink-0 mt-0.5">
+                          <span className="w-7 h-7 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center text-xs font-bold shrink-0 mt-0.5">
                             {q.index + 1}
                           </span>
                           <div className="min-w-0 flex-1">

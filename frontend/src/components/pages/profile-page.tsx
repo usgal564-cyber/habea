@@ -150,8 +150,12 @@ export default function ProfilePage() {
   return (
     <section className="w-full">
       {/* Header */}
-      <div className="bg-gradient-to-b from-brand-900 to-brand-800 py-12 px-4">
-        <div className="max-w-5xl mx-auto">
+      <div className="relative bg-gradient-to-br from-brand-800 via-brand-900 to-brand-950 py-12 px-4 overflow-hidden">
+        <div className="absolute inset-0 opacity-10">
+          <div className="absolute top-5 right-10 w-64 h-64 bg-brand-400 rounded-full blur-3xl" />
+          <div className="absolute bottom-5 left-10 w-80 h-80 bg-brand-300 rounded-full blur-3xl" />
+        </div>
+        <div className="relative max-w-5xl mx-auto">
           <motion.div
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}

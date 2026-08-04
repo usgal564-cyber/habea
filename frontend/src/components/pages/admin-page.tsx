@@ -103,8 +103,12 @@ export default function AdminPage({ onNavigate }: AdminPageProps) {
   return (
     <div className="min-h-screen bg-gray-50/50">
       {/* Header */}
-      <div className="bg-gradient-to-br from-brand-900 via-brand-800 to-brand-900 py-8 lg:py-10 px-4">
-        <div className="max-w-6xl mx-auto">
+      <div className="relative bg-gradient-to-br from-brand-800 via-brand-900 to-brand-950 py-8 lg:py-10 px-4 overflow-hidden">
+        <div className="absolute inset-0 opacity-10">
+          <div className="absolute top-5 right-10 w-64 h-64 bg-brand-400 rounded-full blur-3xl" />
+          <div className="absolute bottom-5 left-10 w-80 h-80 bg-brand-300 rounded-full blur-3xl" />
+        </div>
+        <div className="relative max-w-6xl mx-auto">
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
             <div className="flex items-center gap-3 mb-1">
               <div className="w-11 h-11 rounded-xl bg-brand-700/60 flex items-center justify-center">
@@ -126,9 +130,9 @@ export default function AdminPage({ onNavigate }: AdminPageProps) {
         {/* ── Stat Cards ── */}
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3 lg:gap-4 mb-8">
           {[
-            { label: "Нийт хэрэглэгч", value: totalUsers, color: "from-blue-500 to-blue-600" },
+            { label: "Нийт хэрэглэгч", value: totalUsers, color: "from-brand-500 to-brand-600" },
             { label: "Сургалт бүртгэл", value: totalEnrollments, color: "from-emerald-500 to-emerald-600" },
-            { label: "Тест өгөлт", value: totalQuizAttempts, color: "from-violet-500 to-violet-600" },
+            { label: "Тест өгөлт", value: totalQuizAttempts, color: "from-teal-500 to-teal-600" },
             { label: "Шалгалт өгөлт", value: totalExamAttempts, color: "from-orange-500 to-orange-600" },
             { label: "Санал хүсэлт", value: totalFeedback, color: "from-amber-500 to-amber-600" },
             { label: "Судалгаа", value: totalSurveys, color: "from-rose-500 to-rose-600" },
@@ -294,7 +298,7 @@ export default function AdminPage({ onNavigate }: AdminPageProps) {
           <TabsContent value="quizzes">
             <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
               <Card className="border-0 shadow-sm">
-                <CardHeader className="bg-gradient-to-r from-violet-50 to-purple-50 rounded-t-xl border-b pb-4">
+                <CardHeader className="bg-gradient-to-r from-brand-50 to-emerald-50 rounded-t-xl border-b pb-4">
                   <div>
                     <CardTitle className="text-lg">Тест өгөлтийн дүн</CardTitle>
                     <CardDescription>Нийт {totalQuizAttempts} өгөлт</CardDescription>

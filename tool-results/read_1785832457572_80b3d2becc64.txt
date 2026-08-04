@@ -1,0 +1,567 @@
+     1→
+     2→import React, { useState, useEffect } from "react";
+     3→import { motion, AnimatePresence } from "framer-motion";
+     4→import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+     5→import { Badge } from "@/components/ui/badge";
+     6→import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+     7→import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+     8→import { useAuthStore } from "@/hooks/use-auth";
+     9→import { toast } from "sonner";
+    10→import {
+    11→  Shield, Download, CheckCircle, XCircle,
+    12→  Loader2, Database, FileSpreadsheet, ChevronDown, ChevronRight, Phone, Mail, User, Clock,
+    13→} from "lucide-react";
+    14→
+    15→interface AdminPageProps {
+    16→  onNavigate: (pageId: any, params?: { examId?: string }) => void;
+    17→}
+    18→
+    19→export default function AdminPage({ onNavigate }: AdminPageProps) {
+    20→  const { user, token } = useAuthStore();
+    21→  const [loading, setLoading] = useState(true);
+    22→  const [dashboard, setDashboard] = useState<any>(null);
+    23→  const [expandedCourseId, setExpandedCourseId] = useState<string | null>(null);
+    24→  const [courseEnrollments, setCourseEnrollments] = useState<any[]>([]);
+    25→  const [enrollLoading, setEnrollLoading] = useState(false);
+    26→
+    27→
+    28→
+    29→  const fetchCourseEnrollments = async (courseId: string) => {
+    30→    if (expandedCourseId === courseId) {
+    31→      setExpandedCourseId(null);
+    32→      setCourseEnrollments([]);
+    33→      return;
+    34→    }
+    35→    setExpandedCourseId(courseId);
+    36→    setEnrollLoading(true);
+    37→    try {
+    38→      const res = await fetch(`/api/admin/courses/${courseId}/enrollments`, {
+    39→        headers: { Authorization: `Bearer ${token}` },
+    40→      });
+    41→      const data = await res.json();
+    42→      setCourseEnrollments(data.enrollments || []);
+    43→    } catch {
+    44→      setCourseEnrollments([]);
+    45→      toast.error("Алдаа");
+    46→    } finally {
+    47→      setEnrollLoading(false);
+    48→    }
+    49→  };
+    50→
+    51→  useEffect(() => {
+    52→    if (!token) { setLoading(false); return; }
+    53→    fetch("/api/admin/dashboard", { headers: { Authorization: `Bearer ${token}` } })
+    54→      .then(r => { if (!r.ok) throw new Error(); return r.json(); })
+    55→      .then(data => { setDashboard(data); setLoading(false); })
+    56→      .catch(() => { setLoading(false); });
+    57→  }, [token]);
+    58→
+    59→  if (!user || !token) {
+    60→    return (
+    61→      <div className="min-h-screen">
+    62→        <div className="bg-gradient-to-b from-brand-900 to-brand-800 py-16 px-4">
+    63→          <div className="max-w-4xl mx-auto text-center">
+    64→            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
+    65→              <div className="inline-flex items-center gap-2 bg-brand-700/50 px-4 py-2 rounded-full mb-6">
+    66→                <Shield className="w-4 h-4 text-brand-300" />
+    67→                <span className="text-brand-200 text-sm font-medium">Админ хэсэг</span>
+    68→              </div>
+    69→              <h1 className="text-3xl lg:text-4xl font-bold text-white mb-4">Админ Хяналтын Самбар</h1>
+    70→              <p className="text-brand-200 text-lg">Нэвтрэх шаардлагатай</p>
+    71→            </motion.div>
+    72→          </div>
+    73→        </div>
+    74→        <div className="max-w-2xl mx-auto px-4 -mt-8">
+    75→          <Card className="shadow-xl text-center p-12">
+    76→            <Shield className="w-16 h-16 text-brand-300 mx-auto mb-4" />
+    77→            <h2 className="text-xl font-bold text-brand-900 mb-2">Нэвтрэх шаардлагатай</h2>
+    78→            <p className="text-muted-foreground">Админ хяналтын самбар руу нэвтрэхийн тулд админ кодоор нэвтэрнө үү.</p>
+    79→          </Card>
+    80→        </div>
+    81→      </div>
+    82→    );
+    83→  }
+    84→
+    85→  if (loading) {
+    86→    return (
+    87→      <div className="min-h-screen flex items-center justify-center">
+    88→        <div className="text-center">
+    89→          <Loader2 className="w-12 h-12 text-brand-500 animate-spin mx-auto mb-4" />
+    90→          <p className="text-muted-foreground">Ачааллаж байна...</p>
+    91→        </div>
+    92→      </div>
+    93→    );
+    94→  }
+    95→
+    96→  const totalUsers = dashboard?.totalUsers || 0;
+    97→  const totalEnrollments = dashboard?.totalEnrollments || 0;
+    98→  const totalQuizAttempts = dashboard?.totalQuizAttempts || 0;
+    99→  const totalExamAttempts = dashboard?.totalExamAttempts || 0;
+   100→  const totalFeedback = dashboard?.totalFeedback || 0;
+   101→  const totalSurveys = dashboard?.totalSurveys || 0;
+   102→
+   103→  return (
+   104→    <div className="min-h-screen bg-gray-50/50">
+   105→      {/* Header */}
+   106→      <div className="bg-gradient-to-br from-brand-900 via-brand-800 to-brand-900 py-8 lg:py-10 px-4">
+   107→        <div className="max-w-6xl mx-auto">
+   108→          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
+   109→            <div className="flex items-center gap-3 mb-1">
+   110→              <div className="w-11 h-11 rounded-xl bg-brand-700/60 flex items-center justify-center">
+   111→                <Shield className="w-5 h-5 text-brand-200" />
+   112→              </div>
+   113→              <div>
+   114→                <h1 className="text-2xl lg:text-3xl font-bold text-white leading-tight">Хяналтын Самбар</h1>
+   115→                <p className="text-brand-300 text-sm mt-0.5">
+   116→                  {user?.email || "Админ"} · {user?.role === "ADMIN" ? "Админ" : user?.role === "MANAGER" ? "Менежер" : "Багш"}
+   117→                </p>
+   118→              </div>
+   119→            </div>
+   120→          </motion.div>
+   121→        </div>
+   122→      </div>
+   123→
+   124→      <div className="max-w-6xl mx-auto px-4 -mt-5 pb-16">
+   125→
+   126→        {/* ── Stat Cards ── */}
+   127→        <div className="grid grid-cols-2 md:grid-cols-3 gap-3 lg:gap-4 mb-8">
+   128→          {[
+   129→            { label: "Нийт хэрэглэгч", value: totalUsers, color: "from-blue-500 to-blue-600" },
+   130→            { label: "Сургалт бүртгэл", value: totalEnrollments, color: "from-emerald-500 to-emerald-600" },
+   131→            { label: "Тест өгөлт", value: totalQuizAttempts, color: "from-violet-500 to-violet-600" },
+   132→            { label: "Шалгалт өгөлт", value: totalExamAttempts, color: "from-orange-500 to-orange-600" },
+   133→            { label: "Санал хүсэлт", value: totalFeedback, color: "from-amber-500 to-amber-600" },
+   134→            { label: "Судалгаа", value: totalSurveys, color: "from-rose-500 to-rose-600" },
+   135→          ].map((stat, i) => (
+   136→            <motion.div
+   137→              key={i}
+   138→              initial={{ opacity: 0, y: 15 }}
+   139→              animate={{ opacity: 1, y: 0 }}
+   140→              transition={{ delay: i * 0.05 }}
+   141→            >
+   142→              <Card className="overflow-hidden border-0 shadow-sm hover:shadow-md transition-shadow duration-300">
+   143→                <CardContent className="p-5 lg:p-6">
+   144→                  <p className="text-3xl lg:text-4xl font-extrabold text-gray-900 tracking-tight leading-none">
+   145→                    {stat.value}
+   146→                  </p>
+   147→                  <p className="text-sm text-muted-foreground font-medium mt-2">{stat.label}</p>
+   148→                </CardContent>
+   149→                <div className={`h-1 bg-gradient-to-r ${stat.color}`} />
+   150→              </Card>
+   151→            </motion.div>
+   152→          ))}
+   153→        </div>
+   154→
+   155→        {/* ── Tabbed Content ── */}
+   156→        <Tabs defaultValue="enrollments" className="space-y-5">
+   157→          <TabsList className="bg-white border shadow-sm rounded-xl p-1.5 h-auto flex flex-wrap gap-1">
+   158→            {[
+   159→              { value: "enrollments", label: "Сургалт" },
+   160→              { value: "quizzes", label: "Тест" },
+   161→              { value: "exams", label: "Шалгалт" },
+   162→              { value: "feedback", label: "Санал" },
+   163→              { value: "surveys", label: "Судалгаа" },
+   164→              { value: "export", label: "Экспорт" },
+   165→            ].map((tab) => (
+   166→              <TabsTrigger
+   167→                key={tab.value}
+   168→                value={tab.value}
+   169→                className="px-4 py-2 rounded-lg text-sm font-medium data-[state=active]:bg-brand-600 data-[state=active]:text-white data-[state=active]:shadow-sm transition-all"
+   170→              >
+   171→                {tab.label}
+   172→              </TabsTrigger>
+   173→            ))}
+   174→          </TabsList>
+   175→
+   176→          {/* ── Enrollments ── */}
+   177→          <TabsContent value="enrollments">
+   178→            <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
+   179→              <Card className="border-0 shadow-sm">
+   180→                <CardHeader className="bg-gradient-to-r from-emerald-50 to-green-50 rounded-t-xl border-b pb-4">
+   181→                  <div>
+   182→                    <CardTitle className="text-lg">Сургалтанд бүртгэлтэй</CardTitle>
+   183→                    <CardDescription>Нийт {totalEnrollments} бүртгэл — Сургалт дээр дарж бүртгэгдсэн хүмүүсийн мэдээллийг харна уу</CardDescription>
+   184→                  </div>
+   185→                </CardHeader>
+   186→                <CardContent className="p-0">
+   187→                  {(!dashboard?.courseStats || dashboard.courseStats.length === 0) ? (
+   188→                    <div className="text-center py-16">
+   189→                      <p className="text-2xl font-bold text-gray-300 mb-2">0</p>
+   190→                      <p className="text-muted-foreground text-sm">Одоогоор бүртгэл байхгүй</p>
+   191→                    </div>
+   192→                  ) : (
+   193→                    <div className="overflow-x-auto">
+   194→                      <Table>
+   195→                        <TableHeader>
+   196→                          <TableRow className="hover:bg-transparent">
+   197→                            <TableHead className="font-semibold">Сургалт</TableHead>
+   198→                            <TableHead className="font-semibold text-center">Бүртгэлтэй</TableHead>
+   199→                          </TableRow>
+   200→                        </TableHeader>
+   201→                        <TableBody>
+   202→                          {dashboard.courseStats.map((c: any, i: number) => (
+   203→                            <React.Fragment key={i}>
+   204→                              <TableRow
+   205→                                className="cursor-pointer hover:bg-emerald-50/60 transition-colors"
+   206→                                onClick={() => fetchCourseEnrollments(c.courseId)}
+   207→                              >
+   208→                                <TableCell className="font-medium">{c.title}</TableCell>
+   209→                                <TableCell className="text-center">
+   210→                                  <div className="flex items-center justify-center gap-2">
+   211→                                    <Badge className="bg-emerald-100 text-emerald-800 font-semibold">{c.enrolled} хүн</Badge>
+   212→                                    <ChevronDown
+   213→                                      className={`w-4 h-4 text-gray-400 transition-transform duration-200 ${expandedCourseId === c.courseId ? "rotate-180" : ""}`}
+   214→                                    />
+   215→                                  </div>
+   216→                                </TableCell>
+   217→                              </TableRow>
+   218→                              {/* Expanded detail row */}
+   219→                              {expandedCourseId === c.courseId && (
+   220→                                <TableRow>
+   221→                                  <TableCell colSpan={2} className="p-0">
+   222→                                    <div className="bg-emerald-50/40 border-t border-emerald-100">
+   223→                                      {enrollLoading ? (
+   224→                                        <div className="flex items-center justify-center py-8">
+   225→                                          <Loader2 className="w-5 h-5 text-brand-500 animate-spin mr-2" />
+   226→                                          <span className="text-sm text-muted-foreground">Ачааллаж байна...</span>
+   227→                                        </div>
+   228→                                      ) : courseEnrollments.length === 0 ? (
+   229→                                        <div className="text-center py-8">
+   230→                                          <p className="text-muted-foreground text-sm">Бүртгэгдсэн хүн байхгүй</p>
+   231→                                        </div>
+   232→                                      ) : (
+   233→                                        <div className="p-4">
+   234→                                          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+   235→                                            {courseEnrollments.map((en: any, ei: number) => (
+   236→                                              <motion.div
+   237→                                                key={ei}
+   238→                                                initial={{ opacity: 0, y: 8 }}
+   239→                                                animate={{ opacity: 1, y: 0 }}
+   240→                                                transition={{ delay: ei * 0.04 }}
+   241→                                                className="bg-white rounded-xl border border-emerald-100 p-4 hover:shadow-sm transition-shadow"
+   242→                                              >
+   243→                                                <div className="flex items-start gap-3">
+   244→                                                  <div className="w-9 h-9 rounded-full bg-emerald-100 flex items-center justify-center shrink-0">
+   245→                                                    <User className="w-4 h-4 text-emerald-700" />
+   246→                                                  </div>
+   247→                                                  <div className="min-w-0 flex-1">
+   248→                                                    <p className="font-semibold text-sm text-gray-900 truncate">
+   249→                                                      {en.lastName || ""} {en.firstName || ""}
+   250→                                                    </p>
+   251→                                                    <div className="mt-2 space-y-1.5">
+   252→                                                      <div className="flex items-center gap-2 text-xs text-gray-600">
+   253→                                                        <Phone className="w-3 h-3 text-emerald-500 shrink-0" />
+   254→                                                        <span className="truncate">{en.phone || "—"}</span>
+   255→                                                      </div>
+   256→                                                      <div className="flex items-center gap-2 text-xs text-gray-600">
+   257→                                                        <Mail className="w-3 h-3 text-emerald-500 shrink-0" />
+   258→                                                        <span className="truncate">{en.email || "—"}</span>
+   259→                                                      </div>
+   260→                                                    </div>
+   261→                                                    <div className="flex items-center justify-between mt-2 pt-2 border-t border-gray-50">
+   262→                                                      <span className="text-[11px] text-muted-foreground">
+   263→                                                        {en.createdAt ? new Date(en.createdAt).toLocaleDateString("mn-MN") : "—"}
+   264→                                                      </span>
+   265→                                                      {en.paid ? (
+   266→                                                        <Badge className="bg-emerald-100 text-emerald-700 text-[10px] px-1.5 py-0">Төлсөн</Badge>
+   267→                                                      ) : (
+   268→                                                        <Badge className="bg-amber-100 text-amber-700 text-[10px] px-1.5 py-0">Төлөөгүй</Badge>
+   269→                                                      )}
+   270→                                                    </div>
+   271→                                                  </div>
+   272→                                                </div>
+   273→                                              </motion.div>
+   274→                                            ))}
+   275→                                          </div>
+   276→                                        </div>
+   277→                                      )}
+   278→                                    </div>
+   279→                                  </TableCell>
+   280→                                </TableRow>
+   281→                              )}
+   282→                            </React.Fragment>
+   283→                          ))}
+   284→                        </TableBody>
+   285→                      </Table>
+   286→                    </div>
+   287→                  )}
+   288→                </CardContent>
+   289→              </Card>
+   290→            </motion.div>
+   291→          </TabsContent>
+   292→
+   293→          {/* ── Quizzes ── */}
+   294→          <TabsContent value="quizzes">
+   295→            <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
+   296→              <Card className="border-0 shadow-sm">
+   297→                <CardHeader className="bg-gradient-to-r from-violet-50 to-purple-50 rounded-t-xl border-b pb-4">
+   298→                  <div>
+   299→                    <CardTitle className="text-lg">Тест өгөлтийн дүн</CardTitle>
+   300→                    <CardDescription>Нийт {totalQuizAttempts} өгөлт</CardDescription>
+   301→                  </div>
+   302→                </CardHeader>
+   303→                <CardContent className="p-0">
+   304→                  {(!dashboard?.recentQuizResults || dashboard.recentQuizResults.length === 0) ? (
+   305→                    <div className="text-center py-16">
+   306→                      <p className="text-2xl font-bold text-gray-300 mb-2">0</p>
+   307→                      <p className="text-muted-foreground text-sm">Одоогоор тест өгөлт байхгүй</p>
+   308→                    </div>
+   309→                  ) : (
+   310→                    <div className="overflow-x-auto">
+   311→                      <Table>
+   312→                        <TableHeader>
+   313→                          <TableRow className="hover:bg-transparent">
+   314→                            <TableHead className="font-semibold">Оюутан</TableHead>
+   315→                            <TableHead className="font-semibold">Тест</TableHead>
+   316→                            <TableHead className="font-semibold text-center">Оноо</TableHead>
+   317→                            <TableHead className="font-semibold text-center">Огноо</TableHead>
+   318→                          </TableRow>
+   319→                        </TableHeader>
+   320→                        <TableBody>
+   321→                          {dashboard.recentQuizResults.map((r: any, i: number) => (
+   322→                            <TableRow key={i}>
+   323→                              <TableCell className="font-medium">{r.userName}</TableCell>
+   324→                              <TableCell className="text-muted-foreground">{r.quizTitle}</TableCell>
+   325→                              <TableCell className="text-center">
+   326→                                <Badge variant={r.score >= r.total * 0.8 ? "default" : "destructive"} className={r.score >= r.total * 0.8 ? "bg-green-100 text-green-800" : ""}>
+   327→                                  {r.score}/{r.total}
+   328→                                </Badge>
+   329→                              </TableCell>
+   330→                              <TableCell className="text-center text-sm text-muted-foreground">
+   331→                                {new Date(r.createdAt).toLocaleDateString("mn-MN")}
+   332→                              </TableCell>
+   333→                            </TableRow>
+   334→                          ))}
+   335→                        </TableBody>
+   336→                      </Table>
+   337→                    </div>
+   338→                  )}
+   339→                </CardContent>
+   340→              </Card>
+   341→            </motion.div>
+   342→          </TabsContent>
+   343→
+   344→          {/* ── Exams ── */}
+   345→          <TabsContent value="exams">
+   346→            <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
+   347→              <Card className="border-0 shadow-sm">
+   348→                <CardHeader className="bg-gradient-to-r from-orange-50 to-amber-50 rounded-t-xl border-b pb-4">
+   349→                  <div>
+   350→                    <CardTitle className="text-lg">Шалгалтууд</CardTitle>
+   351→                    <CardDescription>Шалгалт дээр дарж удирдлага хийх, асуулт, үр дүн харна уу</CardDescription>
+   352→                  </div>
+   353→                </CardHeader>
+   354→                <CardContent className="p-0">
+   355→                  {(!dashboard?.recentExamResults || dashboard.recentExamResults.length === 0) ? (
+   356→                    <div className="text-center py-16">
+   357→                      <p className="text-2xl font-bold text-gray-300 mb-2">0</p>
+   358→                      <p className="text-muted-foreground text-sm">Одоогоор шалгалт байхгүй</p>
+   359→                    </div>
+   360→                  ) : (
+   361→                    <div className="overflow-x-auto">
+   362→                      <Table>
+   363→                        <TableHeader>
+   364→                          <TableRow className="hover:bg-transparent">
+   365→                            <TableHead className="font-semibold">Шалгалт</TableHead>
+   366→                            <TableHead className="font-semibold text-center">Код</TableHead>
+   367→                            <TableHead className="font-semibold text-center">Оролдлогууд</TableHead>
+   368→                            <TableHead className="font-semibold text-center w-12"></TableHead>
+   369→                          </TableRow>
+   370→                        </TableHeader>
+   371→                        <TableBody>
+   372→                          {(() => {
+   373→                            const examMap = new Map<string, any>();
+   374→                            (dashboard.recentExamResults || []).forEach((r: any) => {
+   375→                              const key = r.examId || r.examTitle;
+   376→                              if (!examMap.has(key)) {
+   377→                                examMap.set(key, { id: r.examId, title: r.examTitle, code: r.examCode, attempts: [] });
+   378→                              }
+   379→                              examMap.get(key).attempts.push(r);
+   380→                            });
+   381→                            return Array.from(examMap.values()).map((exam: any) => (
+   382→                              <TableRow
+   383→                                key={exam.id}
+   384→                                className="cursor-pointer hover:bg-orange-50/60 transition-colors"
+   385→                                onClick={() => onNavigate("exam-admin-detail", { examId: exam.id })}
+   386→                              >
+   387→                                <TableCell className="font-medium">{exam.title}</TableCell>
+   388→                                <TableCell className="text-center">
+   389→                                  <Badge variant="outline" className="font-mono text-xs">{exam.code || "—"}</Badge>
+   390→                                </TableCell>
+   391→                                <TableCell className="text-center">
+   392→                                  <Badge className="bg-orange-100 text-orange-800 font-semibold">{exam.attempts.length} хүн</Badge>
+   393→                                </TableCell>
+   394→                                <TableCell className="text-center">
+   395→                                  <ChevronRight className="w-4 h-4 text-gray-400" />
+   396→                                </TableCell>
+   397→                              </TableRow>
+   398→                            ));
+   399→                          })()}
+   400→                        </TableBody>
+   401→                      </Table>
+   402→                    </div>
+   403→                  )}
+   404→                </CardContent>
+   405→              </Card>
+   406→            </motion.div>
+   407→          </TabsContent>
+   408→
+   409→          {/* ── Feedback ── */}
+   410→          <TabsContent value="feedback">
+   411→            <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
+   412→              <Card className="border-0 shadow-sm">
+   413→                <CardHeader className="bg-gradient-to-r from-amber-50 to-yellow-50 rounded-t-xl border-b pb-4">
+   414→                  <div>
+   415→                    <CardTitle className="text-lg">Ирсэн санал хүсэлт</CardTitle>
+   416→                    <CardDescription>Нийт {totalFeedback} санал</CardDescription>
+   417→                  </div>
+   418→                </CardHeader>
+   419→                <CardContent className="p-4 lg:p-5">
+   420→                  {(!dashboard?.recentFeedback || dashboard.recentFeedback.length === 0) ? (
+   421→                    <div className="text-center py-16">
+   422→                      <p className="text-2xl font-bold text-gray-300 mb-2">0</p>
+   423→                      <p className="text-muted-foreground text-sm">Одоогоор санал хүсэлт ирээгүй</p>
+   424→                    </div>
+   425→                  ) : (
+   426→                    <div className="space-y-2.5 max-h-[480px] overflow-y-auto pr-1">
+   427→                      {dashboard.recentFeedback.map((f: any, i: number) => (
+   428→                        <div key={i} className="rounded-xl border p-4 hover:bg-gray-50/80 transition-colors">
+   429→                          <div className="flex items-start justify-between gap-3 mb-2">
+   430→                            <div className="flex items-center gap-3 min-w-0">
+   431→                              <div className="w-9 h-9 rounded-full bg-brand-100 flex items-center justify-center text-sm font-bold text-brand-700 shrink-0">
+   432→                                {f.name?.charAt(0) || "?"}
+   433→                              </div>
+   434→                              <div className="min-w-0">
+   435→                                <p className="font-medium text-sm truncate">{f.name}</p>
+   436→                                <p className="text-xs text-muted-foreground">{new Date(f.createdAt).toLocaleDateString("mn-MN")}</p>
+   437→                              </div>
+   438→                            </div>
+   439→                            <div className="flex items-center gap-0.5 shrink-0 pt-0.5">
+   440→                              {Array.from({ length: 5 }, (_, s) => (
+   441→                                <svg key={s} className={`w-3.5 h-3.5 ${s < (f.rating || 0) ? "text-amber-400" : "text-gray-200"}`} viewBox="0 0 24 24" fill="currentColor">
+   442→                                  <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+   443→                                </svg>
+   444→                              ))}
+   445→                            </div>
+   446→                          </div>
+   447→                          <p className="text-sm text-gray-700 leading-relaxed pl-12">{f.message}</p>
+   448→                        </div>
+   449→                      ))}
+   450→                    </div>
+   451→                  )}
+   452→                </CardContent>
+   453→              </Card>
+   454→            </motion.div>
+   455→          </TabsContent>
+   456→
+   457→          {/* ── Surveys ── */}
+   458→          <TabsContent value="surveys">
+   459→            <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
+   460→              <Card className="border-0 shadow-sm">
+   461→                <CardHeader className="bg-gradient-to-r from-rose-50 to-pink-50 rounded-t-xl border-b pb-4">
+   462→                  <div>
+   463→                    <CardTitle className="text-lg">Ирсэн судалгаа</CardTitle>
+   464→                    <CardDescription>Нийт {totalSurveys} судалгаа</CardDescription>
+   465→                  </div>
+   466→                </CardHeader>
+   467→                <CardContent className="p-4 lg:p-5">
+   468→                  {(!dashboard?.recentSurveys || dashboard.recentSurveys.length === 0) ? (
+   469→                    <div className="text-center py-16">
+   470→                      <p className="text-2xl font-bold text-gray-300 mb-2">0</p>
+   471→                      <p className="text-muted-foreground text-sm">Одоогоор судалгаа ирээгүй</p>
+   472→                    </div>
+   473→                  ) : (
+   474→                    <div className="space-y-2.5 max-h-[480px] overflow-y-auto pr-1">
+   475→                      {dashboard.recentSurveys.map((s: any, i: number) => (
+   476→                        <div key={i} className="rounded-xl border p-4 hover:bg-gray-50/80 transition-colors">
+   477→                          <div className="flex items-center justify-between gap-3">
+   478→                            <div className="flex items-center gap-3 min-w-0">
+   479→                              <div className="w-9 h-9 rounded-full bg-rose-100 flex items-center justify-center text-sm font-bold text-rose-700 shrink-0">
+   480→                                {s.name?.charAt(0) || "?"}
+   481→                              </div>
+   482→                              <div className="min-w-0">
+   483→                                <p className="font-medium text-sm truncate">{s.name}</p>
+   484→                                <p className="text-xs text-muted-foreground">{s.email}</p>
+   485→                              </div>
+   486→                            </div>
+   487→                            <div className="flex items-center gap-2 shrink-0">
+   488→                              <span className="text-xs text-muted-foreground">{new Date(s.createdAt).toLocaleDateString("mn-MN")}</span>
+   489→                              <Badge className="bg-rose-100 text-rose-800 text-xs">Судалгаа</Badge>
+   490→                            </div>
+   491→                          </div>
+   492→                        </div>
+   493→                      ))}
+   494→                    </div>
+   495→                  )}
+   496→                </CardContent>
+   497→              </Card>
+   498→            </motion.div>
+   499→          </TabsContent>
+   500→
+   501→          {/* ── Export ── */}
+   502→          <TabsContent value="export">
+   503→            <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
+   504→              <Card className="border-0 shadow-sm">
+   505→                <CardHeader className="bg-gradient-to-r from-gray-50 to-slate-50 rounded-t-xl border-b pb-4">
+   506→                  <div>
+   507→                    <CardTitle className="text-lg">Мэдээлэл татаж авах</CardTitle>
+   508→                    <CardDescription>Бүх өгөгдлийг нэгтгэж татаж авах боломжтой</CardDescription>
+   509→                  </div>
+   510→                </CardHeader>
+   511→                <CardContent className="p-6">
+   512→                  <div className="grid sm:grid-cols-2 gap-4">
+   513→                    <button
+   514→                      onClick={() => { window.open("/api/admin/exam-attempts/export?token=" + token, "_blank"); }}
+   515→                      className="group flex flex-col items-center gap-4 p-8 rounded-2xl border-2 border-dashed border-gray-200 hover:border-brand-400 hover:bg-brand-50/40 transition-all duration-300"
+   516→                    >
+   517→                      <div className="w-14 h-14 rounded-2xl bg-brand-100 group-hover:bg-brand-200 flex items-center justify-center transition-colors">
+   518→                        <FileSpreadsheet className="w-7 h-7 text-brand-700" />
+   519→                      </div>
+   520→                      <div className="text-center">
+   521→                        <p className="font-semibold text-gray-900">Шалгалтын үр дүн</p>
+   522→                        <p className="text-xs text-muted-foreground mt-0.5">CSV форматаар</p>
+   523→                      </div>
+   524→                      <span className="flex items-center gap-1.5 text-brand-700 text-sm font-medium opacity-0 group-hover:opacity-100 translate-y-1 group-hover:translate-y-0 transition-all duration-300">
+   525→                        <Download className="w-4 h-4" />
+   526→                        Татах
+   527→                      </span>
+   528→                    </button>
+   529→
+   530→                    <button
+   531→                      onClick={async () => {
+   532→                        try {
+   533→                          const r = await fetch("/api/admin/export", { headers: { Authorization: `Bearer ${token}` } });
+   534→                          const d = await r.json();
+   535→                          const blob = new Blob([JSON.stringify(d, null, 2)], { type: "application/json" });
+   536→                          const url = URL.createObjectURL(blob);
+   537→                          const a = document.createElement("a");
+   538→                          a.href = url; a.download = "habea_export.json"; a.click();
+   539→                          URL.revokeObjectURL(url);
+   540→                          toast.success("Татаж авлаа");
+   541→                        } catch { toast.error("Алдаа"); }
+   542→                      }}
+   543→                      className="group flex flex-col items-center gap-4 p-8 rounded-2xl border-2 border-dashed border-gray-200 hover:border-amber-400 hover:bg-amber-50/40 transition-all duration-300"
+   544→                    >
+   545→                      <div className="w-14 h-14 rounded-2xl bg-amber-100 group-hover:bg-amber-200 flex items-center justify-center transition-colors">
+   546→                        <Database className="w-7 h-7 text-amber-700" />
+   547→                      </div>
+   548→                      <div className="text-center">
+   549→                        <p className="font-semibold text-gray-900">Бүх өгөгдөл</p>
+   550→                        <p className="text-xs text-muted-foreground mt-0.5">JSON форматаар</p>
+   551→                      </div>
+   552→                      <span className="flex items-center gap-1.5 text-amber-700 text-sm font-medium opacity-0 group-hover:opacity-100 translate-y-1 group-hover:translate-y-0 transition-all duration-300">
+   553→                        <Download className="w-4 h-4" />
+   554→                        Татах
+   555→                      </span>
+   556→                    </button>
+   557→                  </div>
+   558→                </CardContent>
+   559→              </Card>
+   560→            </motion.div>
+   561→          </TabsContent>
+   562→        </Tabs>
+   563→      </div>
+   564→    </div>
+   565→  );
+   566→}
+   567→

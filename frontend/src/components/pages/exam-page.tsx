@@ -384,18 +384,22 @@ export default function ExamPage() {
   return (
     <div className="min-h-screen">
       {/* Header */}
-      <div className="bg-gradient-to-b from-brand-900 to-brand-800 py-16 px-4">
-        <div className="max-w-4xl mx-auto text-center">
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
-            <div className="inline-flex items-center gap-2 bg-brand-700/50 px-4 py-2 rounded-full mb-6">
+      <section className="relative bg-gradient-to-br from-brand-800 via-brand-900 to-brand-950 py-16 lg:py-24 overflow-hidden">
+        <div className="absolute inset-0 opacity-10">
+          <div className="absolute top-10 right-10 w-72 h-72 bg-brand-400 rounded-full blur-3xl" />
+          <div className="absolute bottom-10 left-10 w-96 h-96 bg-brand-300 rounded-full blur-3xl" />
+        </div>
+        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
+            <div className="inline-flex items-center gap-2 bg-brand-700/50 border border-brand-600/30 px-4 py-2 rounded-full mb-6">
               <Lock className="w-4 h-4 text-brand-300" />
-              <span className="text-brand-200 text-sm font-medium">Кодтой шалгалт</span>
+              <span className="text-brand-200 text-sm font-medium">Кодотой шалгалт</span>
             </div>
-            <h1 className="text-3xl lg:text-4xl font-bold text-white mb-4">Шалгалт</h1>
-            <p className="text-brand-200 text-lg max-w-2xl mx-auto">Админ өгсөн кодоор шалгалтанд орох. Шалгалт идэвхтэй үед л орох боломжтой.</p>
+            <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-white mb-4">Шалгалт</h1>
+            <p className="text-brand-200/80 max-w-2xl mx-auto text-lg">Админ өгсөн кодоор шалгалтанд орох. Шалгалт идэвхтэй үед л орох боломжтой.</p>
           </motion.div>
         </div>
-      </div>
+      </section>
 
       <div className="max-w-5xl mx-auto px-4 -mt-8 pb-12">
         {/* ─── Admin: Template Selection + Custom Create ─── */}
