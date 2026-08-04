@@ -1,4 +1,4 @@
-
+// Navbar component with dropdown menus
 import { useState, useEffect, useRef } from "react";
 import {
   Menu,
