@@ -278,3 +278,47 @@ Stage Summary:
 - Backend updated with endDate support and new endpoints
 - Frontend exam list now expandable with full details
 - Exam creation form has Зогсоох огноо date picker
+---
+Task ID: 1
+Agent: Main Agent
+Task: Remove inline exam stop/start from admin page + navigate to separate page; Seed 3 exams with questions
+
+Work Log:
+- Analyzed admin-page.tsx exam section (lines 344-512) which had inline expandable exam results
+- Created new dedicated exam-admin-detail-page.tsx with:
+  - Exam info header with title, code, duration, active status
+  - Switch toggle for stop/start exam
+  - Date picker for setting stop date
+  - Delete exam button
+  - Collapsible questions section showing all questions with correct answers highlighted
+  - Collapsible results section with student scores, pass rates, PDF export
+  - Back button to return to admin
+- Modified App.tsx:
+  - Added "exam-admin-detail" to PageId type
+  - Added selectedExamId state
+  - Updated handleNavigate to accept params with examId
+  - Added handleBackToAdmin function
+  - Added AdminPage onNavigate prop
+  - Added ExamAdminDetailPage case to renderPage switch
+- Modified admin-page.tsx:
+  - Added AdminPageProps interface with onNavigate prop
+  - Removed expandedExamId, examDetailData, examDetailLoading state
+  - Removed fetchExamDetail and handleExportExamPDF functions
+  - Replaced exam section with simple clickable table rows that navigate to exam-admin-detail page
+  - Removed React.Fragment wrappers and inline expansion UI
+  - Added ChevronRight import for navigation indicator
+- Added PUT /api/admin/exams/:id/start route to backend main.go
+- Seeded SQLite database with 3 exams:
+  1. ХАБЭА үндсэн шалгалт (EXAM001, 30 min, 30 questions)
+  2. Ажлын байрны эрсдлийн үнэлгээ (EXAM002, 45 min, 29 questions)
+  3. ХАБЭА хууль эрх зүй (EXAM003, 60 min, 29 questions)
+- Added end_date column to exams table
+- Created exam_questions table
+- Verified Vite build passes without errors
+
+Stage Summary:
+- 3 exams seeded with total of 88 questions in DB
+- Admin page exam section now shows simple list, clicking navigates to separate detail page
+- New exam-admin-detail page has full management: stop/start toggle, end date, questions view, results view, delete, PDF export
+- Backend route for starting exams added
+- Vite build passes (825KB JS, 149KB CSS)

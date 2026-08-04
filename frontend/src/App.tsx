@@ -17,8 +17,9 @@ import FeedbackPage from "@/components/pages/feedback-page";
 import SurveyPage from "@/components/pages/survey-page";
 import AdminPage from "@/components/pages/admin-page";
 import ProfilePage from "@/components/pages/profile-page";
+import ExamAdminDetailPage from "@/components/pages/exam-admin-detail-page";
 
-export type PageId = "home" | "about" | "training" | "quiz" | "exam" | "consulting" | "feedback" | "survey" | "admin" | "profile";
+export type PageId = "home" | "about" | "training" | "quiz" | "exam" | "consulting" | "feedback" | "survey" | "admin" | "profile" | "exam-admin-detail";
 
 const pageConfig: Record<PageId, string> = {
   home: "Нүүр",
@@ -31,6 +32,7 @@ const pageConfig: Record<PageId, string> = {
   survey: "Сэтгэл ханамж",
   admin: "Админ хэсэг",
   profile: "Профайл",
+  "exam-admin-detail": "Шалгалтын удирдлага",
 };
 
 export function getPages() {
@@ -39,6 +41,7 @@ export function getPages() {
 
 export default function App() {
   const [currentPage, setCurrentPage] = useState<PageId>("home");
+  const [selectedExamId, setSelectedExamId] = useState<string | null>(null);
   const [authOpen, setAuthOpen] = useState(false);
   const { user, setAuth, token } = useAuthStore();
 
@@ -59,8 +62,17 @@ export default function App() {
       });
   }, []);
 
-  const handleNavigate = (pageId: PageId) => {
+  const handleNavigate = (pageId: PageId, params?: { examId?: string }) => {
+    if (params?.examId) {
+      setSelectedExamId(params.examId);
+    }
     setCurrentPage(pageId);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const handleBackToAdmin = () => {
+    setCurrentPage("admin");
+    setSelectedExamId(null);
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
@@ -74,8 +86,15 @@ export default function App() {
       case "consulting": return <ConsultingPage />;
       case "feedback": return <FeedbackPage />;
       case "survey": return <SurveyPage />;
-      case "admin": return <AdminPage />;
+      case "admin": return <AdminPage onNavigate={handleNavigate} />;
       case "profile": return <ProfilePage />;
+      case "exam-admin-detail":
+        return (
+          <ExamAdminDetailPage
+            examId={selectedExamId || ""}
+            onBack={handleBackToAdmin}
+          />
+        );
       default: return <HomePage onNavigate={handleNavigate} />;
     }
   };

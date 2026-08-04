@@ -100,6 +100,7 @@ func main() {
                 adminGroup.GET("/exams/:id/results", AdminGetExamDetailHandler)
                 adminGroup.GET("/exams/:id/questions", AdminGetExamQuestionsHandler)
                 adminGroup.PUT("/exams/:id/stop", AdminStopExamHandler)
+                adminGroup.PUT("/exams/:id/start", AdminStartExamHandler)
                 adminGroup.DELETE("/exams/:id", AdminDeleteExamHandler)
 
                 // Courses management
