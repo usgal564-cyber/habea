@@ -118,6 +118,7 @@ type ExamAttempt struct {
         Total     int       `json:"total"`
         Passed    bool      `json:"passed"`
         Answers   string    `json:"answers" gorm:"type:text"`
+        TimeSpent int       `json:"timeSpent"`
         CreatedAt time.Time `json:"createdAt"`
 }
 

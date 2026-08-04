@@ -185,3 +185,79 @@ Stage Summary:
 - Auto-login after registration, then auto-enroll in course, then payment
 - No more anket step, cleaner 3-step flow for both states
 - Produced artifact: frontend/src/components/pages/training-page.tsx
+
+---
+Task ID: 4
+Agent: Sub Agent
+Task: Backend exam improvements - time tracking, profile sections, admin exam detail/stop endpoints
+
+Work Log:
+- models.go: Added `TimeSpent int` field to ExamAttempt struct (seconds student spent on exam)
+- database.go: GORM AutoMigrate will add time_spent column on server restart (no separate db:push needed - SQLite + GORM handles this)
+- handlers.go:
+  - ExamActionRequest: Added `TimeSpent int` field to accept timeSpent from frontend on submit
+  - ExamHandler submit action: Now stores req.TimeSpent in ExamAttempt and returns it in response
+  - GetExamHistoryHandler: Added timeSpent to each attempt result
+  - GetProfileHandler: Added section query param support:
+    - `section=exams` → returns {results: [{id, examId, title, score, total, passed, timeSpent, createdAt}]}
+    - `section=quizzes` → returns {results: [{id, quizId, title, score, total, createdAt}]}
+    - `section=courses` → returns {registrations: [{id, courseId, title, category, description, duration, price, schedule, location, paid, createdAt}]}
+    - No section → returns user profile as before
+  - AdminGetExamDetailHandler (NEW): GET /api/admin/exams/:id/results
+    - Returns exam info, array of students with userId, firstName, lastName, email, phone, score, total, passed, timeSpent, createdAt
+    - Also returns averageScore and totalStudents
+  - AdminStopExamHandler (NEW): PUT /api/admin/exams/:id/stop
+    - Sets exam is_active = false, returns "Шалгалт зогссон"
+- main.go: Added two new admin routes:
+  - adminGroup.GET("/exams/:id/results", AdminGetExamDetailHandler)
+  - adminGroup.PUT("/exams/:id/stop", AdminStopExamHandler)
+
+Stage Summary:
+- ExamAttempt now tracks time spent (seconds)
+- Profile API supports section queries for exams, quizzes, courses
+- Admin can view detailed exam results per exam with student info and averages
+- Admin can stop/deactivate exams
+- No frontend changes made
+- Produced artifacts: backend/models.go, backend/handlers.go, backend/main.go
+
+---
+Task ID: 5
+Agent: Sub Agent
+Task: Frontend exam & admin improvements - time tracking, exam detail, PDF export
+
+Work Log:
+- exam-page.tsx:
+  - Added `elapsedTime` state and `examStartTimeRef` ref for live timer
+  - Added elapsed timer useEffect that counts up every second while timerActive
+  - `handleStartExam`: Records `examStartTimeRef.current = Date.now()`, resets elapsedTime
+  - `handleSubmitExam`: Calculates `timeSpent = Math.floor((Date.now() - examStartTimeRef) / 1000)`, sends it in submit body
+  - Result state updated to `{ score, total, passed, timeSpent }`
+  - Added `formatTimeSpent()` helper ("X мин Y сек")
+  - "Taking" state header now shows both elapsed timer (counting up, MM:SS) and countdown timer
+  - "Result" state shows "Цаг зарцуулсан: X мин Y сек" with Clock icon
+  - `resetExam()` clears elapsedTime and examStartTimeRef
+  - Admin exam list: Added "Зогсоох" (Stop) button next to each active exam, calls PUT /api/admin/exams/:id/stop
+- admin-page.tsx:
+  - Added state: `expandedExamId`, `examDetailData`, `examDetailLoading`
+  - Added `fetchExamDetail(examId)` function calling GET /api/admin/exams/:id/results with toggle behavior
+  - Added `handleExportExamPDF()` function: Opens new window with HTML table + stats, calls window.print() for PDF save
+  - Added `Clock` icon import from lucide-react
+  - Completely rewrote "Шалгалт" (Exams) tab:
+    - Groups exam results by exam into clickable rows (title, code, attempt count)
+    - Each row has ChevronDown indicator, expands on click
+    - Expanded view shows: stats bar (average score, total students, passed count, pass rate), PDF export button
+    - Student cards in grid layout: name, score (e.g. 25/30), time spent (X мин Y сек), passed/failed badge, date
+    - Loading and empty states
+- profile-page.tsx:
+  - Added `timeSpent?: number` to ExamResult interface
+  - Exam result cards now show "Цаг зарцуулсан: X мин Y сек" below date with Clock icon
+  - Exam stat card shows "Дундаж: X мин" when timeSpent data is available
+
+Stage Summary:
+- Exam timer: Live elapsed time (MM:SS) shown during exam, countdown timer still present
+- Exam submission: timeSpent (seconds) sent to backend and displayed in results
+- Admin exam stop: "Зогсоох" button deactivates active exams via API
+- Admin exam detail: Expandable exam rows with student cards, stats, and PDF export
+- Profile: Shows time spent per exam and average time in stat card
+- No indigo/blue Tailwind colors used
+- Produced artifacts: exam-page.tsx, admin-page.tsx, profile-page.tsx

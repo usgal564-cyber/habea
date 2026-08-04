@@ -94,10 +94,11 @@ type QuizSubmitRequest struct {
 }
 
 type ExamActionRequest struct {
-        Action  string `json:"action" binding:"required"`
-        Code    string `json:"code"`
-        ExamID  string `json:"examId"`
-        Answers []int  `json:"answers"`
+        Action   string `json:"action" binding:"required"`
+        Code     string `json:"code"`
+        ExamID   string `json:"examId"`
+        Answers  []int  `json:"answers"`
+        TimeSpent int   `json:"timeSpent"`
 }
 
 type CoursePaymentRequest struct {
@@ -251,11 +252,65 @@ func AdminLoginHandler(c *gin.Context) {
 
 func GetProfileHandler(c *gin.Context) {
         userID, _ := c.Get("userId")
+        section := c.Query("section")
+
         var user User
         if DB.Where("id = ?", userID).First(&user).Error != nil {
                 c.JSON(404, gin.H{"error": "User not found"})
                 return
         }
+
+        switch section {
+        case "exams":
+                var attempts []ExamAttempt
+                DB.Where("user_id = ?", userID).Order("created_at desc").Find(&attempts)
+                var results []gin.H
+                for _, a := range attempts {
+                        var exam Exam
+                        DB.Where("id = ?", a.ExamID).First(&exam)
+                        results = append(results, gin.H{
+                                "id": a.ID, "examId": a.ExamID, "title": exam.Title,
+                                "score": a.Score, "total": a.Total, "passed": a.Passed,
+                                "timeSpent": a.TimeSpent, "createdAt": a.CreatedAt,
+                        })
+                }
+                c.JSON(200, gin.H{"results": results})
+                return
+
+        case "quizzes":
+                var attempts []QuizAttempt
+                DB.Where("user_id = ?", userID).Order("created_at desc").Find(&attempts)
+                var results []gin.H
+                for _, a := range attempts {
+                        var quiz Quiz
+                        DB.Where("id = ?", a.QuizID).First(&quiz)
+                        results = append(results, gin.H{
+                                "id": a.ID, "quizId": a.QuizID, "title": quiz.Title,
+                                "score": a.Score, "total": a.Total, "createdAt": a.CreatedAt,
+                        })
+                }
+                c.JSON(200, gin.H{"results": results})
+                return
+
+        case "courses":
+                var enrollments []Enrollment
+                DB.Where("user_id = ?", userID).Order("created_at desc").Find(&enrollments)
+                var regs []gin.H
+                for _, e := range enrollments {
+                        var course Course
+                        DB.Where("id = ?", e.CourseID).First(&course)
+                        regs = append(regs, gin.H{
+                                "id": e.ID, "courseId": course.ID, "title": course.Title,
+                                "category": course.Category, "description": course.Description,
+                                "duration": course.Duration, "price": course.Price,
+                                "schedule": course.Schedule, "location": course.Location,
+                                "paid": e.Paid, "createdAt": e.CreatedAt,
+                        })
+                }
+                c.JSON(200, gin.H{"registrations": regs})
+                return
+        }
+
         c.JSON(200, gin.H{"user": userResponse(user)})
 }
 
@@ -383,10 +438,10 @@ func ExamHandler(c *gin.Context) {
                 passed := len(questions) > 0 && score >= int(float64(len(questions))*0.8)
 
                 ansJSON, _ := json.Marshal(req.Answers)
-                attempt := ExamAttempt{ID: uuid.New().String(), UserID: userID.(string), ExamID: req.ExamID, Score: score, Total: len(questions), Passed: passed, Answers: string(ansJSON)}
+                attempt := ExamAttempt{ID: uuid.New().String(), UserID: userID.(string), ExamID: req.ExamID, Score: score, Total: len(questions), Passed: passed, Answers: string(ansJSON), TimeSpent: req.TimeSpent}
                 DB.Create(&attempt)
 
-                c.JSON(200, gin.H{"score": score, "total": len(questions), "passed": passed})
+                c.JSON(200, gin.H{"score": score, "total": len(questions), "passed": passed, "timeSpent": req.TimeSpent})
                 return
         }
 
@@ -420,7 +475,7 @@ func GetExamHistoryHandler(c *gin.Context) {
                 DB.Where("id = ?", a.ExamID).First(&exam)
                 results = append(results, gin.H{
                         "id": a.ID, "examId": a.ExamID, "examTitle": exam.Title,
-                        "score": a.Score, "total": a.Total, "passed": a.Passed, "createdAt": a.CreatedAt,
+                        "score": a.Score, "total": a.Total, "passed": a.Passed, "timeSpent": a.TimeSpent, "createdAt": a.CreatedAt,
                 })
         }
         c.JSON(200, gin.H{"history": results})
@@ -924,6 +979,57 @@ func AdminStartExamHandler(c *gin.Context) {
         id := c.Param("id")
         DB.Model(&Exam{}).Where("id = ?", id).Update("is_active", true)
         c.JSON(200, gin.H{"message": "Шалгалт идэвхжлээ"})
+}
+
+func AdminGetExamDetailHandler(c *gin.Context) {
+        examID := c.Param("id")
+
+        var exam Exam
+        if DB.Where("id = ?", examID).First(&exam).Error != nil {
+                c.JSON(404, gin.H{"error": "Шалгалт олдсонгүй"})
+                return
+        }
+
+        var attempts []ExamAttempt
+        DB.Where("exam_id = ?", examID).Order("created_at desc").Find(&attempts)
+
+        var students []gin.H
+        var totalScore int
+        for _, a := range attempts {
+                var user User
+                DB.Where("id = ?", a.UserID).First(&user)
+                students = append(students, gin.H{
+                        "userId":    user.ID,
+                        "firstName": user.FirstName,
+                        "lastName":  user.LastName,
+                        "email":     user.Email,
+                        "phone":     user.Phone,
+                        "score":     a.Score,
+                        "total":     a.Total,
+                        "passed":    a.Passed,
+                        "timeSpent": a.TimeSpent,
+                        "createdAt": a.CreatedAt,
+                })
+                totalScore += a.Score
+        }
+
+        averageScore := 0.0
+        if len(attempts) > 0 {
+                averageScore = float64(totalScore) / float64(len(attempts))
+        }
+
+        c.JSON(200, gin.H{
+                "exam":         gin.H{"id": exam.ID, "title": exam.Title, "code": exam.Code, "duration": exam.Duration, "questionCount": exam.QuestionCount, "isActive": exam.IsActive},
+                "students":      students,
+                "totalStudents": len(students),
+                "averageScore":  averageScore,
+        })
+}
+
+func AdminStopExamHandler(c *gin.Context) {
+        id := c.Param("id")
+        DB.Model(&Exam{}).Where("id = ?", id).Update("is_active", false)
+        c.JSON(200, gin.H{"message": "Шалгалт зогссон"})
 }
 
 // Keep backward compatibility for unused old routes

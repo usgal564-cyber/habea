@@ -54,6 +54,7 @@ interface ExamResult {
   score: number;
   total: number;
   passed: boolean;
+  timeSpent?: number;
   createdAt: string;
   exam?: { title: string };
 }
@@ -208,6 +209,9 @@ export default function ProfilePage() {
                   <p className="text-xs text-muted-foreground">Шалгалт</p>
                   {totalExams > 0 && (
                     <p className="text-xs text-brand-600 mt-1">{passedExams} тэнцэв</p>
+                  )}
+                  {totalExams > 0 && examResults.some(r => r.timeSpent) && (
+                    <p className="text-xs text-muted-foreground mt-0.5">Дундаж: {Math.round(examResults.filter(r => r.timeSpent).reduce((sum, r) => sum + (r.timeSpent || 0), 0) / examResults.filter(r => r.timeSpent).length / 60)} мин</p>
                   )}
                 </CardContent>
               </Card>
@@ -423,6 +427,12 @@ export default function ProfilePage() {
                               <p className="text-xs text-muted-foreground">
                                 {new Date(result.createdAt).toLocaleDateString("mn-MN")}
                               </p>
+                              {result.timeSpent !== undefined && result.timeSpent !== null && (
+                                <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
+                                  <Clock className="w-3 h-3" />
+                                  Цаг зарцуулсан: {Math.floor((result.timeSpent || 0) / 60)} мин {(result.timeSpent || 0) % 60} сек
+                                </p>
+                              )}
                             </div>
                           </div>
                           <div className="text-right">

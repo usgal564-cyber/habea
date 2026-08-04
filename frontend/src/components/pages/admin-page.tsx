@@ -9,7 +9,7 @@ import { useAuthStore } from "@/hooks/use-auth";
 import { toast } from "sonner";
 import {
   Shield, Download, CheckCircle, XCircle,
-  Loader2, Database, FileSpreadsheet, ChevronDown, Phone, Mail, User,
+  Loader2, Database, FileSpreadsheet, ChevronDown, Phone, Mail, User, Clock,
 } from "lucide-react";
 
 export default function AdminPage() {
@@ -19,6 +19,53 @@ export default function AdminPage() {
   const [expandedCourseId, setExpandedCourseId] = useState<string | null>(null);
   const [courseEnrollments, setCourseEnrollments] = useState<any[]>([]);
   const [enrollLoading, setEnrollLoading] = useState(false);
+  const [expandedExamId, setExpandedExamId] = useState<string | null>(null);
+  const [examDetailData, setExamDetailData] = useState<any>(null);
+  const [examDetailLoading, setExamDetailLoading] = useState(false);
+
+  const fetchExamDetail = async (examId: string) => {
+    if (expandedExamId === examId) {
+      setExpandedExamId(null);
+      setExamDetailData(null);
+      return;
+    }
+    setExpandedExamId(examId);
+    setExamDetailLoading(true);
+    try {
+      const res = await fetch(`/api/admin/exams/${examId}/results`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      setExamDetailData(data);
+    } catch {
+      setExamDetailData(null);
+      toast.error("Алдаа");
+    } finally {
+      setExamDetailLoading(false);
+    }
+  };
+
+  const handleExportExamPDF = () => {
+    if (!examDetailData) return;
+    const { exam, students, averageScore, totalStudents } = examDetailData;
+    const passedCount = students.filter((s: any) => s.passed).length;
+    const html = `<!DOCTYPE html><html><head><title>${exam.title} - \u04ae\u0440 \u0434\u04af\u043d</title>
+    <style>body{font-family:sans-serif;padding:40px;} table{width:100%;border-collapse:collapse;margin-top:20px;} th,td{border:1px solid #ddd;padding:8px;text-align:center;} th{background:#f5f5f5;} h1{color:#333;} .stats{margin:20px 0;display:flex;gap:30px;} .stat{text-align:center;} .stat-val{font-size:24px;font-weight:bold;}</style></head>
+    <body><h1>${exam.title}</h1><p>\u041a\u043e\u0434: ${exam.code} | \u041e\u0433\u043d\u043e\u043e: ${new Date().toLocaleDateString('mn-MN')}</p>
+    <div class="stats"><div class="stat"><div class="stat-val">${totalStudents}</div><div>\u041d\u0438\u0439\u0442 \u0441\u0443\u0440\u0430\u0433\u0447</div></div><div class="stat"><div class="stat-val">${averageScore.toFixed(1)}%</div><div>\u0414\u0443\u043d\u0434\u0430\u0436 \u043e\u043d\u043e\u043e</div></div><div class="stat"><div class="stat-val">${passedCount}/${totalStudents}</div><div>\u0422\u044d\u043d\u0446\u0441\u044d\u043d</div></div></div>
+    <table><thead><tr><th>#</th><th>\u041e\u0432\u043e\u0433</th><th>\u041d\u044d\u0440</th><th>\u0418\u043c\u044d\u0439\u043b</th><th>\u0423\u0442\u0430\u0441</th><th>\u041e\u043d\u043e\u043e</th><th>\u0422\u04e9\u043b\u04e9\u0432</th><th>\u0426\u0430\u0433</th></tr></thead><tbody>
+    ${students.map((s: any, i: number) => {
+      const mins = Math.floor((s.timeSpent || 0) / 60);
+      const secs = (s.timeSpent || 0) % 60;
+      return `<tr><td>${i+1}</td><td>${s.lastName||''}</td><td>${s.firstName||''}</td><td>${s.email||''}</td><td>${s.phone||''}</td><td>${s.score}/${s.total}</td><td>${s.passed?'\u0422\u044d\u043d\u0446\u044d\u0432':'\u0410\u043c\u0436\u0438\u043b\u0442\u0433\u04af\u0439'}</td><td>${mins}\u043c\u0438\u043d ${secs}\u0441\u0435\u043a</td></tr>`;
+    }).join('')}
+    </tbody></table>
+    <p style="margin-top:20px;color:#999;font-size:12px;">\u0425\u0410\u0411\u042d\u0410 - \u0428\u0430\u043b\u0433\u0430\u043b\u0442\u044b\u043d \u04af\u0440 \u0434\u04af\u043d | \u0425\u044d\u0432\u043b\u044d\u0433\u0434\u0441\u044d\u043d: ${new Date().toLocaleString('mn-MN')}</p>
+    <script>window.onload=function(){window.print();}</script>
+    </body></html>`;
+    const win = window.open('', '_blank');
+    if (win) { win.document.write(html); win.document.close(); }
+  };
 
   const fetchCourseEnrollments = async (courseId: string) => {
     if (expandedCourseId === courseId) {
@@ -342,7 +389,7 @@ export default function AdminPage() {
                 <CardHeader className="bg-gradient-to-r from-orange-50 to-amber-50 rounded-t-xl border-b pb-4">
                   <div>
                     <CardTitle className="text-lg">Шалгалтын үр дүн</CardTitle>
-                    <CardDescription>Нийт {totalExamAttempts} өгөлт</CardDescription>
+                    <CardDescription>Шалгалт дээр дарж дэлгэрэнгүй үр дүн харна уу</CardDescription>
                   </div>
                 </CardHeader>
                 <CardContent className="p-0">
@@ -356,35 +403,146 @@ export default function AdminPage() {
                       <Table>
                         <TableHeader>
                           <TableRow className="hover:bg-transparent">
-                            <TableHead className="font-semibold">Оюутан</TableHead>
                             <TableHead className="font-semibold">Шалгалт</TableHead>
-                            <TableHead className="font-semibold">Код</TableHead>
-                            <TableHead className="font-semibold text-center">Оноо</TableHead>
-                            <TableHead className="font-semibold text-center">Дүн</TableHead>
-                            <TableHead className="font-semibold text-center">Огноо</TableHead>
+                            <TableHead className="font-semibold text-center">Код</TableHead>
+                            <TableHead className="font-semibold text-center">Хугацаа</TableHead>
+                            <TableHead className="font-semibold text-center">Оролдлогууд</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {dashboard.recentExamResults.map((r: any, i: number) => (
-                            <TableRow key={i}>
-                              <TableCell className="font-medium">{r.userName}</TableCell>
-                              <TableCell className="text-muted-foreground">{r.examTitle}</TableCell>
-                              <TableCell>
-                                <Badge variant="outline" className="font-mono text-xs">{r.examCode}</Badge>
-                              </TableCell>
-                              <TableCell className="text-center font-medium">{r.score}/{r.total}</TableCell>
-                              <TableCell className="text-center">
-                                {r.passed ? (
-                                  <CheckCircle className="w-5 h-5 text-green-600 mx-auto" />
-                                ) : (
-                                  <XCircle className="w-5 h-5 text-red-500 mx-auto" />
+                          {(() => {
+                            const examMap = new Map<string, any>();
+                            (dashboard.recentExamResults || []).forEach((r: any) => {
+                              const key = r.examId || r.examTitle;
+                              if (!examMap.has(key)) {
+                                examMap.set(key, { id: r.examId, title: r.examTitle, code: r.examCode, attempts: [] });
+                              }
+                              examMap.get(key).attempts.push(r);
+                            });
+                            return Array.from(examMap.values()).map((exam: any) => (
+                              <React.Fragment key={exam.id}>
+                                <TableRow
+                                  className="cursor-pointer hover:bg-orange-50/60 transition-colors"
+                                  onClick={() => fetchExamDetail(exam.id)}
+                                >
+                                  <TableCell className="font-medium">{exam.title}</TableCell>
+                                  <TableCell className="text-center">
+                                    <Badge variant="outline" className="font-mono text-xs">{exam.code || "—"}</Badge>
+                                  </TableCell>
+                                  <TableCell className="text-center text-muted-foreground">—</TableCell>
+                                  <TableCell className="text-center">
+                                    <div className="flex items-center justify-center gap-2">
+                                      <Badge className="bg-orange-100 text-orange-800 font-semibold">{exam.attempts.length} хүн</Badge>
+                                      <ChevronDown
+                                        className={`w-4 h-4 text-gray-400 transition-transform duration-200 ${expandedExamId === exam.id ? "rotate-180" : ""}`}
+                                      />
+                                    </div>
+                                  </TableCell>
+                                </TableRow>
+                                {expandedExamId === exam.id && (
+                                  <TableRow>
+                                    <TableCell colSpan={4} className="p-0">
+                                      <div className="bg-orange-50/40 border-t border-orange-100">
+                                        {examDetailLoading ? (
+                                          <div className="flex items-center justify-center py-8">
+                                            <Loader2 className="w-5 h-5 text-brand-500 animate-spin mr-2" />
+                                            <span className="text-sm text-muted-foreground">Ачааллаж байна...</span>
+                                          </div>
+                                        ) : !examDetailData || !examDetailData.students || examDetailData.students.length === 0 ? (
+                                          <div className="text-center py-8">
+                                            <p className="text-muted-foreground text-sm">Оролдлогын үр дүн байхгүй</p>
+                                          </div>
+                                        ) : (
+                                          <div className="p-4">
+                                            {/* Stats bar + PDF export */}
+                                            <div className="flex items-center justify-between mb-4">
+                                              <div className="flex items-center gap-4 flex-wrap">
+                                                <div className="text-center">
+                                                  <p className="text-lg font-bold text-orange-700">{examDetailData.averageScore.toFixed(1)}%</p>
+                                                  <p className="text-xs text-muted-foreground">Дундаж оноо</p>
+                                                </div>
+                                                <div className="text-center">
+                                                  <p className="text-lg font-bold text-gray-900">{examDetailData.totalStudents}</p>
+                                                  <p className="text-xs text-muted-foreground">Нийт сурагч</p>
+                                                </div>
+                                                <div className="text-center">
+                                                  <p className="text-lg font-bold text-green-700">{examDetailData.students.filter((s: any) => s.passed).length}</p>
+                                                  <p className="text-xs text-muted-foreground">Тэнцсэн</p>
+                                                </div>
+                                                <div className="text-center">
+                                                  <p className="text-lg font-bold text-brand-600">
+                                                    {examDetailData.totalStudents > 0
+                                                      ? Math.round((examDetailData.students.filter((s: any) => s.passed).length / examDetailData.totalStudents) * 100)
+                                                      : 0}%
+                                                  </p>
+                                                  <p className="text-xs text-muted-foreground">Тэнцэлтийн хувь</p>
+                                                </div>
+                                              </div>
+                                              <button
+                                                onClick={(ev) => { ev.stopPropagation(); handleExportExamPDF(); }}
+                                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-orange-200 bg-white text-orange-700 text-sm font-medium hover:bg-orange-50 transition-colors shrink-0"
+                                              >
+                                                <Download className="w-4 h-4" />
+                                                PDF
+                                              </button>
+                                            </div>
+                                            {/* Student list */}
+                                            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                                              {examDetailData.students.map((s: any, si: number) => {
+                                                const mins = Math.floor((s.timeSpent || 0) / 60);
+                                                const secs = (s.timeSpent || 0) % 60;
+                                                return (
+                                                  <motion.div
+                                                    key={si}
+                                                    initial={{ opacity: 0, y: 8 }}
+                                                    animate={{ opacity: 1, y: 0 }}
+                                                    transition={{ delay: si * 0.04 }}
+                                                    className="bg-white rounded-xl border border-orange-100 p-4 hover:shadow-sm transition-shadow"
+                                                  >
+                                                    <div className="flex items-start gap-3">
+                                                      <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${s.passed ? 'bg-green-100' : 'bg-red-100'}`}>
+                                                        {s.passed ? <CheckCircle className="w-4 h-4 text-green-600" /> : <XCircle className="w-4 h-4 text-red-500" />}
+                                                      </div>
+                                                      <div className="min-w-0 flex-1">
+                                                        <p className="font-semibold text-sm text-gray-900 truncate">
+                                                          {s.lastName || ""} {s.firstName || ""}
+                                                        </p>
+                                                        <div className="mt-2 space-y-1.5">
+                                                          <div className="flex items-center justify-between">
+                                                            <span className="text-xs text-gray-500">Оноо</span>
+                                                            <span className="text-sm font-bold text-gray-900">{s.score}/{s.total}</span>
+                                                          </div>
+                                                          <div className="flex items-center justify-between">
+                                                            <span className="text-xs text-gray-500 flex items-center gap-1"><Clock className="w-3 h-3" /> Цаг</span>
+                                                            <span className="text-sm text-gray-700">{mins} мин {secs} сек</span>
+                                                          </div>
+                                                          <div className="flex items-center justify-between">
+                                                            <span className="text-xs text-gray-500">Огноо</span>
+                                                            <span className="text-xs text-gray-500">{s.createdAt ? new Date(s.createdAt).toLocaleDateString("mn-MN") : "—"}</span>
+                                                          </div>
+                                                        </div>
+                                                        <div className="mt-2 pt-2 border-t border-gray-50">
+                                                          {s.passed ? (
+                                                            <Badge className="bg-green-100 text-green-700 text-[10px] px-1.5 py-0">Тэнцэв</Badge>
+                                                          ) : (
+                                                            <Badge className="bg-red-100 text-red-700 text-[10px] px-1.5 py-0">Амжилтгүй</Badge>
+                                                          )}
+                                                        </div>
+                                                      </div>
+                                                    </div>
+                                                  </motion.div>
+                                                );
+                                              })}
+                                            </div>
+                                          </div>
+                                        )}
+                                      </div>
+                                    </TableCell>
+                                  </TableRow>
                                 )}
-                              </TableCell>
-                              <TableCell className="text-center text-sm text-muted-foreground">
-                                {new Date(r.createdAt).toLocaleDateString("mn-MN")}
-                              </TableCell>
-                            </TableRow>
-                          ))}
+                              </React.Fragment>
+                            ));
+                          })()}
                         </TableBody>
                       </Table>
                     </div>

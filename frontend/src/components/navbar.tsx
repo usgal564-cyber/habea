@@ -57,8 +57,8 @@ const servicesGroup: NavGroup = {
 };
 
 const specialItems: NavItem[] = [
-  { id: "profile", label: "Профайл", icon: <User className="w-4 h-4" />, authOnly: true },
   { id: "admin", label: "Админ", icon: <Shield className="w-4 h-4" />, adminOnly: true },
+  { id: "profile", label: "Профайл", icon: <User className="w-4 h-4" />, authOnly: true },
 ];
 
 function DropdownMenu({

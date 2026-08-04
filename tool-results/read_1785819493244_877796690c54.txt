@@ -816,95 +816,118 @@
    816→        c.JSON(200, gin.H{"courses": result})
    817→}
    818→
-   819→func AdminCreateCourseHandler(c *gin.Context) {
-   820→        var req AdminCreateCourseRequest
-   821→        if err := c.ShouldBindJSON(&req); err != nil {
-   822→                c.JSON(400, gin.H{"error": err.Error()})
-   823→                return
-   824→        }
-   825→        max := 30
-   826→        if req.MaxStudents != nil { max = *req.MaxStudents }
-   827→        course := Course{ID: uuid.New().String(), Title: req.Title, Category: req.Category, Description: req.Description, Duration: req.Duration, Price: req.Price, Schedule: req.Schedule, Location: req.Location, StartDate: req.StartDate, MaxStudents: max}
-   828→        DB.Create(&course)
-   829→        c.JSON(201, gin.H{"course": course})
-   830→}
-   831→
-   832→func AdminGetQuizzesHandler(c *gin.Context) {
-   833→        var quizzes []Quiz
-   834→        DB.Order("created_at desc").Find(&quizzes)
-   835→        c.JSON(200, gin.H{"quizzes": quizzes})
-   836→}
-   837→
-   838→func AdminCreateQuizHandler(c *gin.Context) {
-   839→        var req AdminCreateQuizRequest
-   840→        if err := c.ShouldBindJSON(&req); err != nil {
-   841→                c.JSON(400, gin.H{"error": err.Error()})
-   842→                return
-   843→        }
-   844→        quiz := Quiz{ID: uuid.New().String(), Title: req.Title, Description: req.Description, Category: req.Category, QuestionCount: len(req.Questions)}
-   845→        DB.Create(&quiz)
-   846→        for i, q := range req.Questions {
-   847→                qq := QuizQuestion{ID: uuid.New().String(), QuizID: quiz.ID, Question: q.Question, OptionA: q.OptionA, OptionB: q.OptionB, OptionC: q.OptionC, OptionD: q.OptionD, Correct: q.Correct, Index: i}
-   848→                DB.Create(&qq)
-   849→        }
-   850→        c.JSON(201, gin.H{"quiz": quiz})
-   851→}
-   852→
-   853→func AdminGetStudentsHandler(c *gin.Context) {
-   854→        var users []User
-   855→        DB.Where("role = ?", "USER").Order("created_at desc").Find(&users)
-   856→        var result []gin.H
-   857→        for _, u := range users {
-   858→                var enrollCount int64
-   859→                DB.Model(&Enrollment{}).Where("user_id = ?", u.ID).Count(&enrollCount)
-   860→                var quizCount int64
-   861→                DB.Model(&QuizAttempt{}).Where("user_id = ?", u.ID).Count(&quizCount)
-   862→                var examCount int64
-   863→                DB.Model(&ExamAttempt{}).Where("user_id = ?", u.ID).Count(&examCount)
-   864→                result = append(result, gin.H{"userId": u.ID, "name": u.FirstName + " " + u.LastName, "email": u.Email, "phone": u.Phone, "enrollments": enrollCount, "quizAttempts": quizCount, "examAttempts": examCount, "createdAt": u.CreatedAt})
-   865→        }
-   866→        c.JSON(200, gin.H{"students": result})
-   867→}
-   868→
-   869→func AdminGetFeedbackHandler(c *gin.Context) {
-   870→        var feedbacks []Feedback
-   871→        DB.Order("created_at desc").Find(&feedbacks)
-   872→        c.JSON(200, gin.H{"feedback": feedbacks})
-   873→}
-   874→
-   875→func AdminGetSurveyResultsHandler(c *gin.Context) {
-   876→        GetSurveyResultsHandler(c)
-   877→}
-   878→
-   879→func AdminExportHandler(c *gin.Context) {
-   880→        var users []User
-   881→        DB.Find(&users)
-   882→        var enrollments []Enrollment
-   883→        DB.Find(&enrollments)
-   884→        var quizAttempts []QuizAttempt
-   885→        DB.Find(&quizAttempts)
-   886→        var examAttempts []ExamAttempt
-   887→        DB.Find(&examAttempts)
-   888→        var feedbacks []Feedback
-   889→        DB.Find(&feedbacks)
-   890→        var surveys []SurveyResponse
-   891→        DB.Find(&surveys)
-   892→
-   893→        c.JSON(200, gin.H{
-   894→                "users": users, "enrollments": enrollments, "quizAttempts": quizAttempts,
-   895→                "examAttempts": examAttempts, "feedback": feedbacks, "surveys": surveys,
-   896→                "exportedAt": time.Now().Format(time.RFC3339),
-   897→        })
-   898→}
-   899→
-   900→func AdminStartExamHandler(c *gin.Context) {
-   901→        id := c.Param("id")
-   902→        DB.Model(&Exam{}).Where("id = ?", id).Update("is_active", true)
-   903→        c.JSON(200, gin.H{"message": "Шалгалт идэвхжлээ"})
-   904→}
-   905→
-   906→// Keep backward compatibility for unused old routes
-   907→func SeedQuizzesHandler(c *gin.Context) {
-   908→        c.JSON(200, gin.H{"message": "Quizzes already seeded from database"})
-   909→}
-   910→
+   819→func AdminGetCourseEnrollmentsHandler(c *gin.Context) {
+   820→        courseID := c.Param("id")
+   821→        var enrollments []Enrollment
+   822→        DB.Where("course_id = ?", courseID).Order("created_at desc").Find(&enrollments)
+   823→
+   824→        var result []gin.H
+   825→        for _, e := range enrollments {
+   826→                var user User
+   827→                DB.Where("id = ?", e.UserID).First(&user)
+   828→                result = append(result, gin.H{
+   829→                        "enrollmentId": e.ID,
+   830→                        "userId":       user.ID,
+   831→                        "firstName":    user.FirstName,
+   832→                        "lastName":     user.LastName,
+   833→                        "email":        user.Email,
+   834→                        "phone":        user.Phone,
+   835→                        "paid":         e.Paid,
+   836→                        "createdAt":    e.CreatedAt,
+   837→                })
+   838→        }
+   839→        c.JSON(200, gin.H{"enrollments": result, "total": len(result)})
+   840→}
+   841→
+   842→func AdminCreateCourseHandler(c *gin.Context) {
+   843→        var req AdminCreateCourseRequest
+   844→        if err := c.ShouldBindJSON(&req); err != nil {
+   845→                c.JSON(400, gin.H{"error": err.Error()})
+   846→                return
+   847→        }
+   848→        max := 30
+   849→        if req.MaxStudents != nil { max = *req.MaxStudents }
+   850→        course := Course{ID: uuid.New().String(), Title: req.Title, Category: req.Category, Description: req.Description, Duration: req.Duration, Price: req.Price, Schedule: req.Schedule, Location: req.Location, StartDate: req.StartDate, MaxStudents: max}
+   851→        DB.Create(&course)
+   852→        c.JSON(201, gin.H{"course": course})
+   853→}
+   854→
+   855→func AdminGetQuizzesHandler(c *gin.Context) {
+   856→        var quizzes []Quiz
+   857→        DB.Order("created_at desc").Find(&quizzes)
+   858→        c.JSON(200, gin.H{"quizzes": quizzes})
+   859→}
+   860→
+   861→func AdminCreateQuizHandler(c *gin.Context) {
+   862→        var req AdminCreateQuizRequest
+   863→        if err := c.ShouldBindJSON(&req); err != nil {
+   864→                c.JSON(400, gin.H{"error": err.Error()})
+   865→                return
+   866→        }
+   867→        quiz := Quiz{ID: uuid.New().String(), Title: req.Title, Description: req.Description, Category: req.Category, QuestionCount: len(req.Questions)}
+   868→        DB.Create(&quiz)
+   869→        for i, q := range req.Questions {
+   870→                qq := QuizQuestion{ID: uuid.New().String(), QuizID: quiz.ID, Question: q.Question, OptionA: q.OptionA, OptionB: q.OptionB, OptionC: q.OptionC, OptionD: q.OptionD, Correct: q.Correct, Index: i}
+   871→                DB.Create(&qq)
+   872→        }
+   873→        c.JSON(201, gin.H{"quiz": quiz})
+   874→}
+   875→
+   876→func AdminGetStudentsHandler(c *gin.Context) {
+   877→        var users []User
+   878→        DB.Where("role = ?", "USER").Order("created_at desc").Find(&users)
+   879→        var result []gin.H
+   880→        for _, u := range users {
+   881→                var enrollCount int64
+   882→                DB.Model(&Enrollment{}).Where("user_id = ?", u.ID).Count(&enrollCount)
+   883→                var quizCount int64
+   884→                DB.Model(&QuizAttempt{}).Where("user_id = ?", u.ID).Count(&quizCount)
+   885→                var examCount int64
+   886→                DB.Model(&ExamAttempt{}).Where("user_id = ?", u.ID).Count(&examCount)
+   887→                result = append(result, gin.H{"userId": u.ID, "name": u.FirstName + " " + u.LastName, "email": u.Email, "phone": u.Phone, "enrollments": enrollCount, "quizAttempts": quizCount, "examAttempts": examCount, "createdAt": u.CreatedAt})
+   888→        }
+   889→        c.JSON(200, gin.H{"students": result})
+   890→}
+   891→
+   892→func AdminGetFeedbackHandler(c *gin.Context) {
+   893→        var feedbacks []Feedback
+   894→        DB.Order("created_at desc").Find(&feedbacks)
+   895→        c.JSON(200, gin.H{"feedback": feedbacks})
+   896→}
+   897→
+   898→func AdminGetSurveyResultsHandler(c *gin.Context) {
+   899→        GetSurveyResultsHandler(c)
+   900→}
+   901→
+   902→func AdminExportHandler(c *gin.Context) {
+   903→        var users []User
+   904→        DB.Find(&users)
+   905→        var enrollments []Enrollment
+   906→        DB.Find(&enrollments)
+   907→        var quizAttempts []QuizAttempt
+   908→        DB.Find(&quizAttempts)
+   909→        var examAttempts []ExamAttempt
+   910→        DB.Find(&examAttempts)
+   911→        var feedbacks []Feedback
+   912→        DB.Find(&feedbacks)
+   913→        var surveys []SurveyResponse
+   914→        DB.Find(&surveys)
+   915→
+   916→        c.JSON(200, gin.H{
+   917→                "users": users, "enrollments": enrollments, "quizAttempts": quizAttempts,
+   918→                "examAttempts": examAttempts, "feedback": feedbacks, "surveys": surveys,
+   919→                "exportedAt": time.Now().Format(time.RFC3339),
+   920→        })
+   921→}
+   922→
+   923→func AdminStartExamHandler(c *gin.Context) {
+   924→        id := c.Param("id")
+   925→        DB.Model(&Exam{}).Where("id = ?", id).Update("is_active", true)
+   926→        c.JSON(200, gin.H{"message": "Шалгалт идэвхжлээ"})
+   927→}
+   928→
+   929→// Keep backward compatibility for unused old routes
+   930→func SeedQuizzesHandler(c *gin.Context) {
+   931→        c.JSON(200, gin.H{"message": "Quizzes already seeded from database"})
+   932→}
+   933→

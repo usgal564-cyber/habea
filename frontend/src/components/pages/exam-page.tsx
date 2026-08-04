@@ -51,10 +51,12 @@ export default function ExamPage() {
   const [answers, setAnswers] = useState<Record<string, number>>({});
   const [currentPage, setCurrentPage] = useState(1);
   const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<{ score: number; total: number; passed: boolean } | null>(null);
+  const [result, setResult] = useState<{ score: number; total: number; passed: boolean; timeSpent: number } | null>(null);
   const [timeLeft, setTimeLeft] = useState(0);
   const [timerActive, setTimerActive] = useState(false);
   const [examHistory, setExamHistory] = useState<any[]>([]);
+  const [elapsedTime, setElapsedTime] = useState(0);
+  const examStartTimeRef = useRef<number>(0);
   const handleSubmitRef = useRef<() => void>(() => {});
 
   // Admin: Create from template
@@ -81,6 +83,7 @@ export default function ExamPage() {
   const totalPages = Math.ceil(safeQuestions.length / QUESTIONS_PER_PAGE);
   const currentQuestions = safeQuestions.slice((currentPage - 1) * QUESTIONS_PER_PAGE, currentPage * QUESTIONS_PER_PAGE);
 
+  // Countdown timer (time left)
   useEffect(() => {
     if (!timerActive || timeLeft <= 0) return;
     const interval = setInterval(() => {
@@ -91,6 +94,15 @@ export default function ExamPage() {
     }, 1000);
     return () => clearInterval(interval);
   }, [timerActive, timeLeft]);
+
+  // Elapsed timer (counting up)
+  useEffect(() => {
+    if (!timerActive) return;
+    const interval = setInterval(() => {
+      setElapsedTime(Math.floor((Date.now() - examStartTimeRef.current) / 1000));
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [timerActive]);
 
   useEffect(() => {
     if (token) {
@@ -135,6 +147,8 @@ export default function ExamPage() {
       const q = data.questions || [];
       setQuestions(q);
       setTimeLeft((q.length > 0 ? examInfo.duration : 30) * 60);
+      examStartTimeRef.current = Date.now();
+      setElapsedTime(0);
       setTimerActive(true);
       setState("taking");
     } catch { toast.error("Асуулт ачааллахад алдаа"); }
@@ -145,11 +159,12 @@ export default function ExamPage() {
     if (!examInfo || !token || !(questions || []).length) return;
     setTimerActive(false); setLoading(true);
     try {
+      const timeSpent = Math.floor((Date.now() - examStartTimeRef.current) / 1000);
       const answerArray = (questions || []).map((q) => answers[q.id] ?? -1);
-      const res = await fetch("/api/exam", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }, body: JSON.stringify({ action: "submit", examId: examInfo.id, answers: answerArray }) });
+      const res = await fetch("/api/exam", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }, body: JSON.stringify({ action: "submit", examId: examInfo.id, answers: answerArray, timeSpent }) });
       const data = await res.json();
       if (!res.ok) { toast.error(data.error); return; }
-      setResult({ score: data.score, total: data.total, passed: data.passed });
+      setResult({ score: data.score, total: data.total, passed: data.passed, timeSpent });
       setState("result");
       fetch("/api/exam/history", { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()).then(d => setExamHistory(d.history || [])).catch(() => {});
     } catch { toast.error("Алдаа"); }
@@ -158,9 +173,10 @@ export default function ExamPage() {
 
   handleSubmitRef.current = handleSubmitExam;
 
-  const resetExam = () => { setState("enter-code"); setCode(""); setExamInfo(null); setQuestions([]); setAnswers({}); setCurrentPage(1); setResult(null); setTimeLeft(0); setTimerActive(false); };
+  const resetExam = () => { setState("enter-code"); setCode(""); setExamInfo(null); setQuestions([]); setAnswers({}); setCurrentPage(1); setResult(null); setTimeLeft(0); setTimerActive(false); setElapsedTime(0); examStartTimeRef.current = 0; };
 
   const formatTime = (s: number) => { const m = Math.floor(s / 60); return `${m.toString().padStart(2, "0")}:${(s % 60).toString().padStart(2, "0")}`; };
+  const formatTimeSpent = (s: number) => { const mins = Math.floor(s / 60); const secs = s % 60; return `${mins} мин ${secs} сек`; };
   const answeredCount = Object.keys(answers).length;
 
   // Admin: Create exam/quiz from template
@@ -172,7 +188,7 @@ export default function ExamPage() {
       const body = isQuiz ? {
         title: template.title,
         description: template.description,
-        category: template.category || "",
+        category: "general",
         questions: template.questions.map(q => ({
           question: q.question,
           optionA: q.optionA,
@@ -523,6 +539,9 @@ export default function ExamPage() {
                               </Badge>
                               <span className="text-sm font-mono font-bold tracking-wider text-brand-700 bg-brand-100 px-2 py-1 rounded">{e.code}</span>
                               <Button size="sm" variant="ghost" onClick={() => copyCode(e.code)}><Copy className="w-3.5 h-3.5" /></Button>
+                              {e.isActive && (
+                                <Button size="sm" variant="ghost" className="text-red-500 hover:text-red-700 hover:bg-red-50" onClick={async (ev) => { ev.stopPropagation(); try { const res = await fetch(`/api/admin/exams/${e.id}/stop`, { method: "PUT", headers: { Authorization: `Bearer ${token}` } }); if (res.ok) { toast.success("Шалгалт зогсов"); fetchAdminItems(); } else { toast.error("Алдаа"); } } catch { toast.error("Алдаа"); } }}><XCircle className="w-3.5 h-3.5" /> Зогсоох</Button>
+                              )}
                             </div>
                           </div>
                         ))}
@@ -647,6 +666,7 @@ export default function ExamPage() {
                   <div className="flex items-center justify-between mb-2">
                     <h2 className="text-lg font-semibold text-brand-900">{examInfo?.title}</h2>
                     <div className="flex items-center gap-3">
+                      <Badge variant="secondary" className="text-sm bg-brand-50 text-brand-700 border-brand-200"><Clock className="w-4 h-4 mr-1" />{formatTime(elapsedTime)}</Badge>
                       <Badge variant={timeLeft < 300 ? "destructive" : "secondary"} className="text-sm"><Clock className="w-4 h-4 mr-1" />{formatTime(timeLeft)}</Badge>
                       <span className="text-sm text-muted-foreground">Хуудас {currentPage}/{totalPages}</span>
                     </div>
@@ -706,7 +726,8 @@ export default function ExamPage() {
                     {result.passed ? <CheckCircle className="w-12 h-12 text-green-600" /> : <XCircle className="w-12 h-12 text-red-500" />}
                   </motion.div>
                   <h2 className="text-2xl font-bold mb-2">{result.passed ? "Тэнсэв!" : "Амжилтгүй"}</h2>
-                  <p className="text-muted-foreground mb-6">{result.passed ? "Баяр хүргэж байна! Та шалгалтыг тэнцэв." : "Дахин оролдохыг зөвлөж байна."}</p>
+                  <p className="text-muted-foreground mb-2">{result.passed ? "Баяр хүргэж байна! Та шалгалтыг тэнцэв." : "Дахин оролдохыг зөвлөж байна."}</p>
+                  <p className="text-sm text-muted-foreground mb-6 flex items-center justify-center gap-1.5"><Clock className="w-4 h-4" /> Цаг зарцуулсан: {formatTimeSpent(result.timeSpent)}</p>
                   <div className="flex justify-center gap-8 mb-8">
                     <div><p className="text-3xl font-bold text-brand-600">{result.score}</p><p className="text-sm text-muted-foreground">Зөв</p></div>
                     <div><p className="text-3xl font-bold text-red-500">{result.total - result.score}</p><p className="text-sm text-muted-foreground">Буруу</p></div>
