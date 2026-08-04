@@ -98,7 +98,9 @@ func main() {
                 adminGroup.GET("/exam-attempts", AdminGetExamAttemptsHandler)
                 adminGroup.GET("/exam-attempts/export", AdminExportExamAttemptsHandler)
                 adminGroup.GET("/exams/:id/results", AdminGetExamDetailHandler)
+                adminGroup.GET("/exams/:id/questions", AdminGetExamQuestionsHandler)
                 adminGroup.PUT("/exams/:id/stop", AdminStopExamHandler)
+                adminGroup.DELETE("/exams/:id", AdminDeleteExamHandler)
 
                 // Courses management
                 adminGroup.GET("/courses", AdminGetCoursesHandler)

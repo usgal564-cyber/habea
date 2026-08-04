@@ -108,6 +108,7 @@ type CoursePaymentRequest struct {
 type AdminCreateExamRequest struct {
         Title     string              `json:"title" binding:"required"`
         Duration  int                 `json:"duration"`
+        EndDate   *string            `json:"endDate"`
         Questions []ExamQuestionInput `json:"questions" binding:"required"`
 }
 
@@ -781,6 +782,7 @@ func AdminGetExamsHandler(c *gin.Context) {
                         "id": e.ID, "title": e.Title, "code": e.Code,
                         "duration": e.Duration, "questionCount": e.QuestionCount,
                         "isActive": e.IsActive, "attempts": cnt, "createdAt": e.CreatedAt,
+                        "endDate": e.EndDate,
                 })
         }
         c.JSON(200, gin.H{"exams": result})
@@ -805,7 +807,15 @@ func AdminCreateExamHandler(c *gin.Context) {
                 duration = 30
         }
 
-        exam := Exam{ID: uuid.New().String(), Title: req.Title, Code: code, Duration: duration, QuestionCount: len(req.Questions), IsActive: true}
+        var endDate *time.Time
+        if req.EndDate != nil && *req.EndDate != "" {
+                t, err := time.Parse("2006-01-02", *req.EndDate)
+                if err == nil {
+                        endDate = &t
+                }
+        }
+
+        exam := Exam{ID: uuid.New().String(), Title: req.Title, Code: code, Duration: duration, QuestionCount: len(req.Questions), IsActive: true, EndDate: endDate}
         if err := DB.Create(&exam).Error; err != nil {
                 c.JSON(500, gin.H{"error": "Failed to create exam"})
                 return
@@ -817,7 +827,7 @@ func AdminCreateExamHandler(c *gin.Context) {
         }
 
         log.Printf("Exam created: %s (code: %s, questions: %d)", req.Title, code, len(req.Questions))
-        c.JSON(201, gin.H{"exam": gin.H{"id": exam.ID, "title": exam.Title, "code": code, "duration": duration, "questionCount": len(req.Questions), "isActive": true}})
+        c.JSON(201, gin.H{"exam": gin.H{"id": exam.ID, "title": exam.Title, "code": code, "duration": duration, "questionCount": len(req.Questions), "isActive": true, "endDate": endDate}})
 }
 
 func AdminGetExamAttemptsHandler(c *gin.Context) {
@@ -1019,10 +1029,29 @@ func AdminGetExamDetailHandler(c *gin.Context) {
         }
 
         c.JSON(200, gin.H{
-                "exam":         gin.H{"id": exam.ID, "title": exam.Title, "code": exam.Code, "duration": exam.Duration, "questionCount": exam.QuestionCount, "isActive": exam.IsActive},
+                "exam":         gin.H{"id": exam.ID, "title": exam.Title, "code": exam.Code, "duration": exam.Duration, "questionCount": exam.QuestionCount, "isActive": exam.IsActive, "endDate": exam.EndDate},
                 "students":      students,
                 "totalStudents": len(students),
                 "averageScore":  averageScore,
+        })
+}
+
+func AdminGetExamQuestionsHandler(c *gin.Context) {
+        id := c.Param("id")
+        var exam Exam
+        if err := DB.Where("id = ?", id).First(&exam).Error; err != nil {
+                c.JSON(404, gin.H{"error": "Шалгалт олдсонгүй"})
+                return
+        }
+        var questions []ExamQuestion
+        DB.Where("exam_id = ?", id).Order("index asc").Find(&questions)
+        c.JSON(200, gin.H{
+                "exam": gin.H{
+                        "id": exam.ID, "title": exam.Title, "code": exam.Code,
+                        "duration": exam.Duration, "questionCount": exam.QuestionCount,
+                        "isActive": exam.IsActive, "createdAt": exam.CreatedAt, "endDate": exam.EndDate,
+                },
+                "questions": questions,
         })
 }
 
@@ -1030,6 +1059,14 @@ func AdminStopExamHandler(c *gin.Context) {
         id := c.Param("id")
         DB.Model(&Exam{}).Where("id = ?", id).Update("is_active", false)
         c.JSON(200, gin.H{"message": "Шалгалт зогссон"})
+}
+
+func AdminDeleteExamHandler(c *gin.Context) {
+        id := c.Param("id")
+        DB.Where("exam_id = ?", id).Delete(&ExamQuestion{})
+        DB.Where("exam_id = ?", id).Delete(&ExamAttempt{})
+        DB.Where("id = ?", id).Delete(&Exam{})
+        c.JSON(200, gin.H{"message": "Шалгалт устгагдлаа"})
 }
 
 // Keep backward compatibility for unused old routes

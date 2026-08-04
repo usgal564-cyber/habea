@@ -1,0 +1,748 @@
+     1→
+     2→import { useState, useEffect, useRef, useCallback } from "react";
+     3→import { motion, AnimatePresence } from "framer-motion";
+     4→import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+     5→import { Button } from "@/components/ui/button";
+     6→import { Input } from "@/components/ui/input";
+     7→import { Label } from "@/components/ui/label";
+     8→import { Textarea } from "@/components/ui/textarea";
+     9→import { Badge } from "@/components/ui/badge";
+    10→import { Progress } from "@/components/ui/progress";
+    11→import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+    12→import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+    13→import { useAuthStore } from "@/hooks/use-auth";
+    14→import { toast } from "sonner";
+    15→import {
+    16→  Shield, Lock, Clock, ChevronRight, ChevronLeft, CheckCircle, XCircle,
+    17→  ArrowLeft, Loader2, Plus, Trash2, Copy, Download, Eye, AlertTriangle,
+    18→  FileEdit, Award, Scale, Flame, Heart, ClipboardList, Zap,
+    19→} from "lucide-react";
+    20→import { examTemplates, type ExamTemplate } from "@/data/exam-templates";
+    21→
+    22→interface Question {
+    23→  id: string;
+    24→  questionText: string;
+    25→  optionA: string;
+    26→  optionB: string;
+    27→  optionC: string;
+    28→  optionD: string;
+    29→}
+    30→
+    31→type ExamState = "enter-code" | "exam-info" | "taking" | "result";
+    32→
+    33→const QUESTIONS_PER_PAGE = 10;
+    34→
+    35→const iconMap: Record<string, React.ReactNode> = {
+    36→  shield: <Shield className="w-6 h-6" />,
+    37→  award: <Award className="w-6 h-6" />,
+    38→  scale: <Scale className="w-6 h-6" />,
+    39→  flame: <Flame className="w-6 h-6" />,
+    40→  heart: <Heart className="w-6 h-6" />,
+    41→};
+    42→
+    43→export default function ExamPage() {
+    44→  const { user, token } = useAuthStore();
+    45→  const isAdmin = user && (user.role === "ADMIN" || user.role === "MANAGER" || user.role === "TEACHER");
+    46→
+    47→  const [state, setState] = useState<ExamState>("enter-code");
+    48→  const [code, setCode] = useState("");
+    49→  const [examInfo, setExamInfo] = useState<{ id: string; title: string; duration: number; questionCount: number } | null>(null);
+    50→  const [questions, setQuestions] = useState<Question[]>([]);
+    51→  const [answers, setAnswers] = useState<Record<string, number>>({});
+    52→  const [currentPage, setCurrentPage] = useState(1);
+    53→  const [loading, setLoading] = useState(false);
+    54→  const [result, setResult] = useState<{ score: number; total: number; passed: boolean; timeSpent: number } | null>(null);
+    55→  const [timeLeft, setTimeLeft] = useState(0);
+    56→  const [timerActive, setTimerActive] = useState(false);
+    57→  const [examHistory, setExamHistory] = useState<any[]>([]);
+    58→  const [elapsedTime, setElapsedTime] = useState(0);
+    59→  const examStartTimeRef = useRef<number>(0);
+    60→  const handleSubmitRef = useRef<() => void>(() => {});
+    61→
+    62→  // Admin: Create from template
+    63→  const [creatingFromTemplate, setCreatingFromTemplate] = useState<string | null>(null);
+    64→  const [createdCode, setCreatedCode] = useState("");
+    65→  const [createdTitle, setCreatedTitle] = useState("");
+    66→
+    67→  // Admin: Custom create
+    68→  const [showCustomCreate, setShowCustomCreate] = useState(false);
+    69→  const [activeCreateType, setActiveCreateType] = useState<"exam" | "quiz">("exam");
+    70→  const [examTitle, setExamTitle] = useState("");
+    71→  const [examDuration, setExamDuration] = useState("30");
+    72→  const [quizDescription, setQuizDescription] = useState("");
+    73→
+    74→  // Admin: Created items list
+    75→  const [adminExams, setAdminExams] = useState<any[]>([]);
+    76→  const [adminQuizzes, setAdminQuizzes] = useState<any[]>([]);
+    77→  const [adminQuestions, setAdminQuestions] = useState<{ question: string; optionA: string; optionB: string; optionC: string; optionD: string; correct: string }[]>([
+    78→    { question: "", optionA: "", optionB: "", optionC: "", optionD: "", correct: "0" },
+    79→  ]);
+    80→  const [customCreating, setCustomCreating] = useState(false);
+    81→
+    82→  const safeQuestions = questions || [];
+    83→  const totalPages = Math.ceil(safeQuestions.length / QUESTIONS_PER_PAGE);
+    84→  const currentQuestions = safeQuestions.slice((currentPage - 1) * QUESTIONS_PER_PAGE, currentPage * QUESTIONS_PER_PAGE);
+    85→
+    86→  // Countdown timer (time left)
+    87→  useEffect(() => {
+    88→    if (!timerActive || timeLeft <= 0) return;
+    89→    const interval = setInterval(() => {
+    90→      setTimeLeft((prev) => {
+    91→        if (prev <= 1) { setTimerActive(false); handleSubmitRef.current(); return 0; }
+    92→        return prev - 1;
+    93→      });
+    94→    }, 1000);
+    95→    return () => clearInterval(interval);
+    96→  }, [timerActive, timeLeft]);
+    97→
+    98→  // Elapsed timer (counting up)
+    99→  useEffect(() => {
+   100→    if (!timerActive) return;
+   101→    const interval = setInterval(() => {
+   102→      setElapsedTime(Math.floor((Date.now() - examStartTimeRef.current) / 1000));
+   103→    }, 1000);
+   104→    return () => clearInterval(interval);
+   105→  }, [timerActive]);
+   106→
+   107→  useEffect(() => {
+   108→    if (token) {
+   109→      fetch("/api/exam/history", { headers: { Authorization: `Bearer ${token}` } })
+   110→        .then(r => r.json())
+   111→        .then(d => setExamHistory(d.history || []))
+   112→        .catch(() => {});
+   113→    }
+   114→  }, [token, state]);
+   115→
+   116→  // Admin: fetch created items
+   117→  const fetchAdminItems = useCallback(() => {
+   118→    if (!token || !isAdmin) return;
+   119→    fetch("/api/admin/exams", { headers: { Authorization: `Bearer ${token}` } })
+   120→      .then(r => r.json()).then(d => setAdminExams(d.exams || [])).catch(() => {});
+   121→    fetch("/api/admin/quizzes", { headers: { Authorization: `Bearer ${token}` } })
+   122→      .then(r => r.json()).then(d => setAdminQuizzes(d.quizzes || [])).catch(() => {});
+   123→  }, [token, isAdmin]);
+   124→
+   125→  useEffect(() => { fetchAdminItems(); }, [fetchAdminItems]);
+   126→
+   127→  const handleVerifyCode = async () => {
+   128→    if (!code.trim()) { toast.error("Код оруулна уу"); return; }
+   129→    setLoading(true);
+   130→    try {
+   131→      const res = await fetch("/api/exam", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "verify", code: code.trim() }) });
+   132→      const data = await res.json();
+   133→      if (!res.ok) { toast.error(data.error); return; }
+   134→      setExamInfo(data.exam);
+   135→      setState("exam-info");
+   136→    } catch { toast.error("Холболтын алдаа"); }
+   137→    finally { setLoading(false); }
+   138→  };
+   139→
+   140→  const handleStartExam = async () => {
+   141→    if (!examInfo || !token) { if (!token) toast.error("Шалгалт өгөхийн тулд нэвтрэх шаардлагатай"); return; }
+   142→    setLoading(true);
+   143→    try {
+   144→      const res = await fetch(`/api/exam?examId=${examInfo.id}`, { headers: { Authorization: `Bearer ${token}` } });
+   145→      const data = await res.json();
+   146→      if (!res.ok) { toast.error(data.error); setState("enter-code"); return; }
+   147→      const q = data.questions || [];
+   148→      setQuestions(q);
+   149→      setTimeLeft((q.length > 0 ? examInfo.duration : 30) * 60);
+   150→      examStartTimeRef.current = Date.now();
+   151→      setElapsedTime(0);
+   152→      setTimerActive(true);
+   153→      setState("taking");
+   154→    } catch { toast.error("Асуулт ачааллахад алдаа"); }
+   155→    finally { setLoading(false); }
+   156→  };
+   157→
+   158→  const handleSubmitExam = useCallback(async () => {
+   159→    if (!examInfo || !token || !(questions || []).length) return;
+   160→    setTimerActive(false); setLoading(true);
+   161→    try {
+   162→      const timeSpent = Math.floor((Date.now() - examStartTimeRef.current) / 1000);
+   163→      const answerArray = (questions || []).map((q) => answers[q.id] ?? -1);
+   164→      const res = await fetch("/api/exam", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }, body: JSON.stringify({ action: "submit", examId: examInfo.id, answers: answerArray, timeSpent }) });
+   165→      const data = await res.json();
+   166→      if (!res.ok) { toast.error(data.error); return; }
+   167→      setResult({ score: data.score, total: data.total, passed: data.passed, timeSpent });
+   168→      setState("result");
+   169→      fetch("/api/exam/history", { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()).then(d => setExamHistory(d.history || [])).catch(() => {});
+   170→    } catch { toast.error("Алдаа"); }
+   171→    finally { setLoading(false); }
+   172→  }, [examInfo, token, questions, answers]);
+   173→
+   174→  handleSubmitRef.current = handleSubmitExam;
+   175→
+   176→  const resetExam = () => { setState("enter-code"); setCode(""); setExamInfo(null); setQuestions([]); setAnswers({}); setCurrentPage(1); setResult(null); setTimeLeft(0); setTimerActive(false); setElapsedTime(0); examStartTimeRef.current = 0; };
+   177→
+   178→  const formatTime = (s: number) => { const m = Math.floor(s / 60); return `${m.toString().padStart(2, "0")}:${(s % 60).toString().padStart(2, "0")}`; };
+   179→  const formatTimeSpent = (s: number) => { const mins = Math.floor(s / 60); const secs = s % 60; return `${mins} мин ${secs} сек`; };
+   180→  const answeredCount = Object.keys(answers).length;
+   181→
+   182→  // Admin: Create exam/quiz from template
+   183→  const handleCreateFromTemplate = async (template: ExamTemplate) => {
+   184→    setCreatingFromTemplate(template.id);
+   185→    try {
+   186→      const isQuiz = template.type === "quiz";
+   187→      const endpoint = isQuiz ? "/api/admin/quizzes" : "/api/admin/exams";
+   188→      const body = isQuiz ? {
+   189→        title: template.title,
+   190→        description: template.description,
+   191→        category: "general",
+   192→        questions: template.questions.map(q => ({
+   193→          question: q.question,
+   194→          optionA: q.optionA,
+   195→          optionB: q.optionB,
+   196→          optionC: q.optionC,
+   197→          optionD: q.optionD,
+   198→          correct: q.correct,
+   199→        })),
+   200→      } : {
+   201→        title: template.title,
+   202→        duration: template.duration,
+   203→        questions: template.questions.map(q => ({
+   204→          question: q.question,
+   205→          optionA: q.optionA,
+   206→          optionB: q.optionB,
+   207→          optionC: q.optionC,
+   208→          optionD: q.optionD,
+   209→          correct: q.correct,
+   210→        })),
+   211→      };
+   212→      const res = await fetch(endpoint, {
+   213→        method: "POST",
+   214→        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+   215→        body: JSON.stringify(body),
+   216→      });
+   217→      const data = await res.json();
+   218→      if (!res.ok) { toast.error(data.error || "Алдаа"); setCreatingFromTemplate(null); return; }
+   219→      if (isQuiz) {
+   220→        setCreatedCode("QUIZ");
+   221→        toast.success(`Сорил үүссэн: ${template.title}`);
+   222→      } else {
+   223→        setCreatedCode(data.exam.code);
+   224→        setCreatedTitle(template.title);
+   225→        toast.success(`Шалгалт үүссэн! Код: ${data.exam.code}`);
+   226→      }
+   227→      fetchAdminItems();
+   228→      setTimeout(() => { setCreatingFromTemplate(null); setCreatedCode(""); setCreatedTitle(""); }, 5000);
+   229→    } catch { toast.error("Алдаа"); setCreatingFromTemplate(null); }
+   230→  };
+   231→
+   232→  // Admin: Add question (custom)
+   233→  const addQuestion = () => setAdminQuestions([...adminQuestions, { question: "", optionA: "", optionB: "", optionC: "", optionD: "", correct: "0" }]);
+   234→  const removeQuestion = (i: number) => { if (adminQuestions.length > 1) setAdminQuestions(adminQuestions.filter((_, idx) => idx !== i)); };
+   235→  const updateQ = (i: number, field: string, val: string) => { const nq = [...adminQuestions]; nq[i] = { ...nq[i], [field]: val }; setAdminQuestions(nq); };
+   236→
+   237→  // Admin: Custom create
+   238→  const handleCustomCreate = async () => {
+   239→    if (!examTitle.trim()) { toast.error(activeCreateType === "exam" ? "Шалгалтын нэр оруулна уу" : "Сорилын нэр оруулна уу"); return; }
+   240→    const valid = adminQuestions.filter(q => q.question.trim() && q.optionA.trim() && q.optionB.trim() && q.optionC.trim() && q.optionD.trim());
+   241→    if (valid.length < 1) { toast.error("Дор хаяж 1 асуулт оруулна уу"); return; }
+   242→    setCustomCreating(true);
+   243→    try {
+   244→      const isQuiz = activeCreateType === "quiz";
+   245→      const endpoint = isQuiz ? "/api/admin/quizzes" : "/api/admin/exams";
+   246→      const body = isQuiz ? {
+   247→        title: examTitle,
+   248→        description: quizDescription,
+   249→        category: "",
+   250→        questions: valid.map(q => ({ ...q, correct: parseInt(q.correct) })),
+   251→      } : {
+   252→        title: examTitle,
+   253→        duration: parseInt(examDuration) || 30,
+   254→        questions: valid.map(q => ({ ...q, correct: parseInt(q.correct) })),
+   255→      };
+   256→      const res = await fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }, body: JSON.stringify(body) });
+   257→      const data = await res.json();
+   258→      if (!res.ok) { toast.error(data.error || "Алдаа"); return; }
+   259→      if (isQuiz) {
+   260→        setCreatedCode("QUIZ");
+   261→        setCreatedTitle(examTitle);
+   262→        toast.success(`Сорил үүссэн: ${examTitle}`);
+   263→      } else {
+   264→        setCreatedCode(data.exam.code);
+   265→        setCreatedTitle(examTitle);
+   266→        toast.success(`Шалгалт үүссэн! Код: ${data.exam.code}`);
+   267→      }
+   268→      fetchAdminItems();
+   269→      setExamTitle(""); setExamDuration("30"); setQuizDescription("");
+   270→      setAdminQuestions([{ question: "", optionA: "", optionB: "", optionC: "", optionD: "", correct: "0" }]);
+   271→      setShowCustomCreate(false);
+   272→    } catch { toast.error("Алдаа"); }
+   273→    finally { setCustomCreating(false); }
+   274→  };
+   275→
+   276→  const resetCustomForm = () => {
+   277→    setExamTitle(""); setExamDuration("30"); setQuizDescription("");
+   278→    setAdminQuestions([{ question: "", optionA: "", optionB: "", optionC: "", optionD: "", correct: "0" }]);
+   279→    setActiveCreateType("exam");
+   280→  };
+   281→
+   282→  const copyCode = (c: string) => {
+   283→    navigator.clipboard.writeText(c);
+   284→    toast.success("Код хуулагдлаа!");
+   285→  };
+   286→
+   287→  return (
+   288→    <div className="min-h-screen">
+   289→      {/* Header */}
+   290→      <div className="bg-gradient-to-b from-brand-900 to-brand-800 py-16 px-4">
+   291→        <div className="max-w-4xl mx-auto text-center">
+   292→          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
+   293→            <div className="inline-flex items-center gap-2 bg-brand-700/50 px-4 py-2 rounded-full mb-6">
+   294→              <Lock className="w-4 h-4 text-brand-300" />
+   295→              <span className="text-brand-200 text-sm font-medium">Кодтой шалгалт</span>
+   296→            </div>
+   297→            <h1 className="text-3xl lg:text-4xl font-bold text-white mb-4">Шалгалт</h1>
+   298→            <p className="text-brand-200 text-lg max-w-2xl mx-auto">Админ өгсөн кодоор шалгалтанд орох. Шалгалт идэвхтэй үед л орох боломжтой.</p>
+   299→          </motion.div>
+   300→        </div>
+   301→      </div>
+   302→
+   303→      <div className="max-w-5xl mx-auto px-4 -mt-8 pb-12">
+   304→        {/* ─── Admin: Template Selection + Custom Create ─── */}
+   305→        {isAdmin && state === "enter-code" && (
+   306→          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="mb-8">
+   307→            <Card className="shadow-xl border-brand-200">
+   308→              <CardHeader className="bg-brand-50 rounded-t-xl">
+   309→                <CardTitle className="text-xl text-brand-900 flex items-center gap-2">
+   310→                  <Shield className="w-5 h-5" /> Админ: Шалгалт үүсгэх
+   311→                </CardTitle>
+   312→              </CardHeader>
+   313→              <CardContent className="p-6">
+   314→                {/* Success Message */}
+   315→                {createdCode && (
+   316→                  <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="mb-6 p-4 bg-green-50 border-2 border-green-300 rounded-xl">
+   317→                    <div className="text-center">
+   318→                      <CheckCircle className="w-8 h-8 text-green-600 mx-auto mb-2" />
+   319→                      <p className="text-green-800 font-medium">{createdTitle}</p>
+   320→                      {createdCode === "QUIZ" ? (
+   321→                        <p className="text-green-700 text-sm mt-1">Сорил амжилттай үүслээ! Сорилууд хуудаснаас харагдана.</p>
+   322→                      ) : (
+   323→                        <>
+   324→                          <p className="text-green-700 text-sm mt-1">Шалгалт үүслээ! Код:</p>
+   325→                          <div className="flex items-center justify-center gap-2 mt-2">
+   326→                            <span className="text-2xl font-bold tracking-[0.3em] text-green-900 font-mono">{createdCode}</span>
+   327→                            <Button size="sm" variant="outline" className="text-green-700 border-green-300 hover:bg-green-100" onClick={() => copyCode(createdCode)}>
+   328→                              <Copy className="w-4 h-4" />
+   329→                            </Button>
+   330→                          </div>
+   331→                        </>
+   332→                      )}
+   333→                    </div>
+   334→                  </motion.div>
+   335→                )}
+   336→
+   337→                <Tabs defaultValue="exam" className="w-full" onValueChange={(v) => setActiveCreateType(v as "exam" | "quiz")}>
+   338→                  <TabsList className="grid w-full grid-cols-2 mb-6">
+   339→                    <TabsTrigger value="exam" className="gap-1.5">
+   340→                      <FileEdit className="w-4 h-4" />
+   341→                      Шалгалт
+   342→                    </TabsTrigger>
+   343→                    <TabsTrigger value="quiz" className="gap-1.5">
+   344→                      <ClipboardList className="w-4 h-4" />
+   345→                      Мэдлэг сорих
+   346→                    </TabsTrigger>
+   347→                  </TabsList>
+   348→
+   349→                  {/* Шалгалт Templates */}
+   350→                  <TabsContent value="exam">
+   351→                    <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+   352→                      {examTemplates.filter(t => t.type === "exam").map((template) => (
+   353→                        <motion.div key={template.id} whileHover={{ y: -2 }}>
+   354→                          <Card className="h-full border-2 hover:border-brand-400 transition-all group cursor-pointer" style={{ borderColor: creatingFromTemplate === template.id ? "#124D1C" : undefined }}>
+   355→                            <CardContent className="p-5 flex flex-col h-full">
+   356→                              <div className="flex items-center gap-3 mb-3">
+   357→                                <div className="w-12 h-12 rounded-xl bg-brand-100 text-brand-700 flex items-center justify-center shrink-0">
+   358→                                  {iconMap[template.icon] || <Shield className="w-6 h-6" />}
+   359→                                </div>
+   360→                                <div className="min-w-0">
+   361→                                  <h3 className="font-bold text-brand-900 text-sm leading-tight">{template.title}</h3>
+   362→                                  <Badge variant="secondary" className="text-xs mt-1 bg-brand-100 text-brand-700">
+   363→                                    {template.questions.length} асуулт
+   364→                                  </Badge>
+   365→                                </div>
+   366→                              </div>
+   367→                              <p className="text-sm text-muted-foreground mb-4 flex-1">{template.description}</p>
+   368→                              <div className="flex items-center justify-between gap-2 mb-3">
+   369→                                <div className="flex items-center gap-3 text-xs text-muted-foreground">
+   370→                                  <span className="flex items-center gap-1"><Clock className="w-3 h-3" />{template.duration} мин</span>
+   371→                                  <span className="flex items-center gap-1"><Zap className="w-3 h-3" />{template.passingScore}%</span>
+   372→                                </div>
+   373→                              </div>
+   374→                              <Button
+   375→                                onClick={() => handleCreateFromTemplate(template)}
+   376→                                disabled={creatingFromTemplate === template.id}
+   377→                                className="w-full bg-brand-600 hover:bg-brand-700 text-white"
+   378→                              >
+   379→                                {creatingFromTemplate === template.id ? (
+   380→                                  <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Үүсгэж байна...</>
+   381→                                ) : (
+   382→                                  "Сонгох"
+   383→                                )}
+   384→                              </Button>
+   385→                            </CardContent>
+   386→                          </Card>
+   387→                        </motion.div>
+   388→                      ))}
+   389→                    </div>
+   390→                  </TabsContent>
+   391→
+   392→                  {/* Мэдлэг сорих Templates */}
+   393→                  <TabsContent value="quiz">
+   394→                    <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+   395→                      {examTemplates.filter(t => t.type === "quiz").map((template) => (
+   396→                        <motion.div key={template.id} whileHover={{ y: -2 }}>
+   397→                          <Card className="h-full border-2 hover:border-amber-400 transition-all group cursor-pointer" style={{ borderColor: creatingFromTemplate === template.id ? "#d97706" : undefined }}>
+   398→                            <CardContent className="p-5 flex flex-col h-full">
+   399→                              <div className="flex items-center gap-3 mb-3">
+   400→                                <div className="w-12 h-12 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
+   401→                                  {iconMap[template.icon] || <ClipboardList className="w-6 h-6" />}
+   402→                                </div>
+   403→                                <div className="min-w-0">
+   404→                                  <h3 className="font-bold text-amber-900 text-sm leading-tight">{template.title}</h3>
+   405→                                  <Badge variant="secondary" className="text-xs mt-1 bg-amber-100 text-amber-700">
+   406→                                    {template.questions.length} асуулт
+   407→                                  </Badge>
+   408→                                </div>
+   409→                              </div>
+   410→                              <p className="text-sm text-muted-foreground mb-4 flex-1">{template.description}</p>
+   411→                              <div className="flex items-center justify-between gap-2 mb-3">
+   412→                                <div className="flex items-center gap-3 text-xs text-muted-foreground">
+   413→                                  <span className="flex items-center gap-1"><Clock className="w-3 h-3" />{template.duration} мин</span>
+   414→                                  <span className="flex items-center gap-1"><Zap className="w-3 h-3" />{template.passingScore}%</span>
+   415→                                </div>
+   416→                              </div>
+   417→                              <Button
+   418→                                onClick={() => handleCreateFromTemplate(template)}
+   419→                                disabled={creatingFromTemplate === template.id}
+   420→                                className="w-full bg-amber-600 hover:bg-amber-700 text-white"
+   421→                              >
+   422→                                {creatingFromTemplate === template.id ? (
+   423→                                  <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Үүсгэж байна...</>
+   424→                                ) : (
+   425→                                  "Сонгох"
+   426→                                )}
+   427→                              </Button>
+   428→                            </CardContent>
+   429→                          </Card>
+   430→                        </motion.div>
+   431→                      ))}
+   432→                    </div>
+   433→                  </TabsContent>
+   434→                </Tabs>
+   435→
+   436→                {/* Divider */}
+   437→                <div className="relative my-6">
+   438→                  <div className="absolute inset-0 flex items-center"><div className="w-full border-t" /></div>
+   439→                  <div className="relative flex justify-center text-xs uppercase">
+   440→                    <span className="bg-white px-3 text-muted-foreground">эсвэл</span>
+   441→                  </div>
+   442→                </div>
+   443→
+   444→                {/* Custom Create Toggle */}
+   445→                {!showCustomCreate ? (
+   446→                  <Button variant="outline" onClick={() => { setShowCustomCreate(true); resetCustomForm(); }} className="w-full border-dashed border-2 border-brand-300 text-brand-700 hover:bg-brand-50 hover:border-brand-400">
+   447→                    <Plus className="w-4 h-4 mr-2" /> Шинээр үүсгэх
+   448→                  </Button>
+   449→                ) : (
+   450→                  <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} className="border-2 border-brand-200 rounded-xl p-5 bg-brand-50/30">
+   451→                    <div className="flex items-center justify-between mb-4">
+   452→                      <h3 className="font-bold text-brand-900 flex items-center gap-2"><FileEdit className="w-4 h-4" /> {activeCreateType === "exam" ? "Шинэ шалгалт" : "Шинэ сорил"} үүсгэх</h3>
+   453→                      <Button size="sm" variant="ghost" onClick={() => { setShowCustomCreate(false); resetCustomForm(); }} className="text-muted-foreground"><XCircle className="w-4 h-4" /></Button>
+   454→                    </div>
+   455→                    <div className="grid sm:grid-cols-2 gap-4 mb-4">
+   456→                      <div>
+   457→                        <Label>{activeCreateType === "exam" ? "Шалгалтын нэр" : "Сорилын нэр"}</Label>
+   458→                        <Input value={examTitle} onChange={e => setExamTitle(e.target.value)} placeholder={activeCreateType === "exam" ? "Жишээ: ХАБЭА үндсэн шалгалт" : "Жишээ: Гал түймэрээс сэргийлэх"} />
+   459→                      </div>
+   460→                      {activeCreateType === "exam" ? (
+   461→                        <div>
+   462→                          <Label>Хугацаа (минут)</Label>
+   463→                          <Input type="number" value={examDuration} onChange={e => setExamDuration(e.target.value)} placeholder="30" />
+   464→                        </div>
+   465→                      ) : (
+   466→                        <div>
+   467→                          <Label>Тайлбар</Label>
+   468→                          <Input value={quizDescription} onChange={e => setQuizDescription(e.target.value)} placeholder="Сорилын тайлбар" />
+   469→                        </div>
+   470→                      )}
+   471→                    </div>
+   472→
+   473→                    <div className="space-y-3 max-h-96 overflow-y-auto pr-1">
+   474→                      <div className="flex items-center justify-between">
+   475→                        <Label className="text-base font-semibold">Асуултууд ({adminQuestions.length})</Label>
+   476→                        <Button type="button" size="sm" variant="outline" onClick={addQuestion}><Plus className="w-4 h-4 mr-1" /> Асуулт нэмэх</Button>
+   477→                      </div>
+   478→                      {adminQuestions.map((q, i) => (
+   479→                        <div key={i} className="bg-white rounded-xl p-4 space-y-3 border">
+   480→                          <div className="flex items-center justify-between">
+   481→                            <span className="text-sm font-bold text-brand-700">Асуулт {i + 1}</span>
+   482→                            <Button type="button" size="sm" variant="ghost" onClick={() => removeQuestion(i)} className="text-red-500 hover:text-red-700">
+   483→                              <Trash2 className="w-4 h-4" />
+   484→                            </Button>
+   485→                          </div>
+   486→                          <Textarea value={q.question} onChange={e => updateQ(i, "question", e.target.value)} placeholder="Асуултын текст..." rows={2} />
+   487→                          <div className="grid grid-cols-2 gap-2">
+   488→                            <Input value={q.optionA} onChange={e => updateQ(i, "optionA", e.target.value)} placeholder="A) Хариулт" />
+   489→                            <Input value={q.optionB} onChange={e => updateQ(i, "optionB", e.target.value)} placeholder="B) Хариулт" />
+   490→                            <Input value={q.optionC} onChange={e => updateQ(i, "optionC", e.target.value)} placeholder="C) Хариулт" />
+   491→                            <Input value={q.optionD} onChange={e => updateQ(i, "optionD", e.target.value)} placeholder="D) Хариулт" />
+   492→                          </div>
+   493→                          <div className="flex items-center gap-2">
+   494→                            <Label className="text-sm">Зөв хариулт:</Label>
+   495→                            <Select value={q.correct} onValueChange={v => updateQ(i, "correct", v)}>
+   496→                              <SelectTrigger className="w-24"><SelectValue /></SelectTrigger>
+   497→                              <SelectContent>
+   498→                                <SelectItem value="0">A</SelectItem>
+   499→                                <SelectItem value="1">B</SelectItem>
+   500→                                <SelectItem value="2">C</SelectItem>
+   501→                                <SelectItem value="3">D</SelectItem>
+   502→                              </SelectContent>
+   503→                            </Select>
+   504→                          </div>
+   505→                        </div>
+   506→                      ))}
+   507→                    </div>
+   508→
+   509→                    <Button onClick={handleCustomCreate} disabled={customCreating || !examTitle.trim()} className="w-full mt-4 bg-brand-600 hover:bg-brand-700">
+   510→                      {customCreating ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Үүсгэж байна...</> : <><Plus className="w-4 h-4 mr-2" />{activeCreateType === "exam" ? "Шалгалт" : "Сорил"} үүсгэх</>}
+   511→                    </Button>
+   512→                  </motion.div>
+   513→                )}
+   514→              </CardContent>
+   515→            </Card>
+   516→
+   517→            {/* Created items list */}
+   518→            {((adminExams || []).length > 0 || (adminQuizzes || []).length > 0) && (
+   519→              <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="mt-6">
+   520→                <Card className="border-brand-200">
+   521→                  <CardHeader className="bg-brand-50 rounded-t-xl">
+   522→                    <CardTitle className="text-lg text-brand-900 flex items-center gap-2">
+   523→                      <Eye className="w-5 h-5" /> Үүссэн шалгалтууд, сорилууд
+   524→                    </CardTitle>
+   525→                  </CardHeader>
+   526→                  <CardContent className="p-4 space-y-3 max-h-80 overflow-y-auto">
+   527→                    {(adminExams || []).length > 0 && (
+   528→                      <div>
+   529→                        <p className="text-xs font-semibold text-brand-600 uppercase mb-2">Шалгалтууд ({(adminExams || []).length})</p>
+   530→                        {(adminExams || []).slice(0, 10).map((e: any) => (
+   531→                          <div key={e.id} className="flex items-center justify-between p-3 rounded-xl bg-gray-50 hover:bg-brand-50 transition-colors mb-2">
+   532→                            <div className="min-w-0 flex-1">
+   533→                              <p className="text-sm font-medium text-brand-900 truncate">{e.title}</p>
+   534→                              <p className="text-xs text-muted-foreground">{e.questionCount} асуулт · {e.duration} мин</p>
+   535→                            </div>
+   536→                            <div className="flex items-center gap-2 ml-3 shrink-0">
+   537→                              <Badge variant={e.isActive ? "default" : "secondary"} className={e.isActive ? "bg-green-100 text-green-800" : ""}>
+   538→                                {e.isActive ? "Идэвхтэй" : "Идэвхгүй"}
+   539→                              </Badge>
+   540→                              <span className="text-sm font-mono font-bold tracking-wider text-brand-700 bg-brand-100 px-2 py-1 rounded">{e.code}</span>
+   541→                              <Button size="sm" variant="ghost" onClick={() => copyCode(e.code)}><Copy className="w-3.5 h-3.5" /></Button>
+   542→                              {e.isActive && (
+   543→                                <Button size="sm" variant="ghost" className="text-red-500 hover:text-red-700 hover:bg-red-50" onClick={async (ev) => { ev.stopPropagation(); try { const res = await fetch(`/api/admin/exams/${e.id}/stop`, { method: "PUT", headers: { Authorization: `Bearer ${token}` } }); if (res.ok) { toast.success("Шалгалт зогсов"); fetchAdminItems(); } else { toast.error("Алдаа"); } } catch { toast.error("Алдаа"); } }}><XCircle className="w-3.5 h-3.5" /> Зогсоох</Button>
+   544→                              )}
+   545→                            </div>
+   546→                          </div>
+   547→                        ))}
+   548→                      </div>
+   549→                    )}
+   550→                    {(adminQuizzes || []).length > 0 && (
+   551→                      <div>
+   552→                        <p className="text-xs font-semibold text-amber-600 uppercase mb-2">Сорилууд ({(adminQuizzes || []).length})</p>
+   553→                        {(adminQuizzes || []).slice(0, 10).map((q: any) => (
+   554→                          <div key={q.id} className="flex items-center justify-between p-3 rounded-xl bg-gray-50 hover:bg-amber-50 transition-colors mb-2">
+   555→                            <div className="min-w-0 flex-1">
+   556→                              <p className="text-sm font-medium text-brand-900 truncate">{q.title}</p>
+   557→                              <p className="text-xs text-muted-foreground">{q.questionCount} асуулт</p>
+   558→                            </div>
+   559→                            <Badge variant="secondary" className="bg-amber-100 text-amber-800 ml-3 shrink-0">
+   560→                              <ClipboardList className="w-3 h-3 mr-1" /> Сорил
+   561→                            </Badge>
+   562→                          </div>
+   563→                        ))}
+   564→                      </div>
+   565→                    )}
+   566→                  </CardContent>
+   567→                </Card>
+   568→              </motion.div>
+   569→            )}
+   570→          </motion.div>
+   571→        )}
+   572→
+   573→        <AnimatePresence mode="wait">
+   574→          {/* Enter Code */}
+   575→          {state === "enter-code" && (
+   576→            <motion.div key="enter-code" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}>
+   577→              <Card className="shadow-xl">
+   578→                <CardHeader className="text-center pb-2">
+   579→                  <CardTitle className="text-xl text-brand-900">Шалгалтын код оруулна уу</CardTitle>
+   580→                </CardHeader>
+   581→                <CardContent className="pt-4">
+   582→                  <div className="max-w-md mx-auto space-y-4">
+   583→                    <div className="text-center mb-6">
+   584→                      <div className="w-16 h-16 rounded-2xl bg-brand-100 flex items-center justify-center mx-auto mb-4">
+   585→                        <Shield className="w-8 h-8 text-brand-600" />
+   586→                      </div>
+   587→                      <p className="text-muted-foreground text-sm">Админ тань өгсөн шалгалтын код оруулж шалгалтанд ороорой</p>
+   588→                    </div>
+   589→                    <div>
+   590→                      <Label>Шалгалтын код</Label>
+   591→                      <Input value={code} onChange={e => setCode(e.target.value.toUpperCase())} placeholder="Жишээ: ABC123" className="text-center text-lg tracking-widest font-mono" onKeyDown={e => e.key === "Enter" && handleVerifyCode()} />
+   592→                    </div>
+   593→                    <Button onClick={handleVerifyCode} className="w-full bg-brand-600 hover:bg-brand-700" disabled={loading || !code.trim()}>
+   594→                      {loading ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Шалгаж байна...</> : "Шалгалт орох"}
+   595→                    </Button>
+   596→                  </div>
+   597→                </CardContent>
+   598→              </Card>
+   599→
+   600→              {/* Exam History */}
+   601→              {(examHistory || []).length > 0 && (
+   602→                <div className="mt-8">
+   603→                  <h3 className="text-lg font-bold text-brand-900 mb-4 flex items-center gap-2">
+   604→                    <Eye className="w-5 h-5" /> Шалгалтын түүх
+   605→                  </h3>
+   606→                  <div className="space-y-3">
+   607→                    {examHistory.map((h: any) => (
+   608→                      <Card key={h.id} className="overflow-hidden">
+   609→                        <CardContent className="p-4">
+   610→                          <div className="flex items-center justify-between flex-wrap gap-2">
+   611→                            <div>
+   612→                              <p className="font-medium text-brand-900">{h.examTitle || "Шалгалт"}</p>
+   613→                              <p className="text-sm text-muted-foreground">{new Date(h.createdAt).toLocaleDateString("mn-MN")}</p>
+   614→                            </div>
+   615→                            <div className="flex items-center gap-3">
+   616→                              <Badge variant={h.passed ? "default" : "destructive"} className={h.passed ? "bg-green-100 text-green-800" : ""}>
+   617→                                {h.passed ? "Тэнсэв" : "Амжилтгүй"}
+   618→                              </Badge>
+   619→                              <span className="text-lg font-bold">{h.score}/{h.total}</span>
+   620→                              <a href={`/api/exam/export/${h.id}`} target="_blank" rel="noopener">
+   621→                                <Button size="sm" variant="outline"><Download className="w-4 h-4" /></Button>
+   622→                              </a>
+   623→                            </div>
+   624→                          </div>
+   625→                        </CardContent>
+   626→                      </Card>
+   627→                    ))}
+   628→                  </div>
+   629→                </div>
+   630→              )}
+   631→            </motion.div>
+   632→          )}
+   633→
+   634→          {/* Exam Info */}
+   635→          {state === "exam-info" && examInfo && (
+   636→            <motion.div key="exam-info" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}>
+   637→              <Card className="shadow-xl">
+   638→                <CardHeader><CardTitle className="text-xl text-brand-900">{examInfo.title}</CardTitle></CardHeader>
+   639→                <CardContent className="space-y-6">
+   640→                  <div className="grid grid-cols-2 gap-4">
+   641→                    <div className="bg-brand-50 rounded-xl p-4 text-center">
+   642→                      <Shield className="w-6 h-6 text-brand-600 mx-auto mb-2" /><p className="text-2xl font-bold text-brand-900">{examInfo.questionCount}</p><p className="text-sm text-muted-foreground">Асуулт</p>
+   643→                    </div>
+   644→                    <div className="bg-brand-50 rounded-xl p-4 text-center">
+   645→                      <Clock className="w-6 h-6 text-brand-600 mx-auto mb-2" /><p className="text-2xl font-bold text-brand-900">{examInfo.duration}</p><p className="text-sm text-muted-foreground">Минут</p>
+   646→                    </div>
+   647→                  </div>
+   648→                  {!user && <div className="bg-amber-50 border border-amber-200 rounded-xl p-4"><p className="text-amber-800 text-sm flex items-center gap-2"><AlertTriangle className="w-4 h-4 shrink-0" /> Шалгалт өгөхийн тулд нэвтрэх шаардлагатай.</p></div>}
+   649→                  {user && <div className="bg-amber-50 border border-amber-200 rounded-xl p-4"><p className="text-amber-800 text-sm flex items-center gap-2"><AlertTriangle className="w-4 h-4 shrink-0" /> Шалгалт эхлэхдээ цаг хязгаар идэвхжинэ. Бэлэн болсон үедээ "Эхлэх" товч дээр дарна уу.</p></div>}
+   650→                  <div className="flex gap-3">
+   651→                    <Button variant="outline" onClick={resetExam} className="flex-1"><ArrowLeft className="w-4 h-4 mr-2" /> Буцах</Button>
+   652→                    <Button onClick={handleStartExam} className="flex-1 bg-brand-600 hover:bg-brand-700" disabled={loading || !user}>
+   653→                      {loading ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Ачааллаж байна...</> : <>Шалгалт эхлэх <ChevronRight className="w-4 h-4 ml-2" /></>}
+   654→                    </Button>
+   655→                  </div>
+   656→                </CardContent>
+   657→              </Card>
+   658→            </motion.div>
+   659→          )}
+   660→
+   661→          {/* Taking Exam */}
+   662→          {state === "taking" && (
+   663→            <motion.div key="taking" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+   664→              <Card className="shadow-xl">
+   665→                <CardHeader className="pb-2">
+   666→                  <div className="flex items-center justify-between mb-2">
+   667→                    <h2 className="text-lg font-semibold text-brand-900">{examInfo?.title}</h2>
+   668→                    <div className="flex items-center gap-3">
+   669→                      <Badge variant="secondary" className="text-sm bg-brand-50 text-brand-700 border-brand-200"><Clock className="w-4 h-4 mr-1" />{formatTime(elapsedTime)}</Badge>
+   670→                      <Badge variant={timeLeft < 300 ? "destructive" : "secondary"} className="text-sm"><Clock className="w-4 h-4 mr-1" />{formatTime(timeLeft)}</Badge>
+   671→                      <span className="text-sm text-muted-foreground">Хуудас {currentPage}/{totalPages}</span>
+   672→                    </div>
+   673→                  </div>
+   674→                  <Progress value={(answeredCount / (questions || []).length) * 100} className="h-2" />
+   675→                  <p className="text-xs text-muted-foreground mt-1">Хариулсан: {answeredCount}/{(questions || []).length}</p>
+   676→                </CardHeader>
+   677→                <CardContent>
+   678→                  {loading ? (
+   679→                    <div className="text-center py-16"><Loader2 className="w-12 h-12 text-brand-500 animate-spin mx-auto mb-4" /><p className="text-muted-foreground">Асуултууд ачааллаж байна...</p></div>
+   680→                  ) : (
+   681→                    <div className="space-y-6">
+   682→                      {(currentQuestions || []).map((q, idx) => {
+   683→                        const gi = (currentPage - 1) * QUESTIONS_PER_PAGE + idx;
+   684→                        return (
+   685→                          <motion.div key={q.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: idx * 0.03 }} className="bg-gray-50 rounded-xl p-4">
+   686→                            <p className="font-medium text-brand-900 mb-3">{gi + 1}. {q.questionText}</p>
+   687→                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+   688→                              {[{ key: 0, label: "A", text: q.optionA }, { key: 1, label: "B", text: q.optionB }, { key: 2, label: "C", text: q.optionC }, { key: 3, label: "D", text: q.optionD }].map((opt) => (
+   689→                                <button key={opt.key} onClick={() => setAnswers({ ...answers, [q.id]: opt.key })}
+   690→                                  className={`text-left p-3 rounded-lg border-2 transition-all text-sm ${answers[q.id] === opt.key ? "border-brand-500 bg-brand-50 text-brand-900" : "border-gray-200 hover:border-brand-300 hover:bg-brand-50/50"}`}>
+   691→                                  <span className="font-bold mr-2">{opt.label})</span>{opt.text}
+   692→                                </button>
+   693→                              ))}
+   694→                            </div>
+   695→                          </motion.div>
+   696→                        );
+   697→                      })}
+   698→                      <div className="flex items-center justify-between pt-4 border-t">
+   699→                        <Button variant="outline" onClick={() => setCurrentPage(Math.max(1, currentPage - 1))} disabled={currentPage === 1}><ChevronLeft className="w-4 h-4 mr-1" /> Өмнөх</Button>
+   700→                        <div className="flex gap-1 flex-wrap justify-center">
+   701→                          {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => (
+   702→                            <button key={p} onClick={() => setCurrentPage(p)} className={`w-8 h-8 rounded-lg text-sm font-medium transition-all ${p === currentPage ? "bg-brand-600 text-white" : "bg-gray-100 hover:bg-brand-100 text-gray-700"}`}>{p}</button>
+   703→                          ))}
+   704→                        </div>
+   705→                        {currentPage < totalPages ? (
+   706→                          <Button onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}>Дараах <ChevronRight className="w-4 h-4 ml-1" /></Button>
+   707→                        ) : (
+   708→                          <Button onClick={handleSubmitExam} className="bg-brand-600 hover:bg-brand-700" disabled={loading}>{loading ? "Илгээж байна..." : "Дуусгах"}</Button>
+   709→                        )}
+   710→                      </div>
+   711→                    </div>
+   712→                  )}
+   713→                </CardContent>
+   714→              </Card>
+   715→            </motion.div>
+   716→          )}
+   717→
+   718→          {/* Result */}
+   719→          {state === "result" && result && (
+   720→            <motion.div key="result" initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }}>
+   721→              <Card className="shadow-xl text-center">
+   722→                <CardContent className="py-12">
+   723→                  <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: "spring", delay: 0.2 }}
+   724→                    className="w-24 h-24 rounded-full mx-auto mb-6 flex items-center justify-center"
+   725→                    style={{ backgroundColor: result.passed ? "#dcfce7" : "#fef2f2" }}>
+   726→                    {result.passed ? <CheckCircle className="w-12 h-12 text-green-600" /> : <XCircle className="w-12 h-12 text-red-500" />}
+   727→                  </motion.div>
+   728→                  <h2 className="text-2xl font-bold mb-2">{result.passed ? "Тэнсэв!" : "Амжилтгүй"}</h2>
+   729→                  <p className="text-muted-foreground mb-2">{result.passed ? "Баяр хүргэж байна! Та шалгалтыг тэнцэв." : "Дахин оролдохыг зөвлөж байна."}</p>
+   730→                  <p className="text-sm text-muted-foreground mb-6 flex items-center justify-center gap-1.5"><Clock className="w-4 h-4" /> Цаг зарцуулсан: {formatTimeSpent(result.timeSpent)}</p>
+   731→                  <div className="flex justify-center gap-8 mb-8">
+   732→                    <div><p className="text-3xl font-bold text-brand-600">{result.score}</p><p className="text-sm text-muted-foreground">Зөв</p></div>
+   733→                    <div><p className="text-3xl font-bold text-red-500">{result.total - result.score}</p><p className="text-sm text-muted-foreground">Буруу</p></div>
+   734→                    <div><p className="text-3xl font-bold text-brand-900">{result.total}</p><p className="text-sm text-muted-foreground">Нийт</p></div>
+   735→                  </div>
+   736→                  <div className="flex justify-center gap-3">
+   737→                    <Button variant="outline" onClick={resetExam}><ArrowLeft className="w-4 h-4 mr-2" /> Буцах</Button>
+   738→                  </div>
+   739→                </CardContent>
+   740→              </Card>
+   741→            </motion.div>
+   742→          )}
+   743→        </AnimatePresence>
+   744→      </div>
+   745→    </div>
+   746→  );
+   747→}
+   748→

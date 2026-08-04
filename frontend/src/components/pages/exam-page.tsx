@@ -13,9 +13,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuthStore } from "@/hooks/use-auth";
 import { toast } from "sonner";
 import {
-  Shield, Lock, Clock, ChevronRight, ChevronLeft, CheckCircle, XCircle,
-  ArrowLeft, Loader2, Plus, Trash2, Copy, Download, Eye, AlertTriangle,
-  FileEdit, Award, Scale, Flame, Heart, ClipboardList, Zap,
+  Shield, Lock, Clock, ChevronRight, ChevronLeft, ChevronDown, ChevronUp,
+  CheckCircle, XCircle, ArrowLeft, Loader2, Plus, Trash2, Copy, Download,
+  Eye, AlertTriangle, FileEdit, Award, Scale, Flame, Heart, ClipboardList,
+  Zap, Calendar,
 } from "lucide-react";
 import { examTemplates, type ExamTemplate } from "@/data/exam-templates";
 
@@ -26,6 +27,16 @@ interface Question {
   optionB: string;
   optionC: string;
   optionD: string;
+}
+
+interface ExamDetailQuestion {
+  id: string;
+  question: string;
+  optionA: string;
+  optionB: string;
+  optionC: string;
+  optionD: string;
+  correct: number;
 }
 
 type ExamState = "enter-code" | "exam-info" | "taking" | "result";
@@ -39,6 +50,8 @@ const iconMap: Record<string, React.ReactNode> = {
   flame: <Flame className="w-6 h-6" />,
   heart: <Heart className="w-6 h-6" />,
 };
+
+const optionLabels = ["A", "B", "C", "D"];
 
 export default function ExamPage() {
   const { user, token } = useAuthStore();
@@ -69,6 +82,7 @@ export default function ExamPage() {
   const [activeCreateType, setActiveCreateType] = useState<"exam" | "quiz">("exam");
   const [examTitle, setExamTitle] = useState("");
   const [examDuration, setExamDuration] = useState("30");
+  const [examEndDate, setExamEndDate] = useState("");
   const [quizDescription, setQuizDescription] = useState("");
 
   // Admin: Created items list
@@ -78,6 +92,12 @@ export default function ExamPage() {
     { question: "", optionA: "", optionB: "", optionC: "", optionD: "", correct: "0" },
   ]);
   const [customCreating, setCustomCreating] = useState(false);
+
+  // Admin: Expanded exam detail
+  const [expandedExamId, setExpandedExamId] = useState<string | null>(null);
+  const [expandedQuestions, setExpandedQuestions] = useState<ExamDetailQuestion[]>([]);
+  const [expandedQuestionsLoading, setExpandedQuestionsLoading] = useState(false);
+  const [showExpandedQuestions, setShowExpandedQuestions] = useState(false);
 
   const safeQuestions = questions || [];
   const totalPages = Math.ceil(safeQuestions.length / QUESTIONS_PER_PAGE);
@@ -123,6 +143,82 @@ export default function ExamPage() {
   }, [token, isAdmin]);
 
   useEffect(() => { fetchAdminItems(); }, [fetchAdminItems]);
+
+  // Admin: Fetch exam questions for expanded detail
+  const handleFetchExamQuestions = async (examId: string) => {
+    if (!token) return;
+    setExpandedQuestionsLoading(true);
+    try {
+      const res = await fetch(`/api/admin/exams/${examId}/questions`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setExpandedQuestions(data.questions || []);
+      } else {
+        toast.error(data.error || "Асуулт ачааллахад алдаа");
+      }
+    } catch {
+      toast.error("Холболтын алдаа");
+    } finally {
+      setExpandedQuestionsLoading(false);
+    }
+  };
+
+  // Admin: Toggle exam expanded view
+  const handleToggleExpand = (examId: string) => {
+    if (expandedExamId === examId) {
+      setExpandedExamId(null);
+      setExpandedQuestions([]);
+      setShowExpandedQuestions(false);
+    } else {
+      setExpandedExamId(examId);
+      setExpandedQuestions([]);
+      setShowExpandedQuestions(false);
+      handleFetchExamQuestions(examId);
+    }
+  };
+
+  // Admin: Stop exam
+  const handleStopExam = async (examId: string) => {
+    try {
+      const res = await fetch(`/api/admin/exams/${examId}/stop`, {
+        method: "PUT",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        toast.success("Шалгалт зогсов");
+        fetchAdminItems();
+      } else {
+        toast.error("Алдаа");
+      }
+    } catch {
+      toast.error("Алдаа");
+    }
+  };
+
+  // Admin: Delete exam
+  const handleDeleteExam = async (examId: string) => {
+    try {
+      const res = await fetch(`/api/admin/exams/${examId}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        toast.success("Шалгалт устгагдлаа");
+        if (expandedExamId === examId) {
+          setExpandedExamId(null);
+          setExpandedQuestions([]);
+          setShowExpandedQuestions(false);
+        }
+        fetchAdminItems();
+      } else {
+        toast.error("Алдаа");
+      }
+    } catch {
+      toast.error("Алдаа");
+    }
+  };
 
   const handleVerifyCode = async () => {
     if (!code.trim()) { toast.error("Код оруулна уу"); return; }
@@ -251,6 +347,7 @@ export default function ExamPage() {
       } : {
         title: examTitle,
         duration: parseInt(examDuration) || 30,
+        endDate: examEndDate || null,
         questions: valid.map(q => ({ ...q, correct: parseInt(q.correct) })),
       };
       const res = await fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }, body: JSON.stringify(body) });
@@ -266,7 +363,7 @@ export default function ExamPage() {
         toast.success(`Шалгалт үүссэн! Код: ${data.exam.code}`);
       }
       fetchAdminItems();
-      setExamTitle(""); setExamDuration("30"); setQuizDescription("");
+      setExamTitle(""); setExamDuration("30"); setExamEndDate(""); setQuizDescription("");
       setAdminQuestions([{ question: "", optionA: "", optionB: "", optionC: "", optionD: "", correct: "0" }]);
       setShowCustomCreate(false);
     } catch { toast.error("Алдаа"); }
@@ -274,7 +371,7 @@ export default function ExamPage() {
   };
 
   const resetCustomForm = () => {
-    setExamTitle(""); setExamDuration("30"); setQuizDescription("");
+    setExamTitle(""); setExamDuration("30"); setExamEndDate(""); setQuizDescription("");
     setAdminQuestions([{ question: "", optionA: "", optionB: "", optionC: "", optionD: "", correct: "0" }]);
     setActiveCreateType("exam");
   };
@@ -470,6 +567,15 @@ export default function ExamPage() {
                       )}
                     </div>
 
+                    {/* End Date field for exam type */}
+                    {activeCreateType === "exam" && (
+                      <div className="mb-4">
+                        <Label className="flex items-center gap-1.5"><Calendar className="w-4 h-4" /> Зогсоох огноо</Label>
+                        <Input type="date" value={examEndDate} onChange={e => setExamEndDate(e.target.value)} className="mt-1" />
+                        <p className="text-xs text-muted-foreground mt-1">Энэ огноонд шалгалт автоматаар зогсох болно</p>
+                      </div>
+                    )}
+
                     <div className="space-y-3 max-h-96 overflow-y-auto pr-1">
                       <div className="flex items-center justify-between">
                         <Label className="text-base font-semibold">Асуултууд ({adminQuestions.length})</Label>
@@ -523,30 +629,189 @@ export default function ExamPage() {
                       <Eye className="w-5 h-5" /> Үүссэн шалгалтууд, сорилууд
                     </CardTitle>
                   </CardHeader>
-                  <CardContent className="p-4 space-y-3 max-h-80 overflow-y-auto">
+                  <CardContent className="p-4">
+                    {/* Exams - Expandable List */}
                     {(adminExams || []).length > 0 && (
-                      <div>
-                        <p className="text-xs font-semibold text-brand-600 uppercase mb-2">Шалгалтууд ({(adminExams || []).length})</p>
-                        {(adminExams || []).slice(0, 10).map((e: any) => (
-                          <div key={e.id} className="flex items-center justify-between p-3 rounded-xl bg-gray-50 hover:bg-brand-50 transition-colors mb-2">
-                            <div className="min-w-0 flex-1">
-                              <p className="text-sm font-medium text-brand-900 truncate">{e.title}</p>
-                              <p className="text-xs text-muted-foreground">{e.questionCount} асуулт · {e.duration} мин</p>
+                      <div className="mb-4">
+                        <p className="text-xs font-semibold text-brand-600 uppercase mb-3">Шалгалтууд ({(adminExams || []).length})</p>
+                        <div className="space-y-2">
+                          {(adminExams || []).map((e: any) => (
+                            <div key={e.id}>
+                              {/* Clickable header row */}
+                              <button
+                                onClick={() => handleToggleExpand(e.id)}
+                                className={`w-full flex items-center justify-between p-3 rounded-xl transition-colors text-left ${expandedExamId === e.id ? "bg-brand-50 border-2 border-brand-300" : "bg-gray-50 hover:bg-brand-50 border border-transparent"}`}
+                              >
+                                <div className="min-w-0 flex-1">
+                                  <p className="text-sm font-medium text-brand-900 truncate">{e.title}</p>
+                                  <p className="text-xs text-muted-foreground mt-0.5">
+                                    {e.questionCount} асуулт · {e.duration} мин
+                                    {e.endDate ? ` · Зогсоох: ${new Date(e.endDate).toLocaleDateString("mn-MN")}` : ""}
+                                  </p>
+                                </div>
+                                <div className="flex items-center gap-2 ml-3 shrink-0">
+                                  <Badge variant={e.isActive ? "default" : "secondary"} className={e.isActive ? "bg-green-100 text-green-800" : ""}>
+                                    {e.isActive ? "Идэвхтэй" : "Идэвхгүй"}
+                                  </Badge>
+                                  <span className="text-sm font-mono font-bold tracking-wider text-brand-700 bg-brand-100 px-2 py-1 rounded">{e.code}</span>
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    onClick={(ev) => { ev.stopPropagation(); copyCode(e.code); }}
+                                  >
+                                    <Copy className="w-3.5 h-3.5" />
+                                  </Button>
+                                  {expandedExamId === e.id ? (
+                                    <ChevronUp className="w-4 h-4 text-brand-600" />
+                                  ) : (
+                                    <ChevronDown className="w-4 h-4 text-muted-foreground" />
+                                  )}
+                                </div>
+                              </button>
+
+                              {/* Expanded Detail Panel */}
+                              <AnimatePresence>
+                                {expandedExamId === e.id && (
+                                  <motion.div
+                                    initial={{ opacity: 0, height: 0 }}
+                                    animate={{ opacity: 1, height: "auto" }}
+                                    exit={{ opacity: 0, height: 0 }}
+                                    transition={{ duration: 0.2 }}
+                                    className="overflow-hidden"
+                                  >
+                                    <div className="mt-2 ml-2 mr-2 p-4 bg-white border-2 border-brand-200 rounded-xl">
+                                      {/* Exam Info Header */}
+                                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-4">
+                                        <div className="bg-brand-50 rounded-lg p-3">
+                                          <p className="text-xs text-muted-foreground mb-1">Нэр</p>
+                                          <p className="text-sm font-semibold text-brand-900 truncate">{e.title}</p>
+                                        </div>
+                                        <div className="bg-brand-50 rounded-lg p-3">
+                                          <p className="text-xs text-muted-foreground mb-1">Код</p>
+                                          <p className="text-sm font-mono font-bold text-brand-700 tracking-wider">{e.code}</p>
+                                        </div>
+                                        <div className="bg-brand-50 rounded-lg p-3">
+                                          <p className="text-xs text-muted-foreground mb-1">Хугацаа</p>
+                                          <p className="text-sm font-semibold text-brand-900">{e.duration} минут</p>
+                                        </div>
+                                        <div className="bg-brand-50 rounded-lg p-3">
+                                          <p className="text-xs text-muted-foreground mb-1">Асуултын тоо</p>
+                                          <p className="text-sm font-semibold text-brand-900">{e.questionCount}</p>
+                                        </div>
+                                        <div className="bg-brand-50 rounded-lg p-3">
+                                          <p className="text-xs text-muted-foreground mb-1">Статус</p>
+                                          <Badge variant={e.isActive ? "default" : "secondary"} className={e.isActive ? "bg-green-100 text-green-800" : ""}>
+                                            {e.isActive ? "Идэвхтэй" : "Идэвхгүй"}
+                                          </Badge>
+                                        </div>
+                                        <div className="bg-brand-50 rounded-lg p-3">
+                                          <p className="text-xs text-muted-foreground mb-1 flex items-center gap-1"><Calendar className="w-3 h-3" /> Зогсоох огноо</p>
+                                          <p className="text-sm font-semibold text-brand-900">
+                                            {e.endDate ? new Date(e.endDate).toLocaleDateString("mn-MN") : "Тодорхойгүй"}
+                                          </p>
+                                        </div>
+                                      </div>
+
+                                      {/* Questions Section */}
+                                      <div className="border-t pt-3">
+                                        <button
+                                          onClick={() => setShowExpandedQuestions(!showExpandedQuestions)}
+                                          className="w-full flex items-center justify-between py-2 text-sm font-semibold text-brand-800 hover:text-brand-600 transition-colors"
+                                        >
+                                          <span className="flex items-center gap-2">
+                                            <ClipboardList className="w-4 h-4" />
+                                            Асуултууд харах ({expandedQuestions.length})
+                                          </span>
+                                          {showExpandedQuestions ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                                        </button>
+
+                                        <AnimatePresence>
+                                          {showExpandedQuestions && (
+                                            <motion.div
+                                              initial={{ opacity: 0, height: 0 }}
+                                              animate={{ opacity: 1, height: "auto" }}
+                                              exit={{ opacity: 0, height: 0 }}
+                                              transition={{ duration: 0.2 }}
+                                              className="overflow-hidden"
+                                            >
+                                              {expandedQuestionsLoading ? (
+                                                <div className="flex items-center justify-center py-8">
+                                                  <Loader2 className="w-6 h-6 text-brand-500 animate-spin mr-2" />
+                                                  <span className="text-sm text-muted-foreground">Ачааллаж байна...</span>
+                                                </div>
+                                              ) : expandedQuestions.length > 0 ? (
+                                                <div className="space-y-4 mt-3 max-h-96 overflow-y-auto pr-1">
+                                                  {expandedQuestions.map((q, idx) => (
+                                                    <div key={q.id} className="bg-gray-50 rounded-lg p-3 border">
+                                                      <p className="text-sm font-medium text-brand-900 mb-2">
+                                                        {idx + 1}. {q.question}
+                                                      </p>
+                                                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                                                        {[
+                                                          { label: "A", text: q.optionA, idx: 0 },
+                                                          { label: "B", text: q.optionB, idx: 1 },
+                                                          { label: "C", text: q.optionC, idx: 2 },
+                                                          { label: "D", text: q.optionD, idx: 3 },
+                                                        ].map((opt) => (
+                                                          <div
+                                                            key={opt.label}
+                                                            className={`text-sm px-3 py-2 rounded-lg border transition-colors ${
+                                                              opt.idx === q.correct
+                                                                ? "bg-green-100 border-green-400 text-green-900 font-semibold"
+                                                                : "bg-white border-gray-200 text-gray-700"
+                                                            }`}
+                                                          >
+                                                            <span className="font-bold mr-1.5">{opt.label})</span>
+                                                            {opt.text}
+                                                            {opt.idx === q.correct && (
+                                                              <CheckCircle className="w-3.5 h-3.5 inline-block ml-1.5 text-green-600" />
+                                                            )}
+                                                          </div>
+                                                        ))}
+                                                      </div>
+                                                    </div>
+                                                  ))}
+                                                </div>
+                                              ) : (
+                                                <p className="text-sm text-muted-foreground text-center py-4">Асуулт олдсонгүй</p>
+                                              )}
+                                            </motion.div>
+                                          )}
+                                        </AnimatePresence>
+                                      </div>
+
+                                      {/* Action Buttons */}
+                                      <div className="flex items-center gap-2 mt-4 pt-3 border-t">
+                                        {e.isActive && (
+                                          <Button
+                                            size="sm"
+                                            variant="outline"
+                                            className="border-red-300 text-red-600 hover:bg-red-50 hover:text-red-700"
+                                            onClick={() => handleStopExam(e.id)}
+                                          >
+                                            <XCircle className="w-4 h-4 mr-1.5" /> Зогсоох
+                                          </Button>
+                                        )}
+                                        <Button
+                                          size="sm"
+                                          variant="outline"
+                                          className="border-red-300 text-red-600 hover:bg-red-50 hover:text-red-700"
+                                          onClick={() => handleDeleteExam(e.id)}
+                                        >
+                                          <Trash2 className="w-4 h-4 mr-1.5" /> Устгах
+                                        </Button>
+                                      </div>
+                                    </div>
+                                  </motion.div>
+                                )}
+                              </AnimatePresence>
                             </div>
-                            <div className="flex items-center gap-2 ml-3 shrink-0">
-                              <Badge variant={e.isActive ? "default" : "secondary"} className={e.isActive ? "bg-green-100 text-green-800" : ""}>
-                                {e.isActive ? "Идэвхтэй" : "Идэвхгүй"}
-                              </Badge>
-                              <span className="text-sm font-mono font-bold tracking-wider text-brand-700 bg-brand-100 px-2 py-1 rounded">{e.code}</span>
-                              <Button size="sm" variant="ghost" onClick={() => copyCode(e.code)}><Copy className="w-3.5 h-3.5" /></Button>
-                              {e.isActive && (
-                                <Button size="sm" variant="ghost" className="text-red-500 hover:text-red-700 hover:bg-red-50" onClick={async (ev) => { ev.stopPropagation(); try { const res = await fetch(`/api/admin/exams/${e.id}/stop`, { method: "PUT", headers: { Authorization: `Bearer ${token}` } }); if (res.ok) { toast.success("Шалгалт зогсов"); fetchAdminItems(); } else { toast.error("Алдаа"); } } catch { toast.error("Алдаа"); } }}><XCircle className="w-3.5 h-3.5" /> Зогсоох</Button>
-                              )}
-                            </div>
-                          </div>
-                        ))}
+                          ))}
+                        </div>
                       </div>
                     )}
+
+                    {/* Quizzes - keep as flat list */}
                     {(adminQuizzes || []).length > 0 && (
                       <div>
                         <p className="text-xs font-semibold text-amber-600 uppercase mb-2">Сорилууд ({(adminQuizzes || []).length})</p>

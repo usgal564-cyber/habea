@@ -95,6 +95,7 @@ type Exam struct {
         Duration      int       `json:"duration"`
         QuestionCount int       `json:"questionCount"`
         IsActive      bool      `gorm:"default:false" json:"isActive"`
+        EndDate       *time.Time `json:"endDate"`
         CreatedAt     time.Time `json:"createdAt"`
 }
 

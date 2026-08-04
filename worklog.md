@@ -261,3 +261,20 @@ Stage Summary:
 - Profile: Shows time spent per exam and average time in stat card
 - No indigo/blue Tailwind colors used
 - Produced artifacts: exam-page.tsx, admin-page.tsx, profile-page.tsx
+---
+Task ID: exam-expand-enddate
+Agent: Main Agent
+Task: Fix exam page - add expandable detail view, end date field, exam questions display
+
+Work Log:
+- Fixed isProfile is not defined error in navbar.tsx (stale browser cache)
+- Added EndDate field to backend Exam model + handlers
+- Created AdminGetExamQuestionsHandler, AdminDeleteExamHandler
+- Rewrote exam-page.tsx with expandable exam list, detail view, end date field
+- Added questions display with correct answers highlighted
+- No TypeScript errors introduced
+
+Stage Summary:
+- Backend updated with endDate support and new endpoints
+- Frontend exam list now expandable with full details
+- Exam creation form has Зогсоох огноо date picker
