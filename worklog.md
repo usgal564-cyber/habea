@@ -342,3 +342,24 @@ Stage Summary:
 - Hero sections unified across exam, admin, profile pages with decorative blur orbs
 - Footer now persistent across all pages for better navigation
 - Code is clean, build passes without TypeScript errors
+
+---
+Task ID: add-easy-questions
+Agent: Main Agent
+Task: 3 бэлэн шалгалт тус бүрт 20 амархан асуулт нэмэх
+
+Work Log:
+- Checked existing question counts: EXAM001=30, EXAM002=30, EXAM003=29
+- Created 20 easy HABEA basic questions for EXAM001 (index 30-49) — about PPE, evacuation, safety signage, first aid, working hours
+- Created 20 easy risk assessment questions for EXAM002 (index 30-49) — about workplace hazards, risk matrix, fire risk, chemical risk, transport accidents
+- Created 20 easy HABEA law questions for EXAM003 (index 29-48) — about HABEA law, employer duties, worker rights, inspections
+- Updated question_count in exams table for all 3 exams
+- Fixed EXAM001 extra question (removed duplicate, kept exactly 50)
+- Rebuilt frontend (826KB JS, 156KB CSS)
+
+Stage Summary:
+- EXAM001: 30 → 50 questions (+20 easy ✅)
+- EXAM002: 30 → 50 questions (+20 easy ✅)
+- EXAM003: 29 → 49 questions (+20 easy ✅)
+- All 60 new questions are easy/basic level
+- Database at /home/z/my-project/backend/data/habea.db updated
