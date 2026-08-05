@@ -384,34 +384,30 @@ export default function ExamPage() {
   return (
     <div className="min-h-screen">
       {/* Header */}
-      <section className="relative bg-gradient-to-br from-brand-800 via-brand-900 to-brand-950 py-16 lg:py-24 overflow-hidden">
+      <section className="relative bg-gradient-to-br from-brand-800 via-brand-900 to-brand-950 py-10 lg:py-14 overflow-hidden">
         <div className="absolute inset-0 opacity-10">
           <div className="absolute top-10 right-10 w-72 h-72 bg-brand-400 rounded-full blur-3xl" />
           <div className="absolute bottom-10 left-10 w-96 h-96 bg-brand-300 rounded-full blur-3xl" />
         </div>
         <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
-            <div className="inline-flex items-center gap-2 bg-brand-700/50 border border-brand-600/30 px-4 py-2 rounded-full mb-6">
-              <Lock className="w-4 h-4 text-brand-300" />
-              <span className="text-brand-200 text-sm font-medium">Кодотой шалгалт</span>
-            </div>
-            <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-white mb-4">Шалгалт</h1>
-            <p className="text-brand-200/80 max-w-2xl mx-auto text-lg">Админ өгсөн кодоор шалгалтанд орох. Шалгалт идэвхтэй үед л орох боломжтой.</p>
+            <h1 className="text-3xl sm:text-4xl font-bold text-white mb-2">Шалгалт</h1>
+            <p className="text-brand-100 max-w-xl mx-auto text-sm sm:text-base">Админ өгсөн кодоор шалгалтанд орох. Шалгалт идэвхтэй үед л орох боломжтой.</p>
           </motion.div>
         </div>
       </section>
 
-      <div className="max-w-5xl mx-auto px-4 -mt-8 pb-12">
+      <div className="max-w-5xl mx-auto px-4 -mt-6 pb-12">
         {/* ─── Admin: Template Selection + Custom Create ─── */}
         {isAdmin && state === "enter-code" && (
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="mb-8">
             <Card className="shadow-xl border-brand-200">
-              <CardHeader className="bg-brand-50 rounded-t-xl">
-                <CardTitle className="text-xl text-brand-900 flex items-center gap-2">
-                  <Shield className="w-5 h-5" /> Админ: Шалгалт үүсгэх
+              <CardHeader className="bg-brand-50 rounded-t-xl py-3 px-5">
+                <CardTitle className="text-base text-brand-900 flex items-center gap-2">
+                  <Shield className="w-4 h-4" /> Админ: Шалгалт үүсгэх
                 </CardTitle>
               </CardHeader>
-              <CardContent className="p-6">
+              <CardContent className="p-5">
                 {/* Success Message */}
                 {createdCode && (
                   <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="mb-6 p-4 bg-green-50 border-2 border-green-300 rounded-xl">
@@ -627,13 +623,13 @@ export default function ExamPage() {
             {/* Created items list */}
             {((adminExams || []).length > 0 || (adminQuizzes || []).length > 0) && (
               <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="mt-6">
-                <Card className="border-brand-200">
-                  <CardHeader className="bg-brand-50 rounded-t-xl">
-                    <CardTitle className="text-lg text-brand-900 flex items-center gap-2">
-                      <Eye className="w-5 h-5" /> Үүссэн шалгалтууд, сорилууд
+                <Card className="border-brand-200 shadow-sm">
+                  <CardHeader className="bg-brand-50 rounded-t-xl py-3 px-5">
+                    <CardTitle className="text-base text-brand-900 flex items-center gap-2">
+                      <Eye className="w-4 h-4" /> Үүссэн шалгалтууд, сорилууд
                     </CardTitle>
                   </CardHeader>
-                  <CardContent className="p-4">
+                  <CardContent className="p-5 space-y-4">
                     {/* Exams - Expandable List */}
                     {(adminExams || []).length > 0 && (
                       <div className="mb-4">
@@ -644,7 +640,7 @@ export default function ExamPage() {
                               {/* Clickable header row */}
                               <button
                                 onClick={() => handleToggleExpand(e.id)}
-                                className={`w-full flex items-center justify-between p-3 rounded-xl transition-colors text-left ${expandedExamId === e.id ? "bg-brand-50 border-2 border-brand-300" : "bg-gray-50 hover:bg-brand-50 border border-transparent"}`}
+                                className={`w-full flex items-center justify-between p-3.5 rounded-xl transition-colors text-left ${expandedExamId === e.id ? "bg-brand-50 border-2 border-brand-300" : "bg-white hover:bg-gray-50 border border-gray-200"}`}
                               >
                                 <div className="min-w-0 flex-1">
                                   <p className="text-sm font-medium text-brand-900 truncate">{e.title}</p>
@@ -820,7 +816,7 @@ export default function ExamPage() {
                       <div>
                         <p className="text-xs font-semibold text-amber-600 uppercase mb-2">Сорилууд ({(adminQuizzes || []).length})</p>
                         {(adminQuizzes || []).slice(0, 10).map((q: any) => (
-                          <div key={q.id} className="flex items-center justify-between p-3 rounded-xl bg-gray-50 hover:bg-amber-50 transition-colors mb-2">
+                          <div key={q.id} className="flex items-center justify-between p-3 rounded-xl bg-white hover:bg-amber-50 transition-colors mb-2 border border-gray-200">
                             <div className="min-w-0 flex-1">
                               <p className="text-sm font-medium text-brand-900 truncate">{q.title}</p>
                               <p className="text-xs text-muted-foreground">{q.questionCount} асуулт</p>
@@ -844,24 +840,24 @@ export default function ExamPage() {
           {state === "enter-code" && (
             <motion.div key="enter-code" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}>
               <Card className="shadow-xl">
-                <CardHeader className="text-center pb-2">
-                  <CardTitle className="text-xl text-brand-900">Шалгалтын код оруулна уу</CardTitle>
-                </CardHeader>
-                <CardContent className="pt-4">
-                  <div className="max-w-md mx-auto space-y-4">
+                <CardContent className="p-6 sm:p-8">
+                  <div className="max-w-md mx-auto">
                     <div className="text-center mb-6">
-                      <div className="w-16 h-16 rounded-2xl bg-brand-100 flex items-center justify-center mx-auto mb-4">
-                        <Shield className="w-8 h-8 text-brand-600" />
+                      <div className="w-14 h-14 rounded-2xl bg-brand-100 flex items-center justify-center mx-auto mb-3">
+                        <Lock className="w-7 h-7 text-brand-600" />
                       </div>
+                      <h2 className="text-xl font-bold text-brand-900 mb-1">Шалгалтын код оруулна уу</h2>
                       <p className="text-muted-foreground text-sm">Админ тань өгсөн шалгалтын код оруулж шалгалтанд ороорой</p>
                     </div>
-                    <div>
-                      <Label>Шалгалтын код</Label>
-                      <Input value={code} onChange={e => setCode(e.target.value.toUpperCase())} placeholder="Жишээ: ABC123" className="text-center text-lg tracking-widest font-mono" onKeyDown={e => e.key === "Enter" && handleVerifyCode()} />
+                    <div className="space-y-3">
+                      <div>
+                        <Label className="text-sm font-medium mb-1.5 block">Шалгалтын код</Label>
+                        <Input value={code} onChange={e => setCode(e.target.value.toUpperCase())} placeholder="Жишээ: ABC123" className="text-center text-lg tracking-widest font-mono h-12" onKeyDown={e => e.key === "Enter" && handleVerifyCode()} />
+                      </div>
+                      <Button onClick={handleVerifyCode} className="w-full bg-brand-600 hover:bg-brand-700 h-11 text-base font-medium" disabled={loading || !code.trim()}>
+                        {loading ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Шалгаж байна...</> : "Шалгалт орох"}
+                      </Button>
                     </div>
-                    <Button onClick={handleVerifyCode} className="w-full bg-brand-600 hover:bg-brand-700" disabled={loading || !code.trim()}>
-                      {loading ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Шалгаж байна...</> : "Шалгалт орох"}
-                    </Button>
                   </div>
                 </CardContent>
               </Card>
