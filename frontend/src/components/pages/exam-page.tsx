@@ -92,6 +92,7 @@ export default function ExamPage() {
     { question: "", optionA: "", optionB: "", optionC: "", optionD: "", correct: "0" },
   ]);
   const [customCreating, setCustomCreating] = useState(false);
+  const [expandedQIndex, setExpandedQIndex] = useState<number | null>(null);
 
   // Admin: Expanded exam detail
   const [expandedExamId, setExpandedExamId] = useState<string | null>(null);
@@ -326,7 +327,11 @@ export default function ExamPage() {
   };
 
   // Admin: Add question (custom)
-  const addQuestion = () => setAdminQuestions([...adminQuestions, { question: "", optionA: "", optionB: "", optionC: "", optionD: "", correct: "0" }]);
+  const addQuestion = () => {
+    const newIdx = adminQuestions.length;
+    setAdminQuestions([...adminQuestions, { question: "", optionA: "", optionB: "", optionC: "", optionD: "", correct: "0" }]);
+    setExpandedQIndex(newIdx);
+  };
   const removeQuestion = (i: number) => { if (adminQuestions.length > 1) setAdminQuestions(adminQuestions.filter((_, idx) => idx !== i)); };
   const updateQ = (i: number, field: string, val: string) => { const nq = [...adminQuestions]; nq[i] = { ...nq[i], [field]: val }; setAdminQuestions(nq); };
 
@@ -374,6 +379,7 @@ export default function ExamPage() {
     setExamTitle(""); setExamDuration("30"); setExamEndDate(""); setQuizDescription("");
     setAdminQuestions([{ question: "", optionA: "", optionB: "", optionC: "", optionD: "", correct: "0" }]);
     setActiveCreateType("exam");
+    setExpandedQIndex(null);
   };
 
   const copyCode = (c: string) => {
@@ -577,42 +583,89 @@ export default function ExamPage() {
                     )}
 
                     <div className="space-y-3 max-h-96 overflow-y-auto pr-1">
-                      <div className="flex items-center justify-between">
-                        <Label className="text-base font-semibold">Асуултууд ({adminQuestions.length})</Label>
-                        <Button type="button" size="sm" variant="outline" onClick={addQuestion}><Plus className="w-4 h-4 mr-1" /> Асуулт нэмэх</Button>
-                      </div>
-                      {adminQuestions.map((q, i) => (
-                        <div key={i} className="bg-white rounded-xl p-4 space-y-3 border">
-                          <div className="flex items-center justify-between">
-                            <span className="text-sm font-bold text-brand-700">Асуулт {i + 1}</span>
-                            <Button type="button" size="sm" variant="ghost" onClick={() => removeQuestion(i)} className="text-red-500 hover:text-red-700">
-                              <Trash2 className="w-4 h-4" />
-                            </Button>
-                          </div>
-                          <Textarea value={q.question} onChange={e => updateQ(i, "question", e.target.value)} placeholder="Асуултын текст..." rows={2} />
-                          <div className="grid grid-cols-2 gap-2">
-                            <Input value={q.optionA} onChange={e => updateQ(i, "optionA", e.target.value)} placeholder="A) Хариулт" />
-                            <Input value={q.optionB} onChange={e => updateQ(i, "optionB", e.target.value)} placeholder="B) Хариулт" />
-                            <Input value={q.optionC} onChange={e => updateQ(i, "optionC", e.target.value)} placeholder="C) Хариулт" />
-                            <Input value={q.optionD} onChange={e => updateQ(i, "optionD", e.target.value)} placeholder="D) Хариулт" />
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <Label className="text-sm">Зөв хариулт:</Label>
-                            <Select value={q.correct} onValueChange={v => updateQ(i, "correct", v)}>
-                              <SelectTrigger className="w-24"><SelectValue /></SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="0">A</SelectItem>
-                                <SelectItem value="1">B</SelectItem>
-                                <SelectItem value="2">C</SelectItem>
-                                <SelectItem value="3">D</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </div>
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                          <Label className="text-base font-semibold">Асуултууд ({adminQuestions.length})</Label>
+                          {adminQuestions.length > 0 && adminQuestions.length < 5 && (
+                            <span className="text-xs text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full">Хамгийн багадаа 5 асуулт</span>
+                          )}
+                          {adminQuestions.length >= 100 && (
+                            <span className="text-xs text-red-600 bg-red-50 px-2 py-0.5 rounded-full">Дээд тал 100 асуулт</span>
+                          )}
                         </div>
-                      ))}
+                        <Button type="button" size="sm" variant="outline" onClick={addQuestion} disabled={adminQuestions.length >= 100}><Plus className="w-4 h-4 mr-1" /> Асуулт нэмэх</Button>
+                      </div>
+                      <p className="text-xs text-muted-foreground mb-3">Энэ шалгалт {adminQuestions.length} асуулттай</p>
+                      <div className="space-y-1.5 max-h-96 overflow-y-auto pr-1">
+                        {adminQuestions.map((q, i) => {
+                          const isExpanded = expandedQIndex === i;
+                          const hasContent = q.question.trim() || q.optionA.trim() || q.optionB.trim();
+                          const preview = q.question.trim() || "Асуулт бичээгүй";
+                          return (
+                            <div key={i} className={`rounded-xl border transition-all ${isExpanded ? "border-brand-300 bg-brand-50/50 shadow-sm" : "border-gray-200 hover:border-gray-300"}`}>
+                              <button
+                                type="button"
+                                onClick={() => setExpandedQIndex(isExpanded ? null : i)}
+                                className="w-full flex items-center justify-between px-3.5 py-2.5 text-left"
+                              >
+                                <div className="flex items-center gap-2.5 min-w-0">
+                                  <span className={`w-7 h-7 rounded-lg flex items-center justify-center text-xs font-bold shrink-0 ${hasContent ? "bg-brand-100 text-brand-700" : "bg-gray-100 text-gray-400"}`}>
+                                    {i + 1}
+                                  </span>
+                                  <div className="min-w-0">
+                                    <p className={`text-sm truncate ${hasContent ? "text-brand-900 font-medium" : "text-muted-foreground italic"}`}>
+                                      {preview.length > 50 ? preview.substring(0, 50) + "..." : preview}
+                                    </p>
+                                    {hasContent && (
+                                      <p className="text-xs text-muted-foreground mt-0.5">
+                                        A: {q.optionA ? q.optionA.substring(0, 15) + (q.optionA.length > 15 ? "..." : "") : "—"} ·
+                                        B: {q.optionB ? q.optionB.substring(0, 15) + (q.optionB.length > 15 ? "..." : "") : "—"} ·
+                                        Зөв: {["A","B","C","D"][parseInt(q.correct) || 0]}
+                                      </p>
+                                    )}
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-1 shrink-0 ml-2">
+                                  <Button type="button" size="sm" variant="ghost" onClick={(ev) => { ev.stopPropagation(); removeQuestion(i); }} className="h-7 w-7 p-0 text-red-400 hover:text-red-600 hover:bg-red-50">
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </Button>
+                                  {isExpanded ? <ChevronUp className="w-4 h-4 text-brand-600" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
+                                </div>
+                              </button>
+                              <AnimatePresence>
+                                {isExpanded && (
+                                  <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} transition={{ duration: 0.15 }} className="overflow-hidden">
+                                    <div className="px-3.5 pb-3.5 pt-1 space-y-2.5 border-t border-brand-100">
+                                      <Textarea value={q.question} onChange={e => updateQ(i, "question", e.target.value)} placeholder="Асуултын текст..." rows={2} className="text-sm" />
+                                      <div className="grid grid-cols-2 gap-2">
+                                        <Input value={q.optionA} onChange={e => updateQ(i, "optionA", e.target.value)} placeholder="A) Хариулт" className="text-sm" />
+                                        <Input value={q.optionB} onChange={e => updateQ(i, "optionB", e.target.value)} placeholder="B) Хариулт" className="text-sm" />
+                                        <Input value={q.optionC} onChange={e => updateQ(i, "optionC", e.target.value)} placeholder="C) Хариулт" className="text-sm" />
+                                        <Input value={q.optionD} onChange={e => updateQ(i, "optionD", e.target.value)} placeholder="D) Хариулт" className="text-sm" />
+                                      </div>
+                                      <div className="flex items-center gap-2">
+                                        <Label className="text-sm">Зөв хариулт:</Label>
+                                        <Select value={q.correct} onValueChange={v => updateQ(i, "correct", v)}>
+                                          <SelectTrigger className="w-24"><SelectValue /></SelectTrigger>
+                                          <SelectContent>
+                                            <SelectItem value="0">A</SelectItem>
+                                            <SelectItem value="1">B</SelectItem>
+                                            <SelectItem value="2">C</SelectItem>
+                                            <SelectItem value="3">D</SelectItem>
+                                          </SelectContent>
+                                        </Select>
+                                      </div>
+                                    </div>
+                                  </motion.div>
+                                )}
+                              </AnimatePresence>
+                            </div>
+                          );
+                        })}
+                      </div>
                     </div>
 
-                    <Button onClick={handleCustomCreate} disabled={customCreating || !examTitle.trim()} className="w-full mt-4 bg-brand-600 hover:bg-brand-700">
+                    <Button onClick={handleCustomCreate} disabled={customCreating || !examTitle.trim() || adminQuestions.length < 5} className="w-full mt-4 bg-brand-600 hover:bg-brand-700">
                       {customCreating ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Үүсгэж байна...</> : <><Plus className="w-4 h-4 mr-2" />{activeCreateType === "exam" ? "Шалгалт" : "Сорил"} үүсгэх</>}
                     </Button>
                   </motion.div>

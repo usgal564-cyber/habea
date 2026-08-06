@@ -1,0 +1,866 @@
+     1→     1→
+     2→     2→import { useEffect, useState, useCallback } from "react";
+     3→     3→import { motion, AnimatePresence } from "framer-motion";
+     4→     4→import { toast } from "sonner";
+     5→     5→import {
+     6→     6→  Brain,
+     7→     7→  ChevronLeft,
+     8→     8→  ChevronRight,
+     9→     9→  CheckCircle2,
+    10→    10→  XCircle,
+    11→    11→  RotateCcw,
+    12→    12→  ListChecks,
+    13→    13→  Loader2,
+    14→    14→  HelpCircle,
+    15→    15→  Trophy,
+    16→    16→  ArrowLeft,
+    17→    17→  Lock,
+    18→    18→  CreditCard,
+    19→    19→  ShieldCheck,
+    20→    20→  Wallet,
+    21→    21→  Plus,
+    22→    22→} from "lucide-react";
+    23→    23→import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+    24→    24→import { Button } from "@/components/ui/button";
+    25→    25→import { Badge } from "@/components/ui/badge";
+    26→    26→import { Progress } from "@/components/ui/progress";
+    27→    27→import { Skeleton } from "@/components/ui/skeleton";
+    28→    28→import { Input } from "@/components/ui/input";
+    29→    29→import { useAuthStore } from "@/hooks/use-auth";
+    30→    30→import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+    31→    31→
+    32→    32→/* ─── Types ─────────────────────────────────────────────── */
+    33→    33→
+    34→    34→type QuizListItem = {
+    35→    35→  id: string;
+    36→    36→  title: string;
+    37→    37→  description: string;
+    38→    38→  slug: string;
+    39→    39→  questionCount: number;
+    40→    40→  price: number;
+    41→    41→};
+    42→    42→
+    43→    43→type Question = {
+    44→    44→  id: string;
+    45→    45→  questionText: string;
+    46→    46→  optionA: string;
+    47→    47→  optionB: string;
+    48→    48→  optionC: string;
+    49→    49→  optionD: string;
+    50→    50→  questionOrder: number;
+    51→    51→};
+    52→    52→
+    53→    53→type QuizResult = {
+    54→    54→  attemptId: string;
+    55→    55→  score: number;
+    56→    56→  total: number;
+    57→    57→  passed: boolean;
+    58→    58→};
+    59→    59→
+    60→    60→/* ─── Constants ─────────────────────────────────────────── */
+    61→    61→
+    62→    62→const QUESTIONS_PER_PAGE = 20;
+    63→    63→const QUIZ_PRICE = 5000; // ₮ per quiz
+    64→    64→
+    65→    65→/* ─── Animation Variants ────────────────────────────────── */
+    66→    66→
+    67→    67→const containerVariants = {
+    68→    68→  hidden: { opacity: 0 },
+    69→    69→  visible: { opacity: 1, transition: { staggerChildren: 0.06 } },
+    70→    70→};
+    71→    71→
+    72→    72→const itemVariants = {
+    73→    73→  hidden: { opacity: 0, y: 16 },
+    74→    74→  visible: { opacity: 1, y: 0, transition: { duration: 0.35, ease: "easeOut" } },
+    75→    75→};
+    76→    76→
+    77→    77→/* ─── Quiz Card Skeleton ────────────────────────────────── */
+    78→    78→
+    79→    79→function QuizCardSkeleton() {
+    80→    80→  return (
+    81→    81→    <Card className="overflow-hidden">
+    82→    82→      <CardHeader className="pb-3">
+    83→    83→        <Skeleton className="h-5 w-3/4" />
+    84→    84→        <Skeleton className="mt-2 h-4 w-full" />
+    85→    85→      </CardHeader>
+    86→    86→      <CardContent>
+    87→    87→        <div className="flex items-center justify-between">
+    88→    88→          <Skeleton className="h-6 w-24 rounded-full" />
+    89→    89→          <Skeleton className="h-9 w-28" />
+    90→    90→        </div>
+    91→    91→      </CardContent>
+    92→    92→    </Card>
+    93→    93→  );
+    94→    94→}
+    95→    95→
+    96→    96→/* ─── Step 1: Quiz Selection ────────────────────────────── */
+    97→    97→
+    98→    98→function QuizSelection({ onSelect }: { onSelect: (quiz: QuizListItem) => void }) {
+    99→    99→  const [quizzes, setQuizzes] = useState<QuizListItem[]>([]);
+   100→   100→  const [isLoading, setIsLoading] = useState(true);
+   101→   101→  const { user, token } = useAuthStore();
+   102→   102→
+   103→   103→  // Admin states
+   104→   104→  const isAdmin = user && (user.role === "ADMIN" || user.role === "MANAGER" || user.role === "TEACHER");
+   105→   105→  const [showAdminCreate, setShowAdminCreate] = useState(false);
+   106→   106→  const [adminTitle, setAdminTitle] = useState("");
+   107→   107→  const [adminDesc, setAdminDesc] = useState("");
+   108→   108→  const [adminQuestions, setAdminQuestions] = useState<{ question: string; optionA: string; optionB: string; optionC: string; optionD: string; correct: string }[]>([
+   109→   109→    { question: "", optionA: "", optionB: "", optionC: "", optionD: "", correct: "0" },
+   110→   110→  ]);
+   111→   111→  const [adminCreating, setAdminCreating] = useState(false);
+   112→   112→
+   113→   113→  const refreshQuizzes = useCallback(() => {
+   114→   114→    fetch("/api/quiz")
+   115→   115→      .then(r => r.json())
+   116→   116→      .then(d => { if (d.quizzes) setQuizzes(d.quizzes.map((q: QuizListItem) => ({ ...q, price: QUIZ_PRICE }))); })
+   117→   117→      .catch(() => {});
+   118→   118→  }, []);
+   119→   119→
+   120→   120→  useEffect(() => {
+   121→   121→    async function fetchQuizzes() {
+   122→   122→      try {
+   123→   123→        const res = await fetch("/api/quiz");
+   124→   124→        const data = await res.json();
+   125→   125→        if (data.quizzes && data.quizzes.length > 0) {
+   126→   126→          setQuizzes(data.quizzes.map((q: QuizListItem) => ({ ...q, price: QUIZ_PRICE })));
+   127→   127→        }
+   128→   128→      } catch {
+   129→   129→        toast.error("Алдаа", { description: "Сорилуудыг ачааллахад алдаа гарлаа." });
+   130→   130→      } finally {
+   131→   131→        setIsLoading(false);
+   132→   132→      }
+   133→   133→    }
+   134→   134→    fetchQuizzes();
+   135→   135→  }, []);
+   136→   136→
+   137→   137→  const handleStartQuiz = (quiz: QuizListItem) => {
+   138→   138→    if (!user || !token) {
+   139→   139→      toast.error("Нэвтрэх шаардлагатай", {
+   140→   140→        description: "Сорил өгөхийн тулд нэвтэрнө үү.",
+   141→   141→      });
+   142→   142→      return;
+   143→   143→    }
+   144→   144→    onSelect(quiz);
+   145→   145→  };
+   146→   146→
+   147→   147→  return (
+   148→   148→    <>
+   149→   149→      {/* Hero Banner */}
+   150→   150→      <div className="bg-gradient-to-b from-brand-900 to-brand-800 py-16 px-4">
+   151→   151→        <div className="max-w-4xl mx-auto text-center">
+   152→   152→          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
+   153→   153→            <div className="inline-flex items-center gap-2 bg-brand-700/50 px-4 py-2 rounded-full mb-6">
+   154→   154→              <Brain className="w-4 h-4 text-brand-300" />
+   155→   155→              <span className="text-brand-200 text-sm font-medium">Мэдлэг сорих</span>
+   156→   156→            </div>
+   157→   157→            <h1 className="text-3xl lg:text-4xl font-bold text-white mb-4">Сорилууд</h1>
+   158→   158→            <p className="text-brand-200 text-lg max-w-2xl mx-auto">
+   159→   159→              ХАБЭА-ын бүх чиглэлээр мэдлэг сорих сорилууд. Төлбөр төлсний дараа сорил өгөх боломжтой.
+   160→   160→            </p>
+   161→   161→            <div className="mt-4 inline-flex items-center gap-2 bg-amber-500/20 border border-amber-400/30 rounded-full px-4 py-1.5 text-sm text-amber-200">
+   162→   162→              <CreditCard className="size-4" />
+   163→   163→              Сорил бүрд: {QUIZ_PRICE.toLocaleString()}₮
+   164→   164→            </div>
+   165→   165→          </motion.div>
+   166→   166→        </div>
+   167→   167→      </div>
+   168→   168→
+   169→   169→      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 -mt-8">
+   170→   170→
+   171→   171→      {/* Admin: Create Quiz Section */}
+   172→   172→      {isAdmin && (
+   173→   173→        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="mb-8">
+   174→   174→          <Card className="border-amber-200 shadow-lg">
+   175→   175→            <CardHeader className="bg-amber-50 rounded-t-xl">
+   176→   176→              <CardTitle className="text-lg text-amber-900 flex items-center gap-2">
+   177→   177→                <ShieldCheck className="w-5 h-5" /> Админ: Шинэ сорил үүсгэх
+   178→   178→              </CardTitle>
+   179→   179→            </CardHeader>
+   180→   180→            <CardContent className="p-5">
+   181→   181→              {!showAdminCreate ? (
+   182→   182→                <Button variant="outline" onClick={() => setShowAdminCreate(true)} className="w-full border-dashed border-2 border-amber-300 text-amber-700 hover:bg-amber-50 hover:border-amber-400">
+   183→   183→                  <Plus className="w-4 h-4 mr-2" /> Сорил нэмэх
+   184→   184→                </Button>
+   185→   185→              ) : (
+   186→   186→                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+   187→   187→                  <div className="flex items-center justify-between mb-4">
+   188→   188→                    <h3 className="font-bold text-amber-900">Сорилын мэдээлэл</h3>
+   189→   189→                    <Button size="sm" variant="ghost" onClick={() => setShowAdminCreate(false)} className="text-muted-foreground"><XCircle className="w-4 h-4" /></Button>
+   190→   190→                  </div>
+   191→   191→                  <div className="grid sm:grid-cols-2 gap-4 mb-4">
+   192→   192→                    <div>
+   193→   193→                      <label className="text-sm font-medium text-gray-700 mb-1 block">Сорилын нэр</label>
+   194→   194→                      <Input value={adminTitle} onChange={e => setAdminTitle(e.target.value)} placeholder="Жишээ: Гал түймэрээс сэргийлэх" />
+   195→   195→                    </div>
+   196→   196→                    <div>
+   197→   197→                      <label className="text-sm font-medium text-gray-700 mb-1 block">Тайлбар</label>
+   198→   198→                      <Input value={adminDesc} onChange={e => setAdminDesc(e.target.value)} placeholder="Сорилын товч тайлбар" />
+   199→   199→                    </div>
+   200→   200→                  </div>
+   201→   201→
+   202→   202→                  <div className="space-y-3 max-h-96 overflow-y-auto pr-1 mb-4">
+   203→   203→                    <div className="flex items-center justify-between">
+   204→   204→                      <label className="text-sm font-semibold text-gray-700">Асуултууд ({adminQuestions.length})</label>
+   205→   205→                      <Button type="button" size="sm" variant="outline" onClick={() => setAdminQuestions([...adminQuestions, { question: "", optionA: "", optionB: "", optionC: "", optionD: "", correct: "0" }])}><Plus className="w-4 h-4 mr-1" /> Асуулт нэмэх</Button>
+   206→   206→                    </div>
+   207→   207→                    {adminQuestions.map((q, i) => (
+   208→   208→                      <div key={i} className="bg-white rounded-xl p-4 space-y-3 border">
+   209→   209→                        <div className="flex items-center justify-between">
+   210→   210→                          <span className="text-sm font-bold text-amber-700">Асуулт {i + 1}</span>
+   211→   211→                          <Button type="button" size="sm" variant="ghost" onClick={() => { if (adminQuestions.length > 1) setAdminQuestions(adminQuestions.filter((_, idx) => idx !== i)); }} className="text-red-500 hover:text-red-700">
+   212→   212→                            <RotateCcw className="w-3.5 h-3.5" />
+   213→   213→                          </Button>
+   214→   214→                        </div>
+   215→   215→                        <Input value={q.question} onChange={e => { const nq = [...adminQuestions]; nq[i] = { ...nq[i], question: e.target.value }; setAdminQuestions(nq); }} placeholder="Асуултын текст" />
+   216→   216→                        <div className="grid grid-cols-2 gap-2">
+   217→   217→                          <Input value={q.optionA} onChange={e => { const nq = [...adminQuestions]; nq[i] = { ...nq[i], optionA: e.target.value }; setAdminQuestions(nq); }} placeholder="A) Хариулт" />
+   218→   218→                          <Input value={q.optionB} onChange={e => { const nq = [...adminQuestions]; nq[i] = { ...nq[i], optionB: e.target.value }; setAdminQuestions(nq); }} placeholder="B) Хариулт" />
+   219→   219→                          <Input value={q.optionC} onChange={e => { const nq = [...adminQuestions]; nq[i] = { ...nq[i], optionC: e.target.value }; setAdminQuestions(nq); }} placeholder="C) Хариулт" />
+   220→   220→                          <Input value={q.optionD} onChange={e => { const nq = [...adminQuestions]; nq[i] = { ...nq[i], optionD: e.target.value }; setAdminQuestions(nq); }} placeholder="D) Хариулт" />
+   221→   221→                        </div>
+   222→   222→                        <div className="flex items-center gap-2">
+   223→   223→                          <span className="text-sm">Зөв хариулт:</span>
+   224→   224→                          <select value={q.correct} onChange={e => { const nq = [...adminQuestions]; nq[i] = { ...nq[i], correct: e.target.value }; setAdminQuestions(nq); }} className="border rounded-lg px-3 py-1.5 text-sm">
+   225→   225→                            <option value="0">A</option>
+   226→   226→                            <option value="1">B</option>
+   227→   227→                            <option value="2">C</option>
+   228→   228→                            <option value="3">D</option>
+   229→   229→                          </select>
+   230→   230→                        </div>
+   231→   231→                      </div>
+   232→   232→                    ))}
+   233→   233→                  </div>
+   234→   234→
+   235→   235→                  <Button onClick={async () => {
+   236→   236→                    if (!adminTitle.trim()) { toast.error("Сорилын нэр оруулна уу"); return; }
+   237→   237→                    const valid = adminQuestions.filter(q => q.question.trim() && q.optionA.trim() && q.optionB.trim() && q.optionC.trim() && q.optionD.trim());
+   238→   238→                    if (valid.length < 1) { toast.error("Дор хаяж 1 асуулт оруулна уу"); return; }
+   239→   239→                    setAdminCreating(true);
+   240→   240→                    try {
+   241→   241→                      const res = await fetch("/api/admin/quizzes", {
+   242→   242→                        method: "POST",
+   243→   243→                        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+   244→   244→                        body: JSON.stringify({
+   245→   245→                          title: adminTitle,
+   246→   246→                          description: adminDesc,
+   247→   247→                          category: "",
+   248→   248→                          questions: valid.map(q => ({ ...q, correct: parseInt(q.correct) })),
+   249→   249→                        }),
+   250→   250→                      });
+   251→   251→                      const data = await res.json();
+   252→   252→                      if (!res.ok) { toast.error(data.error || "Алдаа"); return; }
+   253→   253→                      toast.success(`Сорил үүссэн: ${adminTitle}`);
+   254→   254→                      setAdminTitle(""); setAdminDesc("");
+   255→   255→                      setAdminQuestions([{ question: "", optionA: "", optionB: "", optionC: "", optionD: "", correct: "0" }]);
+   256→   256→                      setShowAdminCreate(false);
+   257→   257→                      refreshQuizzes();
+   258→   258→                    } catch { toast.error("Алдаа"); }
+   259→   259→                    finally { setAdminCreating(false); }
+   260→   260→                  }} disabled={adminCreating || !adminTitle.trim()} className="w-full bg-amber-600 hover:bg-amber-700 text-white">
+   261→   261→                    {adminCreating ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Үүсгэж байна...</> : <><Plus className="w-4 h-4 mr-2" /> Сорил үүсгэх</>}
+   262→   262→                  </Button>
+   263→   263→                </motion.div>
+   264→   264→              )}
+   265→   265→            </CardContent>
+   266→   266→          </Card>
+   267→   267→        </motion.div>
+   268→   268→      )}
+   269→   269→
+   270→   270→      {/* Quiz Grid */}
+   271→   271→      {isLoading ? (
+   272→   272→        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+   273→   273→          {Array.from({ length: 6 }).map((_, i) => (
+   274→   274→            <QuizCardSkeleton key={i} />
+   275→   275→          ))}
+   276→   276→        </div>
+   277→   277→      ) : quizzes.length > 0 ? (
+   278→   278→        <motion.div
+   279→   279→          variants={containerVariants}
+   280→   280→          initial="hidden"
+   281→   281→          animate="visible"
+   282→   282→          className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3"
+   283→   283→        >
+   284→   284→          {quizzes.map((quiz) => (
+   285→   285→            <motion.div key={quiz.id} variants={itemVariants}>
+   286→   286→              <Card className="group relative h-full overflow-hidden border-brand-100 bg-white transition-all duration-300 hover:border-brand-300 hover:shadow-lg hover:shadow-brand-100/50">
+   287→   287→                <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-brand-500 to-brand-700 opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
+   288→   288→                <CardHeader className="pb-3">
+   289→   289→                  <div className="flex items-start justify-between gap-3">
+   290→   290→                    <div className="flex-1">
+   291→   291→                      <CardTitle className="text-lg leading-tight text-brand-900 transition-colors group-hover:text-brand-700">
+   292→   292→                        {quiz.title}
+   293→   293→                      </CardTitle>
+   294→   294→                      <CardDescription className="mt-1.5 line-clamp-2">
+   295→   295→                        {quiz.description}
+   296→   296→                      </CardDescription>
+   297→   297→                    </div>
+   298→   298→                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-brand-50 text-brand-600 transition-colors group-hover:bg-brand-100">
+   299→   299→                      <HelpCircle className="size-5" />
+   300→   300→                    </div>
+   301→   301→                  </div>
+   302→   302→                </CardHeader>
+   303→   303→                <CardContent>
+   304→   304→                  <div className="flex items-center justify-between">
+   305→   305→                    <div className="flex items-center gap-2">
+   306→   306→                      <Badge
+   307→   307→                        variant="secondary"
+   308→   308→                        className="bg-brand-50 text-brand-700 hover:bg-brand-100"
+   309→   309→                      >
+   310→   310→                        <ListChecks className="mr-1 size-3" />
+   311→   311→                        {quiz.questionCount} асуулт
+   312→   312→                      </Badge>
+   313→   313→                      <Badge className="bg-amber-100 text-amber-800 hover:bg-amber-200">
+   314→   314→                        {quiz.price.toLocaleString()}₮
+   315→   315→                      </Badge>
+   316→   316→                    </div>
+   317→   317→                    <Button
+   318→   318→                      size="sm"
+   319→   319→                      className="bg-brand-600 text-white hover:bg-brand-700 focus-visible:ring-brand-500"
+   320→   320→                      onClick={() => handleStartQuiz(quiz)}
+   321→   321→                    >
+   322→   322→                      <Lock className="size-4 mr-1" />
+   323→   323→                      Төлбөр төлөх
+   324→   324→                    </Button>
+   325→   325→                  </div>
+   326→   326→                </CardContent>
+   327→   327→              </Card>
+   328→   328→            </motion.div>
+   329→   329→          ))}
+   330→   330→        </motion.div>
+   331→   331→      ) : (
+   332→   332→        <div className="flex flex-col items-center justify-center py-20 text-center">
+   333→   333→          <div className="mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-brand-50">
+   334→   334→            <Brain className="size-10 text-brand-300" />
+   335→   335→          </div>
+   336→   336→          <h3 className="text-xl font-semibold text-brand-900">Сорил олдсонгүй</h3>
+   337→   337→          <p className="mt-2 text-muted-foreground">
+   338→   338→            Одоогоор идэвхтэй сорил байхгүй байна. Дараа дахин шалгана уу.
+   339→   339→          </p>
+   340→   340→        </div>
+   341→   341→      )}
+   342→   342→      </div>
+   343→   343→    </>
+   344→   344→  );
+   345→   345→}
+   346→   346→
+   347→   347→/* ─── Step 2: Payment Dialog ──────────────────────────────── */
+   348→   348→
+   349→   349→function PaymentGate({
+   350→   350→  quiz,
+   351→   351→  onPaid,
+   352→   352→  onBack,
+   353→   353→}: {
+   354→   354→  quiz: QuizListItem;
+   355→   355→  onPaid: () => void;
+   356→   356→  onBack: () => void;
+   357→   357→}) {
+   358→   358→  const { token } = useAuthStore();
+   359→   359→  const [paying, setPaying] = useState(false);
+   360→   360→
+   361→   361→  const handlePay = async () => {
+   362→   362→    setPaying(true);
+   363→   363→    try {
+   364→   364→      const res = await fetch("/api/quiz/payment", {
+   365→   365→        method: "POST",
+   366→   366→        headers: {
+   367→   367→          "Content-Type": "application/json",
+   368→   368→          Authorization: `Bearer ${token}`,
+   369→   369→        },
+   370→   370→        body: JSON.stringify({ quizId: quiz.id }),
+   371→   371→      });
+   372→   372→      const data = await res.json();
+   373→   373→      if (res.ok) {
+   374→   374→        toast.success("Төлбөр амжилттай");
+   375→   375→        onPaid();
+   376→   376→      } else {
+   377→   377→        toast.error("Төлбөр амжилтгүй", { description: data.error || "Дахин оролдоно уу" });
+   378→   378→      }
+   379→   379→    } catch {
+   380→   380→      toast.error("Холболтын алдаа");
+   381→   381→    } finally {
+   382→   382→      setPaying(false);
+   383→   383→    }
+   384→   384→  };
+   385→   385→
+   386→   386→  return (
+   387→   387→    <Dialog open onOpenChange={() => onBack()}>
+   388→   388→      <DialogContent className="sm:max-w-md bg-white">
+   389→   389→        <DialogHeader>
+   390→   390→          <DialogTitle className="text-brand-900 font-bold text-xl flex items-center gap-2">
+   391→   391→            <Wallet className="w-5 h-5 text-brand-600" />
+   392→   392→            Төлбөр төлөх
+   393→   393→          </DialogTitle>
+   394→   394→        </DialogHeader>
+   395→   395→
+   396→   396→        <div className="space-y-5 pt-2">
+   397→   397→          {/* Quiz Info */}
+   398→   398→          <div className="bg-brand-50 rounded-xl p-4">
+   399→   399→            <p className="text-sm text-muted-foreground">Сорил</p>
+   400→   400→            <p className="text-lg font-bold text-brand-900">{quiz.title}</p>
+   401→   401→            <div className="flex items-center gap-3 mt-2 text-sm text-muted-foreground">
+   402→   402→              <span className="flex items-center gap-1">
+   403→   403→                <ListChecks className="w-4 h-4" />
+   404→   404→                {quiz.questionCount} асуулт
+   405→   405→              </span>
+   406→   406→            </div>
+   407→   407→          </div>
+   408→   408→
+   409→   409→          {/* Price */}
+   410→   410→          <div className="flex items-center justify-between bg-amber-50 rounded-xl p-4 border border-amber-200">
+   411→   411→            <span className="text-sm font-medium text-amber-800">Төлбөрийн дүн:</span>
+   412→   412→            <span className="text-2xl font-bold text-amber-900">{quiz.price.toLocaleString()}₮</span>
+   413→   413→          </div>
+   414→   414→
+   415→   415→          {/* Payment Info */}
+   416→   416→          <div className="bg-gray-50 rounded-xl p-4 text-sm text-muted-foreground space-y-2">
+   417→   417→            <p className="flex items-center gap-2">
+   418→   418→              <ShieldCheck className="w-4 h-4 text-brand-600" />
+   419→   419→              Төлбөр амжилттай хийгдсэний дараа сорил эхлүүлнэ
+   420→   420→            </p>
+   421→   421→            <p className="flex items-center gap-2">
+   422→   422→              <CreditCard className="w-4 h-4 text-brand-600" />
+   423→   423→              70% бөгөөд тэнцсэн тохиолдод сертификат олгогдоно
+   424→   424→            </p>
+   425→   425→          </div>
+   426→   426→
+   427→   427→          {/* Actions */}
+   428→   428→          <div className="flex gap-3">
+   429→   429→            <Button variant="outline" onClick={onBack} className="flex-1" disabled={paying}>
+   430→   430→              <ArrowLeft className="w-4 h-4 mr-1" />
+   431→   431→              Буцах
+   432→   432→            </Button>
+   433→   433→            <Button
+   434→   434→              onClick={handlePay}
+   435→   435→              className="flex-1 bg-brand-600 hover:bg-brand-700 text-white"
+   436→   436→              disabled={paying}
+   437→   437→            >
+   438→   438→              {paying ? (
+   439→   439→                <>
+   440→   440→                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+   441→   441→                  Төлбөр хийгдэж байна...
+   442→   442→                </>
+   443→   443→              ) : (
+   444→   444→                <>
+   445→   445→                  <CreditCard className="w-4 h-4 mr-1" />
+   446→   446→                  {quiz.price.toLocaleString()}₮ төлөх
+   447→   447→                </>
+   448→   448→              )}
+   449→   449→            </Button>
+   450→   450→          </div>
+   451→   451→        </div>
+   452→   452→      </DialogContent>
+   453→   453→    </Dialog>
+   454→   454→  );
+   455→   455→}
+   456→   456→
+   457→   457→/* ─── Step 3: Quiz Taking ───────────────────────────────── */
+   458→   458→
+   459→   459→function QuizTaking({
+   460→   460→  quiz,
+   461→   461→  onFinish,
+   462→   462→  onBack,
+   463→   463→}: {
+   464→   464→  quiz: QuizListItem;
+   465→   465→  onFinish: (answers: number[]) => void;
+   466→   466→  onBack: () => void;
+   467→   467→}) {
+   468→   468→  const [currentPage, setCurrentPage] = useState(1);
+   469→   469→  const [totalPages, setTotalPages] = useState(1);
+   470→   470→  const [questions, setQuestions] = useState<Question[]>([]);
+   471→   471→  const [answers, setAnswers] = useState<Record<string, number>>({});
+   472→   472→  const [isLoading, setIsLoading] = useState(true);
+   473→   473→  const [isSubmitting, setIsSubmitting] = useState(false);
+   474→   474→
+   475→   475→  const fetchQuestions = useCallback(
+   476→   476→    async (page: number) => {
+   477→   477→      setIsLoading(true);
+   478→   478→      try {
+   479→   479→        const res = await fetch(
+   480→   480→          `/api/quiz?slug=${quiz.slug}&page=${page}&limit=${QUESTIONS_PER_PAGE}`
+   481→   481→        );
+   482→   482→        const data = await res.json();
+   483→   483→        if (data.quiz && data.questions) {
+   484→   484→          setQuestions(data.questions);
+   485→   485→          setTotalPages(data.pagination.totalPages);
+   486→   486→        } else {
+   487→   487→          toast.error("Алдаа", {
+   488→   488→            description: "Асуултуудыг ачааллахад алдаа гарлаа.",
+   489→   489→          });
+   490→   490→        }
+   491→   491→      } catch {
+   492→   492→        toast.error("Холболтын алдаа");
+   493→   493→      } finally {
+   494→   494→        setIsLoading(false);
+   495→   495→      }
+   496→   496→    },
+   497→   497→    [quiz.slug]
+   498→   498→  );
+   499→   499→
+   500→   500→  useEffect(() => {
+   501→   501→    fetchQuestions(1);
+   502→   502→  }, [fetchQuestions]);
+   503→   503→
+   504→   504→  const handleSelectAnswer = (questionId: string, optionIndex: number) => {
+   505→   505→    setAnswers((prev) => ({ ...prev, [questionId]: optionIndex }));
+   506→   506→  };
+   507→   507→
+   508→   508→  const handlePageChange = (page: number) => {
+   509→   509→    setCurrentPage(page);
+   510→   510→    fetchQuestions(page);
+   511→   511→    window.scrollTo({ top: 0, behavior: "smooth" });
+   512→   512→  };
+   513→   513→
+   514→   514→  const handleFinish = async () => {
+   515→   515→    setIsSubmitting(true);
+   516→   516→    try {
+   517→   517→      const allAnswers: number[] = [];
+   518→   518→      for (let p = 1; p <= totalPages; p++) {
+   519→   519→        const res = await fetch(
+   520→   520→          `/api/quiz?slug=${quiz.slug}&page=${p}&limit=${QUESTIONS_PER_PAGE}`
+   521→   521→        );
+   522→   522→        const data = await res.json();
+   523→   523→        if (data.questions) {
+   524→   524→          for (const q of data.questions) {
+   525→   525→            allAnswers.push(answers[q.id] ?? -1);
+   526→   526→          }
+   527→   527→        }
+   528→   528→      }
+   529→   529→      onFinish(allAnswers);
+   530→   530→    } catch {
+   531→   531→      toast.error("Алдаа", {
+   532→   532→        description: "Хариултуудыг илгээхэд алдаа гарлаа.",
+   533→   533→      });
+   534→   534→    } finally {
+   535→   535→      setIsSubmitting(false);
+   536→   536→    }
+   537→   537→  };
+   538→   538→
+   539→   539→  const answeredCount = Object.keys(answers).length;
+   540→   540→
+   541→   541→  return (
+   542→   542→    <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}>
+   543→   543→      <div className="mb-6 flex items-center justify-between">
+   544→   544→        <button
+   545→   545→          onClick={onBack}
+   546→   546→          className="flex items-center gap-2 text-sm text-muted-foreground hover:text-brand-700 transition-colors"
+   547→   547→        >
+   548→   548→          <ArrowLeft className="size-4" />
+   549→   549→          Буцах
+   550→   550→        </button>
+   551→   551→        <h2 className="text-lg font-bold text-brand-900">{quiz.title}</h2>
+   552→   552→      </div>
+   553→   553→
+   554→   554→      <Card className="border-brand-100">
+   555→   555→        <CardHeader className="pb-3">
+   556→   556→          <div className="flex items-center justify-between text-sm">
+   557→   557→            <span className="text-muted-foreground">
+   558→   558→              Хуудас {currentPage} / {totalPages}
+   559→   559→            </span>
+   560→   560→            <span className="text-muted-foreground">
+   561→   561→              Хариулсан: {answeredCount}
+   562→   562→            </span>
+   563→   563→          </div>
+   564→   564→          <Progress value={(answeredCount / (quiz.questionCount || 20)) * 100} className="h-2" />
+   565→   565→        </CardHeader>
+   566→   566→
+   567→   567→        <CardContent>
+   568→   568→          {isLoading ? (
+   569→   569→            <div className="py-16 flex justify-center">
+   570→   570→              <Loader2 className="size-8 animate-spin text-brand-500" />
+   571→   571→            </div>
+   572→   572→          ) : (
+   573→   573→            <div className="space-y-6">
+   574→   574→              {questions.map((q, idx) => {
+   575→   575→                const globalIdx = (currentPage - 1) * QUESTIONS_PER_PAGE + idx;
+   576→   576→                return (
+   577→   577→                  <motion.div
+   578→   578→                    key={q.id}
+   579→   579→                    initial={{ opacity: 0, y: 10 }}
+   580→   580→                    animate={{ opacity: 1, y: 0 }}
+   581→   581→                    transition={{ delay: idx * 0.03 }}
+   582→   582→                    className="bg-gray-50 rounded-xl p-4"
+   583→   583→                  >
+   584→   584→                    <p className="font-medium text-brand-900 mb-3">
+   585→   585→                      {globalIdx + 1}. {q.questionText}
+   586→   586→                    </p>
+   587→   587→                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+   588→   588→                      {[
+   589→   589→                        { key: 0, label: "A", text: q.optionA },
+   590→   590→                        { key: 1, label: "B", text: q.optionB },
+   591→   591→                        { key: 2, label: "C", text: q.optionC },
+   592→   592→                        { key: 3, label: "D", text: q.optionD },
+   593→   593→                      ].map((opt) => (
+   594→   594→                        <button
+   595→   595→                          key={opt.key}
+   596→   596→                          onClick={() => handleSelectAnswer(q.id, opt.key)}
+   597→   597→                          className={`text-left p-3 rounded-lg border-2 transition-all text-sm ${
+   598→   598→                            answers[q.id] === opt.key
+   599→   599→                              ? "border-brand-500 bg-brand-50 text-brand-900"
+   600→   600→                              : "border-gray-200 hover:border-brand-300 hover:bg-brand-50/50"
+   601→   601→                          }`}
+   602→   602→                        >
+   603→   603→                          <span className="font-bold mr-2">{opt.label})</span>
+   604→   604→                          {opt.text}
+   605→   605→                        </button>
+   606→   606→                      ))}
+   607→   607→                    </div>
+   608→   608→                  </motion.div>
+   609→   609→                );
+   610→   610→              })}
+   611→   611→
+   612→   612→              {/* Pagination */}
+   613→   613→              <div className="flex items-center justify-between pt-4 border-t">
+   614→   614→                <Button
+   615→   615→                  variant="outline"
+   616→   616→                  onClick={() => handlePageChange(Math.max(1, currentPage - 1))}
+   617→   617→                  disabled={currentPage === 1}
+   618→   618→                >
+   619→   619→                  <ChevronLeft className="w-4 h-4 mr-1" /> Өмнөх
+   620→   620→                </Button>
+   621→   621→                <div className="flex gap-1 flex-wrap justify-center">
+   622→   622→                  {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
+   623→   623→                    <button
+   624→   624→                      key={p}
+   625→   625→                      onClick={() => handlePageChange(p)}
+   626→   626→                      className={`w-8 h-8 rounded-lg text-sm font-medium transition-all ${
+   627→   627→                        p === currentPage
+   628→   628→                          ? "bg-brand-600 text-white"
+   629→   629→                          : "bg-gray-100 hover:bg-brand-100 text-gray-700"
+   630→   630→                      }`}
+   631→   631→                    >
+   632→   632→                      {p}
+   633→   633→                    </button>
+   634→   634→                  ))}
+   635→   635→                </div>
+   636→   636→                {currentPage < totalPages ? (
+   637→   637→                  <Button
+   638→   638→                    onClick={() => handlePageChange(Math.min(totalPages, currentPage + 1))}
+   639→   639→                  >
+   640→   640→                    Дараах <ChevronRight className="w-4 h-4 ml-1" />
+   641→   641→                  </Button>
+   642→   642→                ) : (
+   643→   643→                  <Button
+   644→   644→                    onClick={handleFinish}
+   645→   645→                    className="bg-brand-600 hover:bg-brand-700"
+   646→   646→                    disabled={isSubmitting}
+   647→   647→                  >
+   648→   648→                    {isSubmitting ? (
+   649→   649→                      <>
+   650→   650→                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+   651→   651→                        Илгээж байна...
+   652→   652→                      </>
+   653→   653→                    ) : (
+   654→   654→                      "Дуусгах"
+   655→   655→                    )}
+   656→   656→                  </Button>
+   657→   657→                )}
+   658→   658→              </div>
+   659→   659→            </div>
+   660→   660→          )}
+   661→   661→        </CardContent>
+   662→   662→      </Card>
+   663→   663→    </motion.div>
+   664→   664→  );
+   665→   665→}
+   666→   666→
+   667→   667→/* ─── Step 4: Results ─────────────────────────────────── */
+   668→   668→
+   669→   669→function QuizResults({
+   670→   670→  quiz,
+   671→   671→  result,
+   672→   672→  onRetry,
+   673→   673→  onBackToList,
+   674→   674→}: {
+   675→   675→  quiz: QuizListItem;
+   676→   676→  result: QuizResult;
+   677→   677→  onRetry: () => void;
+   678→   678→  onBackToList: () => void;
+   679→   679→}) {
+   680→   680→  const percentage = Math.round((result.score / result.total) * 100);
+   681→   681→
+   682→   682→  return (
+   683→   683→    <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}>
+   684→   684→      <Card className="border-brand-100 shadow-lg">
+   685→   685→        <CardContent className="py-12 text-center">
+   686→   686→          <motion.div
+   687→   687→            initial={{ scale: 0 }}
+   688→   688→            animate={{ scale: 1 }}
+   689→   689→            transition={{ type: "spring", delay: 0.2 }}
+   690→   690→            className="w-24 h-24 rounded-full mx-auto mb-6 flex items-center justify-center"
+   691→   691→            style={{
+   692→   692→              backgroundColor: result.passed ? "#dcfce7" : "#fef2f2",
+   693→   693→            }}
+   694→   694→          >
+   695→   695→            {result.passed ? (
+   696→   696→              <Trophy className="w-12 h-12 text-green-600" />
+   697→   697→            ) : (
+   698→   698→              <XCircle className="w-12 h-12 text-red-500" />
+   699→   699→            )}
+   700→   700→          </motion.div>
+   701→   701→
+   702→   702→          <h2 className="text-2xl font-bold mb-2 text-brand-900">
+   703→   703→            {result.passed ? "Баяр хүргэе! Тэнцэв" : "Амжилтгүй"}
+   704→   704→          </h2>
+   705→   705→          <p className="text-muted-foreground mb-8">
+   706→   706→            {quiz.title}
+   707→   707→          </p>
+   708→   708→
+   709→   709→          <div className="flex justify-center gap-8 mb-8">
+   710→   710→            <div>
+   711→   711→              <p className="text-3xl font-bold text-brand-600">{result.score}</p>
+   712→   712→              <p className="text-sm text-muted-foreground">Зөв</p>
+   713→   713→            </div>
+   714→   714→            <div>
+   715→   715→              <p className="text-3xl font-bold text-red-500">{result.total - result.score}</p>
+   716→   716→              <p className="text-sm text-muted-foreground">Буруу</p>
+   717→   717→            </div>
+   718→   718→            <div>
+   719→   719→              <p className="text-3xl font-bold text-brand-900">{percentage}%</p>
+   720→   720→              <p className="text-sm text-muted-foreground">Үзүүлэлт</p>
+   721→   721→            </div>
+   722→   722→          </div>
+   723→   723→
+   724→   724→          <div className="flex justify-center gap-3">
+   725→   725→            <Button variant="outline" onClick={onBackToList}>
+   726→   726→              <ArrowLeft className="w-4 h-4 mr-2" />
+   727→   727→              Буцах
+   728→   728→            </Button>
+   729→   729→            <Button onClick={onRetry} className="bg-brand-600 hover:bg-brand-700">
+   730→   730→              <RotateCcw className="w-4 h-4 mr-2" />
+   731→   731→              Дахин оролдох
+   732→   732→            </Button>
+   733→   733→          </div>
+   734→   734→        </CardContent>
+   735→   735→      </Card>
+   736→   736→    </motion.div>
+   737→   737→  );
+   738→   738→}
+   739→   739→
+   740→   740→/* ─── Main Component ──────────────────────────────────────── */
+   741→   741→
+   742→   742→type Step = "selection" | "payment" | "taking" | "results";
+   743→   743→
+   744→   744→export default function QuizPage() {
+   745→   745→  const [step, setStep] = useState<Step>("selection");
+   746→   746→  const [selectedQuiz, setSelectedQuiz] = useState<QuizListItem | null>(null);
+   747→   747→  const [result, setResult] = useState<QuizResult | null>(null);
+   748→   748→  const [isSubmitting, setIsSubmitting] = useState(false);
+   749→   749→
+   750→   750→  const handleSelectQuiz = useCallback((quiz: QuizListItem) => {
+   751→   751→    setSelectedQuiz(quiz);
+   752→   752→    setResult(null);
+   753→   753→    setStep("payment");
+   754→   754→  }, []);
+   755→   755→
+   756→   756→  const handlePaid = useCallback(() => {
+   757→   757→    setStep("taking");
+   758→   758→  }, []);
+   759→   759→
+   760→   760→  const handleFinish = useCallback(
+   761→   761→    async (answers: number[]) => {
+   762→   762→      if (!selectedQuiz) return;
+   763→   763→
+   764→   764→      setIsSubmitting(true);
+   765→   765→      try {
+   766→   766→        const res = await fetch("/api/quiz", {
+   767→   767→          method: "POST",
+   768→   768→          headers: { "Content-Type": "application/json" },
+   769→   769→          body: JSON.stringify({
+   770→   770→            quizId: selectedQuiz.id,
+   771→   771→            answers,
+   772→   772→          }),
+   773→   773→        });
+   774→   774→
+   775→   775→        const data = await res.json();
+   776→   776→
+   777→   777→        if (res.ok) {
+   778→   778→          setResult({
+   779→   779→            attemptId: data.attemptId,
+   780→   780→            score: data.score,
+   781→   781→            total: data.total,
+   782→   782→            passed: data.passed,
+   783→   783→          });
+   784→   784→          setStep("results");
+   785→   785→
+   786→   786→          if (data.passed) {
+   787→   787→            toast.success("Баяр хүргэе!", {
+   788→   788→              description: `Та ${data.score}/${data.total} оноо авч тэнцлээ!`,
+   789→   789→            });
+   790→   790→          } else {
+   791→   791→            toast.error("Тэнцээгүй", {
+   792→   792→              description: `Та ${data.score}/${data.total} оноо авсан байна. 70% шаардлагатай.`,
+   793→   793→            });
+   794→   794→          }
+   795→   795→        } else {
+   796→   796→          toast.error("Алдаа", {
+   797→   797→            description: data.error || "Хариултуудыг илгээхэд алдаа гарлаа.",
+   798→   798→          });
+   799→   799→        }
+   800→   800→      } catch {
+   801→   801→        toast.error("Холболтын алдаа");
+   802→   802→      } finally {
+   803→   803→        setIsSubmitting(false);
+   804→   804→      }
+   805→   805→    },
+   806→   806→    [selectedQuiz]
+   807→   807→  );
+   808→   808→
+   809→   809→  const handleRetry = useCallback(() => {
+   810→   810→    setResult(null);
+   811→   811→    setStep("payment");
+   812→   812→  }, []);
+   813→   813→
+   814→   814→  const handleBackToList = useCallback(() => {
+   815→   815→    setSelectedQuiz(null);
+   816→   816→    setResult(null);
+   817→   817→    setStep("selection");
+   818→   818→  }, []);
+   819→   819→
+   820→   820→  return (
+   821→   821→    <section className="w-full">
+   822→   822→      {step === "selection" && <QuizSelection onSelect={handleSelectQuiz} />}
+   823→   823→
+   824→   824→      {step === "payment" && selectedQuiz && (
+   825→   825→        <PaymentGate quiz={selectedQuiz} onPaid={handlePaid} onBack={handleBackToList} />
+   826→   826→      )}
+   827→   827→
+   828→   828→      {step === "taking" && selectedQuiz && (
+   829→   829→        <QuizTaking
+   830→   830→          quiz={selectedQuiz}
+   831→   831→          onFinish={handleFinish}
+   832→   832→          onBack={handleBackToList}
+   833→   833→        />
+   834→   834→      )}
+   835→   835→
+   836→   836→      {step === "results" && selectedQuiz && result && (
+   837→   837→        <QuizResults
+   838→   838→          quiz={selectedQuiz}
+   839→   839→          result={result}
+   840→   840→          onRetry={handleRetry}
+   841→   841→          onBackToList={handleBackToList}
+   842→   842→        />
+   843→   843→      )}
+   844→   844→
+   845→   845→      {/* Submit overlay */}
+   846→   846→      <AnimatePresence>
+   847→   847→        {isSubmitting && (
+   848→   848→          <motion.div
+   849→   849→            initial={{ opacity: 0 }}
+   850→   850→            animate={{ opacity: 1 }}
+   851→   851→            exit={{ opacity: 0 }}
+   852→   852→            className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
+   853→   853→          >
+   854→   854→            <div className="flex flex-col items-center gap-4 rounded-2xl bg-white p-8 shadow-2xl">
+   855→   855→              <Loader2 className="size-10 animate-spin text-brand-600" />
+   856→   856→              <p className="text-lg font-medium text-brand-900">
+   857→   857→                Хариултуудыг шалгаж байна...
+   858→   858→              </p>
+   859→   859→            </div>
+   860→   860→          </motion.div>
+   861→   861→        )}
+   862→   862→      </AnimatePresence>
+   863→   863→    </section>
+   864→   864→  );
+   865→   865→}
+   866→   866→

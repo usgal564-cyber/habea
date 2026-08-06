@@ -363,3 +363,24 @@ Stage Summary:
 - EXAM003: 29 → 49 questions (+20 easy ✅)
 - All 60 new questions are easy/basic level
 - Database at /home/z/my-project/backend/data/habea.db updated
+
+---
+Task ID: ui-fixes-round2
+Agent: Main Agent
+Task: Multiple UI/UX fixes - compact exam question list, profile stats, easy questions, quiz questions
+
+Work Log:
+- **Exam creation question UX**: Changed from all-expanded to compact expandable list. Each question shows as a compact row with number badge, preview text, and chevron. Click to expand edit form. Auto-expands newly added question.
+- **Question count limits**: Added min 5 / max 100 validation. Shows warning badge when < 5 questions, disables button at 100. Create button disabled until 5+ questions.
+- **Easy giveaway questions seeded**: Added 5 super easy questions (1+1=?, 2+2=?, 3+2=?) at index 0-4 for each exam. Shifted existing questions by 5. EXAM001: 50→55, EXAM002: 50→55, EXAM003: 49→54.
+- **Quiz questions added**: Added 20 easy questions to each of 3 quizzes. Quiz 1: 5→25, Quiz 2: 5→25, Quiz 3: 5→25.
+- **Profile page stat cards**: "Сорил" now shows average score %, "Шалгалт" now shows average score % + avg time. "Амжилт" shows pass count detail. "Сургалт" shows "Бүртгэлтэй" when enrolled.
+- **Profile page courses section**: Already had courses tab + display. Confirmed it fetches /api/profile?section=courses and shows enrolled trainings with title, category, duration, date, status.
+- Frontend build passes: 828KB JS, 157KB CSS
+
+Stage Summary:
+- Admin exam creation is now much more usable - compact numbered list, click to edit
+- All 3 exams have 5 easy giveaway questions at the start for easy passing
+- All 3 quizzes now have 25 questions each (was 5)
+- Profile stats show quiz/exam average scores and detailed pass info
+- Build successful
