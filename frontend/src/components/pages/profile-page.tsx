@@ -4,7 +4,7 @@ import { motion } from "framer-motion";
 import { toast } from "sonner";
 import {
   User, Mail, Phone, MapPin, LogOut, BookOpen, Brain, ClipboardCheck,
-  Calendar, Award, XCircle, ChevronRight, Loader2, Shield, Clock,
+  Calendar, Award, XCircle, ChevronRight, Loader2, Shield, Clock, BarChart3,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -93,6 +93,7 @@ export default function ProfilePage() {
   const quizAvgScore = totalQuizzes > 0 ? Math.round(quizResults.reduce((sum, r) => sum + (r.score / r.total) * 100, 0) / totalQuizzes) : 0;
   const examAvgScore = totalExams > 0 ? Math.round(examResults.reduce((sum, r) => sum + (r.score / r.total) * 100, 0) / totalExams) : 0;
   const examAvgTime = totalExams > 0 && examResults.some(r => r.timeSpent) ? Math.round(examResults.filter(r => r.timeSpent).reduce((sum, r) => sum + (r.timeSpent || 0), 0) / examResults.filter(r => r.timeSpent).length / 60) : 0;
+  const combinedAvg = totalQuizzes + totalExams > 0 ? Math.round((quizResults.reduce((sum, r) => sum + (r.score / r.total) * 100, 0) + examResults.reduce((sum, r) => sum + (r.score / r.total) * 100, 0)) / (totalQuizzes + totalExams)) : 0;
 
   return (
     <section className="w-full">
@@ -173,14 +174,14 @@ export default function ProfilePage() {
                   )}
                 </CardContent>
               </Card>
-              {/* Card 4: Сургалт */}
+              {/* Card 4: Нийт дундаж */}
               <Card className="border-brand-100">
                 <CardContent className="p-4 text-center">
-                  <BookOpen className="w-5 h-5 text-brand-600 mx-auto mb-2" />
-                  <p className="text-2xl font-bold text-brand-900">{totalCourses}</p>
-                  <p className="text-xs text-muted-foreground">Сургалт</p>
+                  <BarChart3 className="w-5 h-5 text-brand-600 mx-auto mb-2" />
+                  <p className="text-2xl font-bold text-brand-900">{combinedAvg > 0 ? `${combinedAvg}%` : "—"}</p>
+                  <p className="text-xs text-muted-foreground">Нийт дундаж</p>
                   {totalCourses > 0 && (
-                    <p className="text-xs text-brand-600 mt-1">Бүртгэлтэй</p>
+                    <p className="text-xs text-brand-600 mt-1">{totalCourses} сургалт</p>
                   )}
                 </CardContent>
               </Card>

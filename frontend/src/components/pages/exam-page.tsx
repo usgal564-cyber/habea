@@ -10,6 +10,8 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { useAuthStore } from "@/hooks/use-auth";
 import { toast } from "sonner";
 import {
@@ -88,11 +90,10 @@ export default function ExamPage() {
   // Admin: Created items list
   const [adminExams, setAdminExams] = useState<any[]>([]);
   const [adminQuizzes, setAdminQuizzes] = useState<any[]>([]);
-  const [adminQuestions, setAdminQuestions] = useState<{ question: string; optionA: string; optionB: string; optionC: string; optionD: string; correct: string }[]>([
-    { question: "", optionA: "", optionB: "", optionC: "", optionD: "", correct: "0" },
-  ]);
+  const [adminQuestions, setAdminQuestions] = useState<{ question: string; optionA: string; optionB: string; optionC: string; optionD: string; correct: string }[]>([]);
   const [customCreating, setCustomCreating] = useState(false);
-  const [expandedQIndex, setExpandedQIndex] = useState<number | null>(null);
+  const [showQuestionDialog, setShowQuestionDialog] = useState(false);
+  const [dialogQuestion, setDialogQuestion] = useState({ question: "", optionA: "", optionB: "", optionC: "", optionD: "", correct: "0" });
 
   // Admin: Expanded exam detail
   const [expandedExamId, setExpandedExamId] = useState<string | null>(null);
@@ -326,14 +327,22 @@ export default function ExamPage() {
     } catch { toast.error("Алдаа"); setCreatingFromTemplate(null); }
   };
 
-  // Admin: Add question (custom)
-  const addQuestion = () => {
-    const newIdx = adminQuestions.length;
-    setAdminQuestions([...adminQuestions, { question: "", optionA: "", optionB: "", optionC: "", optionD: "", correct: "0" }]);
-    setExpandedQIndex(newIdx);
+  // Admin: Add question via dialog
+  const addQuestionFromDialog = () => {
+    const q = dialogQuestion;
+    if (!q.question.trim() || !q.optionA.trim() || !q.optionB.trim() || !q.optionC.trim() || !q.optionD.trim()) {
+      toast.error("Бүх талбарыг бөглөнө үү");
+      return;
+    }
+    if (adminQuestions.length >= 100) {
+      toast.error("Дээд тал 100 асуулт");
+      return;
+    }
+    setAdminQuestions([...adminQuestions, { ...q }]);
+    setDialogQuestion({ question: "", optionA: "", optionB: "", optionC: "", optionD: "", correct: "0" });
+    toast.success(`Асуулт #${adminQuestions.length + 1} нэмэгдлээ`);
   };
-  const removeQuestion = (i: number) => { if (adminQuestions.length > 1) setAdminQuestions(adminQuestions.filter((_, idx) => idx !== i)); };
-  const updateQ = (i: number, field: string, val: string) => { const nq = [...adminQuestions]; nq[i] = { ...nq[i], [field]: val }; setAdminQuestions(nq); };
+  const removeQuestion = (i: number) => { setAdminQuestions(adminQuestions.filter((_, idx) => idx !== i)); };
 
   // Admin: Custom create
   const handleCustomCreate = async () => {
@@ -369,17 +378,19 @@ export default function ExamPage() {
       }
       fetchAdminItems();
       setExamTitle(""); setExamDuration("30"); setExamEndDate(""); setQuizDescription("");
-      setAdminQuestions([{ question: "", optionA: "", optionB: "", optionC: "", optionD: "", correct: "0" }]);
+      setAdminQuestions([]);
       setShowCustomCreate(false);
+      setShowQuestionDialog(false);
     } catch { toast.error("Алдаа"); }
     finally { setCustomCreating(false); }
   };
 
   const resetCustomForm = () => {
     setExamTitle(""); setExamDuration("30"); setExamEndDate(""); setQuizDescription("");
-    setAdminQuestions([{ question: "", optionA: "", optionB: "", optionC: "", optionD: "", correct: "0" }]);
+    setAdminQuestions([]);
     setActiveCreateType("exam");
-    setExpandedQIndex(null);
+    setShowQuestionDialog(false);
+    setDialogQuestion({ question: "", optionA: "", optionB: "", optionC: "", optionD: "", correct: "0" });
   };
 
   const copyCode = (c: string) => {
@@ -582,92 +593,121 @@ export default function ExamPage() {
                       </div>
                     )}
 
-                    <div className="space-y-3 max-h-96 overflow-y-auto pr-1">
-                      <div className="flex items-center justify-between mb-2">
-                        <div className="flex items-center gap-2">
-                          <Label className="text-base font-semibold">Асуултууд ({adminQuestions.length})</Label>
+                    {/* Question List + Add Button */}
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2.5">
+                          <Label className="text-base font-semibold">Асуултууд</Label>
+                          <Badge variant={adminQuestions.length >= 5 ? "default" : "secondary"} className={adminQuestions.length >= 5 ? "bg-brand-600 text-white" : "bg-amber-100 text-amber-700"}>
+                            {adminQuestions.length} / 100
+                          </Badge>
                           {adminQuestions.length > 0 && adminQuestions.length < 5 && (
-                            <span className="text-xs text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full">Хамгийн багадаа 5 асуулт</span>
-                          )}
-                          {adminQuestions.length >= 100 && (
-                            <span className="text-xs text-red-600 bg-red-50 px-2 py-0.5 rounded-full">Дээд тал 100 асуулт</span>
+                            <span className="text-xs text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full">Хамгийн багадаа 5</span>
                           )}
                         </div>
-                        <Button type="button" size="sm" variant="outline" onClick={addQuestion} disabled={adminQuestions.length >= 100}><Plus className="w-4 h-4 mr-1" /> Асуулт нэмэх</Button>
+                        <Button type="button" size="sm" onClick={() => setShowQuestionDialog(true)} disabled={adminQuestions.length >= 100} className="bg-brand-600 hover:bg-brand-700 text-white">
+                          <Plus className="w-4 h-4 mr-1" /> Асуулт нэмэх
+                        </Button>
                       </div>
-                      <p className="text-xs text-muted-foreground mb-3">Энэ шалгалт {adminQuestions.length} асуулттай</p>
-                      <div className="space-y-1.5 max-h-96 overflow-y-auto pr-1">
-                        {adminQuestions.map((q, i) => {
-                          const isExpanded = expandedQIndex === i;
-                          const hasContent = q.question.trim() || q.optionA.trim() || q.optionB.trim();
-                          const preview = q.question.trim() || "Асуулт бичээгүй";
-                          return (
-                            <div key={i} className={`rounded-xl border transition-all ${isExpanded ? "border-brand-300 bg-brand-50/50 shadow-sm" : "border-gray-200 hover:border-gray-300"}`}>
-                              <button
-                                type="button"
-                                onClick={() => setExpandedQIndex(isExpanded ? null : i)}
-                                className="w-full flex items-center justify-between px-3.5 py-2.5 text-left"
-                              >
-                                <div className="flex items-center gap-2.5 min-w-0">
-                                  <span className={`w-7 h-7 rounded-lg flex items-center justify-center text-xs font-bold shrink-0 ${hasContent ? "bg-brand-100 text-brand-700" : "bg-gray-100 text-gray-400"}`}>
+
+                      {/* Compact question list */}
+                      {adminQuestions.length === 0 ? (
+                        <div className="text-center py-10 border-2 border-dashed border-gray-200 rounded-xl">
+                          <ClipboardList className="w-10 h-10 text-gray-300 mx-auto mb-3" />
+                          <p className="text-sm text-muted-foreground">Асуулт байхгүй</p>
+                          <p className="text-xs text-muted-foreground mt-1">Дээрх &quot;Асуулт нэмэх&quot; товч дээр дарж эхлэнэ үү</p>
+                        </div>
+                      ) : (
+                        <ScrollArea className="max-h-[280px]">
+                          <div className="space-y-1.5 pr-2">
+                            {adminQuestions.map((q, i) => {
+                              const correctLetter = ["A","B","C","D"][parseInt(q.correct) || 0];
+                              return (
+                                <div key={i} className="flex items-center gap-2.5 px-3 py-2 rounded-lg bg-gray-50 hover:bg-brand-50 transition-colors group">
+                                  <span className="w-6 h-6 rounded-md bg-brand-100 text-brand-700 flex items-center justify-center text-xs font-bold shrink-0">
                                     {i + 1}
                                   </span>
-                                  <div className="min-w-0">
-                                    <p className={`text-sm truncate ${hasContent ? "text-brand-900 font-medium" : "text-muted-foreground italic"}`}>
-                                      {preview.length > 50 ? preview.substring(0, 50) + "..." : preview}
-                                    </p>
-                                    {hasContent && (
-                                      <p className="text-xs text-muted-foreground mt-0.5">
-                                        A: {q.optionA ? q.optionA.substring(0, 15) + (q.optionA.length > 15 ? "..." : "") : "—"} ·
-                                        B: {q.optionB ? q.optionB.substring(0, 15) + (q.optionB.length > 15 ? "..." : "") : "—"} ·
-                                        Зөв: {["A","B","C","D"][parseInt(q.correct) || 0]}
-                                      </p>
-                                    )}
-                                  </div>
-                                </div>
-                                <div className="flex items-center gap-1 shrink-0 ml-2">
-                                  <Button type="button" size="sm" variant="ghost" onClick={(ev) => { ev.stopPropagation(); removeQuestion(i); }} className="h-7 w-7 p-0 text-red-400 hover:text-red-600 hover:bg-red-50">
-                                    <Trash2 className="w-3.5 h-3.5" />
+                                  <p className="text-sm text-brand-900 truncate flex-1 min-w-0">{q.question || "—"}</p>
+                                  <Badge variant="outline" className="text-[10px] shrink-0 border-green-200 text-green-700 bg-green-50">Зөв: {correctLetter}</Badge>
+                                  <Button type="button" size="sm" variant="ghost" onClick={() => removeQuestion(i)} className="h-6 w-6 p-0 text-red-300 hover:text-red-600 hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                                    <Trash2 className="w-3 h-3" />
                                   </Button>
-                                  {isExpanded ? <ChevronUp className="w-4 h-4 text-brand-600" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
                                 </div>
-                              </button>
-                              <AnimatePresence>
-                                {isExpanded && (
-                                  <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} transition={{ duration: 0.15 }} className="overflow-hidden">
-                                    <div className="px-3.5 pb-3.5 pt-1 space-y-2.5 border-t border-brand-100">
-                                      <Textarea value={q.question} onChange={e => updateQ(i, "question", e.target.value)} placeholder="Асуултын текст..." rows={2} className="text-sm" />
-                                      <div className="grid grid-cols-2 gap-2">
-                                        <Input value={q.optionA} onChange={e => updateQ(i, "optionA", e.target.value)} placeholder="A) Хариулт" className="text-sm" />
-                                        <Input value={q.optionB} onChange={e => updateQ(i, "optionB", e.target.value)} placeholder="B) Хариулт" className="text-sm" />
-                                        <Input value={q.optionC} onChange={e => updateQ(i, "optionC", e.target.value)} placeholder="C) Хариулт" className="text-sm" />
-                                        <Input value={q.optionD} onChange={e => updateQ(i, "optionD", e.target.value)} placeholder="D) Хариулт" className="text-sm" />
-                                      </div>
-                                      <div className="flex items-center gap-2">
-                                        <Label className="text-sm">Зөв хариулт:</Label>
-                                        <Select value={q.correct} onValueChange={v => updateQ(i, "correct", v)}>
-                                          <SelectTrigger className="w-24"><SelectValue /></SelectTrigger>
-                                          <SelectContent>
-                                            <SelectItem value="0">A</SelectItem>
-                                            <SelectItem value="1">B</SelectItem>
-                                            <SelectItem value="2">C</SelectItem>
-                                            <SelectItem value="3">D</SelectItem>
-                                          </SelectContent>
-                                        </Select>
-                                      </div>
-                                    </div>
-                                  </motion.div>
-                                )}
-                              </AnimatePresence>
-                            </div>
-                          );
-                        })}
-                      </div>
+                              );
+                            })}
+                          </div>
+                        </ScrollArea>
+                      )}
                     </div>
 
                     <Button onClick={handleCustomCreate} disabled={customCreating || !examTitle.trim() || adminQuestions.length < 5} className="w-full mt-4 bg-brand-600 hover:bg-brand-700">
-                      {customCreating ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Үүсгэж байна...</> : <><Plus className="w-4 h-4 mr-2" />{activeCreateType === "exam" ? "Шалгалт" : "Сорил"} үүсгэх</>}
+                      {customCreating ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Үүсгэж байна...</> : <><Plus className="w-4 h-4 mr-2" />{activeCreateType === "exam" ? "Шалгалт" : "Сорил"} үүсгэх ({adminQuestions.length} асуулт)</>}
                     </Button>
+
+                    {/* Question Add Dialog */}
+                    <Dialog open={showQuestionDialog} onOpenChange={setShowQuestionDialog}>
+                      <DialogContent className="sm:max-w-lg">
+                        <DialogHeader>
+                          <DialogTitle className="flex items-center gap-2">
+                            <Plus className="w-5 h-5 text-brand-600" />
+                            Асуулт нэмэх
+                            <Badge variant="secondary" className="ml-auto bg-brand-100 text-brand-700">#{adminQuestions.length + 1}</Badge>
+                          </DialogTitle>
+                        </DialogHeader>
+                        <div className="space-y-4">
+                          <div>
+                            <Label className="text-sm font-medium mb-1.5 block">Асуултын текст</Label>
+                            <Textarea
+                              value={dialogQuestion.question}
+                              onChange={(e) => setDialogQuestion({ ...dialogQuestion, question: e.target.value })}
+                              placeholder="Асуулт бичнэ үү..."
+                              rows={3}
+                              className="text-sm"
+                              autoFocus
+                            />
+                          </div>
+                          <div className="grid grid-cols-2 gap-3">
+                            {[
+                              { key: "optionA", label: "A", placeholder: "A) Хариулт" },
+                              { key: "optionB", label: "B", placeholder: "B) Хариулт" },
+                              { key: "optionC", label: "C", placeholder: "C) Хариулт" },
+                              { key: "optionD", label: "D", placeholder: "D) Хариулт" },
+                            ].map((opt) => (
+                              <div key={opt.key}>
+                                <Label className="text-xs text-muted-foreground mb-1 block">{opt.label}</Label>
+                                <Input
+                                  value={dialogQuestion[opt.key as keyof typeof dialogQuestion]}
+                                  onChange={(e) => setDialogQuestion({ ...dialogQuestion, [opt.key]: e.target.value })}
+                                  placeholder={opt.placeholder}
+                                  className="text-sm"
+                                />
+                              </div>
+                            ))}
+                          </div>
+                          <div>
+                            <Label className="text-sm font-medium mb-1.5 block">Зөв хариулт</Label>
+                            <Select value={dialogQuestion.correct} onValueChange={(v) => setDialogQuestion({ ...dialogQuestion, correct: v })}>
+                              <SelectTrigger className="w-32"><SelectValue /></SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="0">A</SelectItem>
+                                <SelectItem value="1">B</SelectItem>
+                                <SelectItem value="2">C</SelectItem>
+                                <SelectItem value="3">D</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </div>
+                        <DialogFooter className="gap-2 sm:gap-0">
+                          <Button variant="outline" onClick={() => setShowQuestionDialog(false)}>Хаах</Button>
+                          <Button onClick={() => {
+                            addQuestionFromDialog();
+                            // Keep dialog open for next question
+                          }} className="bg-brand-600 hover:bg-brand-700 text-white">
+                            <Plus className="w-4 h-4 mr-1.5" /> Нэмэх
+                          </Button>
+                        </DialogFooter>
+                      </DialogContent>
+                    </Dialog>
                   </motion.div>
                 )}
               </CardContent>

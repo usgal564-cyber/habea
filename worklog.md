@@ -384,3 +384,28 @@ Stage Summary:
 - All 3 quizzes now have 25 questions each (was 5)
 - Profile stats show quiz/exam average scores and detailed pass info
 - Build successful
+---
+Task ID: 1
+Agent: Main Agent
+Task: 6-point UI/UX improvement request (continued session)
+
+Work Log:
+- Read all relevant files: exam-page.tsx, quiz-page.tsx, profile-page.tsx, exam-admin-detail-page.tsx, handlers.go, main.go, models.go
+- Checked database state: 3 exams (55/55/54 questions), 3 quizzes (25 each), 0 enrollments
+- Confirmed fake questions already exist at index 0 of each exam (1+1, 2+2, 3+2)
+- Added 20 easy questions to each of 3 quizzes (now 45 each), shifted existing questions by +20
+- Replaced exam-page.tsx question adding UX: inline collapsible form → Dialog modal + compact ScrollArea list
+- Added Badge showing "X / 100" next to question count
+- Added min=5 warning and max=100 validation
+- Dialog stays open after adding question for rapid sequential entry
+- Fixed backend GetProfileHandler to return nested course format with status field
+- Changed profile Card 4 from "Сургалт" to "Нийт дундаж" with combined quiz+exam average
+- Added BarChart3 icon import
+- Build successful (843KB JS, 157KB CSS)
+
+Stage Summary:
+- exam-page.tsx: Major UX improvement — Dialog modal for question adding
+- quiz_questions: 60 new easy questions added (20 per quiz)
+- profile-page.tsx: Backend format fix, Card 4 renamed to "Нийт дундаж"
+- handlers.go: Course enrollment response now uses nested format with status
+- All 6 tasks completed, build passes

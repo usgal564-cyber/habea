@@ -300,12 +300,23 @@ func GetProfileHandler(c *gin.Context) {
                 for _, e := range enrollments {
                         var course Course
                         DB.Where("id = ?", e.CourseID).First(&course)
+                        status := "confirmed"
+                        if !e.Paid {
+                                status = "pending"
+                        }
                         regs = append(regs, gin.H{
-                                "id": e.ID, "courseId": course.ID, "title": course.Title,
-                                "category": course.Category, "description": course.Description,
-                                "duration": course.Duration, "price": course.Price,
-                                "schedule": course.Schedule, "location": course.Location,
-                                "paid": e.Paid, "createdAt": e.CreatedAt,
+                                "id": e.ID,
+                                "status": status,
+                                "createdAt": e.CreatedAt,
+                                "course": gin.H{
+                                        "title": course.Title,
+                                        "category": course.Category,
+                                        "duration": course.Duration,
+                                        "description": course.Description,
+                                        "price": course.Price,
+                                        "schedule": course.Schedule,
+                                        "location": course.Location,
+                                },
                         })
                 }
                 c.JSON(200, gin.H{"registrations": regs})
