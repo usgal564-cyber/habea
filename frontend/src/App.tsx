@@ -45,22 +45,18 @@ export default function App() {
   const [authOpen, setAuthOpen] = useState(false);
   const { user, setAuth, token } = useAuthStore();
 
-  useEffect(() => {
-    if (!token) return;
-    fetch("https://habea.onrender.com/api/auth/me", {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-      .then((res) => {
-        if (res.status === 401 || res.status === 403) {
-          // Token expired or invalid — clear auth
-          setAuth(null, null);
-        }
-        // Other errors (500, 502, network) → keep token, backend may be down
-      })
-      .catch(() => {
-        // Network error — keep token, do NOT log out
-      });
-  }, []);
+useEffect(() => {
+  if (!token) return;
+
+  apiFetch("/api/auth/me", {
+    headers: { Authorization: `Bearer ${token}` },
+  }).then((data) => {
+    if (!data) {
+      // Token хүчингүй болсон эсвэл алдаа гарсан үед
+      setAuth(null, null);
+    }
+  });
+}, []);
 
   const handleNavigate = (pageId: PageId, params?: { examId?: string }) => {
     if (params?.examId) {
