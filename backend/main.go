@@ -14,6 +14,7 @@ func main() {
 	gin.SetMode(gin.ReleaseMode)
 
 	r := gin.Default()
+	r.Use(CORSMiddleware())
 
 	// CORS middleware
 	r.Use(func(c *gin.Context) {
