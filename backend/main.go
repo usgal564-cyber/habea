@@ -89,6 +89,7 @@ func main() {
 	// Admin routes (ADMIN, MANAGER, TEACHER)
 	// ============================================================
 	adminGroup := r.Group("/api/admin", AuthMiddleware(), AdminMiddleware())
+	r.Run(":8080")
 	{
 		// Dashboard
 		adminGroup.GET("/dashboard", DashboardHandler)
