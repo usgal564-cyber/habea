@@ -2,6 +2,12 @@
 import * as React from "react"
 import { Slot } from "@radix-ui/react-slot"
 import { cva, VariantProps } from "class-variance-authority"
+// Өмнө нь:
+import { VariantProps, cva } from "class-variance-authority";
+
+// Ингэж засна:
+import type { VariantProps } from "class-variance-authority"; // 'type' нэмсэн
+import { cva } from "class-variance-authority"; // 'cva'-г тусад нь импортолно
 import { PanelLeftIcon } from "lucide-react"
 
 import { useIsMobile } from "@/hooks/use-mobile"
