@@ -1,5 +1,5 @@
 
-import { Toaster as Sonner, ToasterProps } from "sonner"
+import type { ToasterProps } from "sonner"; // 'type' нэмсэн
 
 const Toaster = ({ ...props }: ToasterProps) => {
   return (
