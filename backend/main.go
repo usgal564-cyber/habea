@@ -34,6 +34,11 @@ func main() {
 	// ============================================================
 	// Auth routes (public)
 	// ============================================================
+	r.GET("/", func(c *gin.Context) {
+		c.JSON(200, gin.H{
+			"message": "Backend API is running successfully!",
+		})
+	})
 	r.POST("/api/auth/register", RegisterHandler)
 	r.POST("/api/auth/login", LoginHandler)
 	r.GET("/api/auth/me", AuthMiddleware(), MeHandler)
