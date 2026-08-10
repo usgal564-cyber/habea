@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -10,6 +9,7 @@ import { toast } from "sonner";
 import {
   Shield, Download, CheckCircle, XCircle,
   Loader2, Database, FileSpreadsheet, ChevronDown, ChevronRight, Phone, Mail, User, Clock,
+  Trash2,
 } from "lucide-react";
 
 interface AdminPageProps {
@@ -23,8 +23,57 @@ export default function AdminPage({ onNavigate }: AdminPageProps) {
   const [expandedCourseId, setExpandedCourseId] = useState<string | null>(null);
   const [courseEnrollments, setCourseEnrollments] = useState<any[]>([]);
   const [enrollLoading, setEnrollLoading] = useState(false);
+  const [deletingFeedbackId, setDeletingFeedbackId] = useState<string | null>(null);
+  const [deletingContactId, setDeletingContactId] = useState<string | null>(null);
 
+  const deleteFeedback = async (id: string) => {
+    setDeletingFeedbackId(id);
+    try {
+      const res = await fetch(`/api/feedback/${id}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        toast.success("Санал хүсэлт амжилттай устгагдлаа");
+        // Remove from local state
+        setDashboard(prev => ({
+          ...prev,
+          recentFeedback: prev.recentFeedback.filter((f: any) => f.id !== id),
+          totalFeedback: Math.max(0, (prev.totalFeedback || 1) - 1),
+        }));
+      } else {
+        toast.error("Устгах үед алдаа гарлаа");
+      }
+    } catch {
+      toast.error("Сервертэй холбогдоход алдаа гарлаа");
+    } finally {
+      setDeletingFeedbackId(null);
+    }
+  };
 
+  const deleteContactForm = async (id: string) => {
+    setDeletingContactId(id);
+    try {
+      const res = await fetch(`/api/admin/contact-forms/${id}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        toast.success("Холбогдох хүсэлт амжилттай устгагдлаа");
+        setDashboard(prev => ({
+          ...prev,
+          recentContactForms: prev.recentContactForms.filter((f: any) => f.id !== id),
+          totalContactForms: Math.max(0, (prev.totalContactForms || 1) - 1),
+        }));
+      } else {
+        toast.error("Устгах үед алдаа гарлаа");
+      }
+    } catch {
+      toast.error("Сервертэй холбогдоход алдаа гарлаа");
+    } finally {
+      setDeletingContactId(null);
+    }
+  };
 
   const fetchCourseEnrollments = async (courseId: string) => {
     if (expandedCourseId === courseId) {
@@ -99,6 +148,7 @@ export default function AdminPage({ onNavigate }: AdminPageProps) {
   const totalExamAttempts = dashboard?.totalExamAttempts || 0;
   const totalFeedback = dashboard?.totalFeedback || 0;
   const totalSurveys = dashboard?.totalSurveys || 0;
+  const totalContactForms = dashboard?.totalContactForms || 0;
 
   return (
     <div className="min-h-screen bg-gray-50/50">
@@ -135,6 +185,7 @@ export default function AdminPage({ onNavigate }: AdminPageProps) {
             { label: "Тест өгөлт", value: totalQuizAttempts, color: "from-teal-500 to-teal-600" },
             { label: "Шалгалт өгөлт", value: totalExamAttempts, color: "from-orange-500 to-orange-600" },
             { label: "Санал хүсэлт", value: totalFeedback, color: "from-amber-500 to-amber-600" },
+            { label: "Холбогдох хүсэлт", value: totalContactForms, color: "from-sky-500 to-sky-600" },
             { label: "Судалгаа", value: totalSurveys, color: "from-rose-500 to-rose-600" },
           ].map((stat, i) => (
             <motion.div
@@ -164,6 +215,7 @@ export default function AdminPage({ onNavigate }: AdminPageProps) {
               { value: "quizzes", label: "Тест" },
               { value: "exams", label: "Шалгалт" },
               { value: "feedback", label: "Санал" },
+              { value: "contacts", label: "Холбогдох" },
               { value: "surveys", label: "Судалгаа" },
               { value: "export", label: "Экспорт" },
             ].map((tab) => (
@@ -292,6 +344,39 @@ export default function AdminPage({ onNavigate }: AdminPageProps) {
                 </CardContent>
               </Card>
             </motion.div>
+
+            {/* Recent Enrollments */}
+            {dashboard?.recentEnrollments && dashboard.recentEnrollments.length > 0 && (
+              <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="mt-4">
+                <Card className="border-0 shadow-sm">
+                  <CardHeader className="bg-gradient-to-r from-emerald-50 to-teal-50 rounded-t-xl border-b pb-3">
+                    <div>
+                      <CardTitle className="text-base">Сүүлийн сургалтын бүртгэлүүд</CardTitle>
+                      <CardDescription>Хэрэглэгчид сургалтад бүртгүүлсэн</CardDescription>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="p-4">
+                    <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+                      {dashboard.recentEnrollments.map((en: any, i: number) => (
+                        <div key={i} className="flex items-center gap-3 p-3 rounded-xl border hover:bg-emerald-50/50 transition-colors">
+                          <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center text-xs font-bold text-emerald-700 shrink-0">
+                            {(en.userName || "?").charAt(0)}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium truncate">{en.userName}</p>
+                            <p className="text-xs text-muted-foreground truncate">{en.courseTitle}</p>
+                          </div>
+                          <div className="text-right shrink-0">
+                            <Badge className="bg-emerald-100 text-emerald-700 text-[10px] px-1.5 py-0">{en.paid ? "Төлсөн" : "Төлөөгүй"}</Badge>
+                            <p className="text-[10px] text-muted-foreground mt-1">{new Date(en.createdAt).toLocaleDateString("mn-MN")}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              </motion.div>
+            )}
           </TabsContent>
 
           {/* ── Quizzes ── */}
@@ -429,7 +514,7 @@ export default function AdminPage({ onNavigate }: AdminPageProps) {
                   ) : (
                     <div className="space-y-2.5 max-h-[480px] overflow-y-auto pr-1">
                       {dashboard.recentFeedback.map((f: any, i: number) => (
-                        <div key={i} className="rounded-xl border p-4 hover:bg-gray-50/80 transition-colors">
+                        <div key={i} className="rounded-xl border p-4 hover:bg-gray-50/80 transition-colors group">
                           <div className="flex items-start justify-between gap-3 mb-2">
                             <div className="flex items-center gap-3 min-w-0">
                               <div className="w-9 h-9 rounded-full bg-brand-100 flex items-center justify-center text-sm font-bold text-brand-700 shrink-0">
@@ -440,15 +525,89 @@ export default function AdminPage({ onNavigate }: AdminPageProps) {
                                 <p className="text-xs text-muted-foreground">{new Date(f.createdAt).toLocaleDateString("mn-MN")}</p>
                               </div>
                             </div>
-                            <div className="flex items-center gap-0.5 shrink-0 pt-0.5">
-                              {Array.from({ length: 5 }, (_, s) => (
-                                <svg key={s} className={`w-3.5 h-3.5 ${s < (f.rating || 0) ? "text-amber-400" : "text-gray-200"}`} viewBox="0 0 24 24" fill="currentColor">
-                                  <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
-                                </svg>
-                              ))}
+                            <div className="flex items-center gap-2 shrink-0 pt-0.5">
+                              <div className="flex items-center gap-0.5">
+                                {Array.from({ length: 5 }, (_, s) => (
+                                  <svg key={s} className={`w-3.5 h-3.5 ${s < (f.rating || 0) ? "text-amber-400" : "text-gray-200"}`} viewBox="0 0 24 24" fill="currentColor">
+                                    <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+                                  </svg>
+                                ))}
+                              </div>
+                              <button
+                                onClick={() => deleteFeedback(f.id)}
+                                disabled={deletingFeedbackId === f.id}
+                                className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-lg hover:bg-red-50 text-red-400 hover:text-red-600"
+                                title="Устгах"
+                              >
+                                {deletingFeedbackId === f.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                              </button>
                             </div>
                           </div>
                           <p className="text-sm text-gray-700 leading-relaxed pl-12">{f.message}</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </motion.div>
+          </TabsContent>
+
+          {/* ── Contact Forms ── */}
+          <TabsContent value="contacts">
+            <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
+              <Card className="border-0 shadow-sm">
+                <CardHeader className="bg-gradient-to-r from-sky-50 to-cyan-50 rounded-t-xl border-b pb-4">
+                  <div>
+                    <CardTitle className="text-lg">Холбогдох хүсэлтүүд</CardTitle>
+                    <CardDescription>Нийт {totalContactForms} хүсэлт — Хэрэглэгчид бидэнтэй холбогдох үед ирэх</CardDescription>
+                  </div>
+                </CardHeader>
+                <CardContent className="p-4 lg:p-5">
+                  {(!dashboard?.recentContactForms || dashboard.recentContactForms.length === 0) ? (
+                    <div className="text-center py-16">
+                      <p className="text-2xl font-bold text-gray-300 mb-2">0</p>
+                      <p className="text-muted-foreground text-sm">Одоогоор холбогдох хүсэлт ирээгүй</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-2.5 max-h-[480px] overflow-y-auto pr-1">
+                      {dashboard.recentContactForms.map((cf: any, i: number) => (
+                        <div key={i} className="rounded-xl border p-4 hover:bg-gray-50/80 transition-colors group">
+                          <div className="flex items-start justify-between gap-3 mb-2">
+                            <div className="flex items-center gap-3 min-w-0">
+                              <div className="w-9 h-9 rounded-full bg-sky-100 flex items-center justify-center text-sm font-bold text-sky-700 shrink-0">
+                                {cf.name?.charAt(0) || "?"}
+                              </div>
+                              <div className="min-w-0">
+                                <p className="font-medium text-sm truncate">{cf.name}</p>
+                                <p className="text-xs text-muted-foreground">{new Date(cf.createdAt).toLocaleDateString("mn-MN")}</p>
+                              </div>
+                            </div>
+                            <button
+                              onClick={() => deleteContactForm(cf.id)}
+                              disabled={deletingContactId === cf.id}
+                              className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-lg hover:bg-red-50 text-red-400 hover:text-red-600"
+                              title="Устгах"
+                            >
+                              {deletingContactId === cf.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                            </button>
+                          </div>
+                          <div className="pl-12 space-y-1.5">
+                            {(cf.email || cf.phone) && (
+                              <div className="flex items-center gap-3 text-xs text-gray-500">
+                                {cf.email && (
+                                  <span className="flex items-center gap-1"><Mail className="w-3 h-3 text-sky-500" />{cf.email}</span>
+                                )}
+                                {cf.phone && (
+                                  <span className="flex items-center gap-1"><Phone className="w-3 h-3 text-sky-500" />{cf.phone}</span>
+                                )}
+                              </div>
+                            )}
+                            {cf.subject && (
+                              <p className="text-xs font-medium text-sky-700 bg-sky-50 rounded px-2 py-0.5 inline-block">{cf.subject}</p>
+                            )}
+                            <p className="text-sm text-gray-700 leading-relaxed">{cf.message}</p>
+                          </div>
                         </div>
                       ))}
                     </div>

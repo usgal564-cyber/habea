@@ -1,11 +1,8 @@
-
 import { useEffect, useState, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
 import {
   Brain,
-  ChevronLeft,
-  ChevronRight,
   CheckCircle2,
   XCircle,
   RotateCcw,
@@ -28,6 +25,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { useAuthStore } from "@/hooks/use-auth";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { quizTemplates, getQuizById } from "@/data/quiz-templates";
 
 /* ─── Types ─────────────────────────────────────────────── */
 
@@ -35,19 +33,20 @@ type QuizListItem = {
   id: string;
   title: string;
   description: string;
-  slug: string;
   questionCount: number;
   price: number;
 };
 
 type Question = {
   id: string;
-  questionText: string;
+  quizId: string;
+  question: string;
   optionA: string;
   optionB: string;
   optionC: string;
   optionD: string;
-  questionOrder: number;
+  correct: number;
+  index: number;
 };
 
 type QuizResult = {
@@ -59,7 +58,6 @@ type QuizResult = {
 
 /* ─── Constants ─────────────────────────────────────────── */
 
-const QUESTIONS_PER_PAGE = 20;
 const QUIZ_PRICE = 5000; // ₮ per quiz
 
 /* ─── Animation Variants ────────────────────────────────── */
@@ -113,20 +111,43 @@ function QuizSelection({ onSelect }: { onSelect: (quiz: QuizListItem) => void })
   const refreshQuizzes = useCallback(() => {
     fetch("/api/quiz")
       .then(r => r.json())
-      .then(d => { if (d.quizzes) setQuizzes(d.quizzes.map((q: QuizListItem) => ({ ...q, price: QUIZ_PRICE }))); })
+      .then(d => { if (d.quizzes && d.quizzes.length > 0) setQuizzes(d.quizzes.map((q: QuizListItem) => ({ ...q, price: QUIZ_PRICE }))); })
       .catch(() => {});
   }, []);
 
   useEffect(() => {
     async function fetchQuizzes() {
       try {
+        // 1. Always include hardcoded templates
+        const hardcodedQuizzes: QuizListItem[] = quizTemplates.map(t => ({
+          id: t.id,
+          title: t.title,
+          description: t.description,
+          questionCount: t.questions.length,
+          price: QUIZ_PRICE,
+        }));
+
+        // 2. Try to fetch from backend, merge if available
         const res = await fetch("/api/quiz");
         const data = await res.json();
         if (data.quizzes && data.quizzes.length > 0) {
-          setQuizzes(data.quizzes.map((q: QuizListItem) => ({ ...q, price: QUIZ_PRICE })));
+          // Add backend quizzes that aren't in templates (by id OR backendId)
+          const extra = data.quizzes
+            .filter((q: QuizListItem) => !quizTemplates.find(t => t.id === q.id || t.backendId === q.id))
+            .map((q: QuizListItem) => ({ ...q, price: QUIZ_PRICE }));
+          setQuizzes([...hardcodedQuizzes, ...extra]);
+        } else {
+          setQuizzes(hardcodedQuizzes);
         }
       } catch {
-        toast.error("Алдаа", { description: "Сорилуудыг ачааллахад алдаа гарлаа." });
+        // Fallback: use only hardcoded templates
+        setQuizzes(quizTemplates.map(t => ({
+          id: t.id,
+          title: t.title,
+          description: t.description,
+          questionCount: t.questions.length,
+          price: QUIZ_PRICE,
+        })));
       } finally {
         setIsLoading(false);
       }
@@ -156,11 +177,11 @@ function QuizSelection({ onSelect }: { onSelect: (quiz: QuizListItem) => void })
             </div>
             <h1 className="text-3xl lg:text-4xl font-bold text-white mb-4">Сорилууд</h1>
             <p className="text-brand-200 text-lg max-w-2xl mx-auto">
-              ХАБЭА-ын бүх чиглэлээр мэдлэг сорих сорилууд. Төлбөр төлсний дараа сорил өгөх боломжтой.
+              ХАБЭА-ын бүх чиглэлээр мэдлэг сорих сорилууд. Сорилоо шууд эхлүүлээрэй!
             </p>
-            <div className="mt-4 inline-flex items-center gap-2 bg-amber-500/20 border border-amber-400/30 rounded-full px-4 py-1.5 text-sm text-amber-200">
-              <CreditCard className="size-4" />
-              Сорил бүрд: {QUIZ_PRICE.toLocaleString()}₮
+            <div className="mt-4 inline-flex items-center gap-2 bg-green-500/20 border border-green-400/30 rounded-full px-4 py-1.5 text-sm text-green-200">
+              <ShieldCheck className="size-4" />
+              Төлбөргүй — Сорилоо шууд өгөөрэй
             </div>
           </motion.div>
         </div>
@@ -310,8 +331,8 @@ function QuizSelection({ onSelect }: { onSelect: (quiz: QuizListItem) => void })
                         <ListChecks className="mr-1 size-3" />
                         {quiz.questionCount} асуулт
                       </Badge>
-                      <Badge className="bg-amber-100 text-amber-800 hover:bg-amber-200">
-                        {quiz.price.toLocaleString()}₮
+                      <Badge className="bg-green-100 text-green-700 hover:bg-green-200">
+                        Төлбөргүй
                       </Badge>
                     </div>
                     <Button
@@ -319,8 +340,8 @@ function QuizSelection({ onSelect }: { onSelect: (quiz: QuizListItem) => void })
                       className="bg-brand-600 text-white hover:bg-brand-700 focus-visible:ring-brand-500"
                       onClick={() => handleStartQuiz(quiz)}
                     >
-                      <Lock className="size-4 mr-1" />
-                      Төлбөр төлөх
+                      <ListChecks className="size-3" />
+                      Сорил өгөх
                     </Button>
                   </div>
                 </CardContent>
@@ -465,75 +486,64 @@ function QuizTaking({
   onFinish: (answers: number[]) => void;
   onBack: () => void;
 }) {
-  const [currentPage, setCurrentPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
+  const { token } = useAuthStore();
   const [questions, setQuestions] = useState<Question[]>([]);
   const [answers, setAnswers] = useState<Record<string, number>>({});
   const [isLoading, setIsLoading] = useState(true);
-  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const fetchQuestions = useCallback(
-    async (page: number) => {
-      setIsLoading(true);
-      try {
-        const res = await fetch(
-          `/api/quiz?slug=${quiz.slug}&page=${page}&limit=${QUESTIONS_PER_PAGE}`
-        );
-        const data = await res.json();
-        if (data.quiz && data.questions) {
-          setQuestions(data.questions);
-          setTotalPages(data.pagination.totalPages);
-        } else {
-          toast.error("Алдаа", {
-            description: "Асуултуудыг ачааллахад алдаа гарлаа.",
-          });
-        }
-      } catch {
-        toast.error("Холболтын алдаа");
-      } finally {
-        setIsLoading(false);
+  const fetchQuestions = useCallback(async () => {
+    setIsLoading(true);
+
+    // 1. Try hardcoded templates first
+    const tpl = getQuizById(quiz.id);
+    if (tpl) {
+      const mapped: Question[] = tpl.questions.map((q, i) => ({
+        id: `qz-${i}`,
+        quizId: quiz.id,
+        question: q.question,
+        optionA: q.optionA,
+        optionB: q.optionB,
+        optionC: q.optionC,
+        optionD: q.optionD,
+        correct: q.correct,
+        index: i,
+      }));
+      setQuestions(mapped);
+      setIsLoading(false);
+      return;
+    }
+
+    // 2. Fallback to backend
+    try {
+      const res = await fetch(`/api/quiz/questions?quizId=${quiz.id}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (data.questions) {
+        setQuestions(data.questions);
+      } else {
+        toast.error("Алдаа", {
+          description: "Асуултуудыг ачааллахад алдаа гарлаа.",
+        });
       }
-    },
-    [quiz.slug]
-  );
+    } catch {
+      toast.error("Холболтын алдаа");
+    } finally {
+      setIsLoading(false);
+    }
+  }, [quiz.id, token]);
 
   useEffect(() => {
-    fetchQuestions(1);
+    fetchQuestions();
   }, [fetchQuestions]);
 
   const handleSelectAnswer = (questionId: string, optionIndex: number) => {
     setAnswers((prev) => ({ ...prev, [questionId]: optionIndex }));
   };
 
-  const handlePageChange = (page: number) => {
-    setCurrentPage(page);
-    fetchQuestions(page);
-    window.scrollTo({ top: 0, behavior: "smooth" });
-  };
-
-  const handleFinish = async () => {
-    setIsSubmitting(true);
-    try {
-      const allAnswers: number[] = [];
-      for (let p = 1; p <= totalPages; p++) {
-        const res = await fetch(
-          `/api/quiz?slug=${quiz.slug}&page=${p}&limit=${QUESTIONS_PER_PAGE}`
-        );
-        const data = await res.json();
-        if (data.questions) {
-          for (const q of data.questions) {
-            allAnswers.push(answers[q.id] ?? -1);
-          }
-        }
-      }
-      onFinish(allAnswers);
-    } catch {
-      toast.error("Алдаа", {
-        description: "Хариултуудыг илгээхэд алдаа гарлаа.",
-      });
-    } finally {
-      setIsSubmitting(false);
-    }
+  const handleFinish = () => {
+    const answerArray = questions.map((q) => answers[q.id] ?? -1);
+    onFinish(answerArray);
   };
 
   const answeredCount = Object.keys(answers).length;
@@ -555,13 +565,13 @@ function QuizTaking({
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between text-sm">
             <span className="text-muted-foreground">
-              Хуудас {currentPage} / {totalPages}
+              Нийт: {questions.length} асуулт
             </span>
             <span className="text-muted-foreground">
               Хариулсан: {answeredCount}
             </span>
           </div>
-          <Progress value={(answeredCount / (quiz.questionCount || 20)) * 100} className="h-2" />
+          <Progress value={(answeredCount / (questions.length || 1)) * 100} className="h-2" />
         </CardHeader>
 
         <CardContent>
@@ -571,9 +581,7 @@ function QuizTaking({
             </div>
           ) : (
             <div className="space-y-6">
-              {questions.map((q, idx) => {
-                const globalIdx = (currentPage - 1) * QUESTIONS_PER_PAGE + idx;
-                return (
+              {questions.map((q, idx) => (
                   <motion.div
                     key={q.id}
                     initial={{ opacity: 0, y: 10 }}
@@ -582,7 +590,7 @@ function QuizTaking({
                     className="bg-gray-50 rounded-xl p-4"
                   >
                     <p className="font-medium text-brand-900 mb-3">
-                      {globalIdx + 1}. {q.questionText}
+                      {idx + 1}. {q.question}
                     </p>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                       {[
@@ -606,55 +614,16 @@ function QuizTaking({
                       ))}
                     </div>
                   </motion.div>
-                );
-              })}
+              ))}
 
-              {/* Pagination */}
-              <div className="flex items-center justify-between pt-4 border-t">
+              <div className="flex items-center justify-end pt-4 border-t">
                 <Button
-                  variant="outline"
-                  onClick={() => handlePageChange(Math.max(1, currentPage - 1))}
-                  disabled={currentPage === 1}
+                  onClick={handleFinish}
+                  className="bg-brand-600 hover:bg-brand-700"
+                  disabled={answeredCount === 0}
                 >
-                  <ChevronLeft className="w-4 h-4 mr-1" /> Өмнөх
+                  Дуусгах
                 </Button>
-                <div className="flex gap-1 flex-wrap justify-center">
-                  {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
-                    <button
-                      key={p}
-                      onClick={() => handlePageChange(p)}
-                      className={`w-8 h-8 rounded-lg text-sm font-medium transition-all ${
-                        p === currentPage
-                          ? "bg-brand-600 text-white"
-                          : "bg-gray-100 hover:bg-brand-100 text-gray-700"
-                      }`}
-                    >
-                      {p}
-                    </button>
-                  ))}
-                </div>
-                {currentPage < totalPages ? (
-                  <Button
-                    onClick={() => handlePageChange(Math.min(totalPages, currentPage + 1))}
-                  >
-                    Дараах <ChevronRight className="w-4 h-4 ml-1" />
-                  </Button>
-                ) : (
-                  <Button
-                    onClick={handleFinish}
-                    className="bg-brand-600 hover:bg-brand-700"
-                    disabled={isSubmitting}
-                  >
-                    {isSubmitting ? (
-                      <>
-                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                        Илгээж байна...
-                      </>
-                    ) : (
-                      "Дуусгах"
-                    )}
-                  </Button>
-                )}
               </div>
             </div>
           )}
@@ -742,16 +711,29 @@ function QuizResults({
 type Step = "selection" | "payment" | "taking" | "results";
 
 export default function QuizPage() {
+  const { user, token } = useAuthStore();
   const [step, setStep] = useState<Step>("selection");
   const [selectedQuiz, setSelectedQuiz] = useState<QuizListItem | null>(null);
   const [result, setResult] = useState<QuizResult | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleSelectQuiz = useCallback((quiz: QuizListItem) => {
+    if (!user || !token) {
+      toast.error("Нэвтрэх шаардлагатай", {
+        description: "Сорил өгөхийн тулд нэвтэрнө үү.",
+      });
+      return;
+    }
     setSelectedQuiz(quiz);
     setResult(null);
-    setStep("payment");
-  }, []);
+    // Template quiz-үүдэд төлбөр шаардлагагүй, шууд сорилд орох
+    const tpl = getQuizById(quiz.id);
+    if (tpl) {
+      setStep("taking");
+    } else {
+      setStep("payment");
+    }
+  }, [user, token]);
 
   const handlePaid = useCallback(() => {
     setStep("taking");
@@ -762,10 +744,55 @@ export default function QuizPage() {
       if (!selectedQuiz) return;
 
       setIsSubmitting(true);
+
+      // 1. Try to grade on frontend using hardcoded template
+      const tpl = getQuizById(selectedQuiz.id);
+      if (tpl) {
+        const score = answers.reduce((sum, ans, i) => {
+          const correctIdx = tpl.questions[i]?.correct;
+          return sum + (ans === correctIdx ? 1 : 0);
+        }, 0);
+        const total = tpl.questions.length;
+        const passingScore = tpl.passingScore;
+        const percentage = total > 0 ? (score / total) * 100 : 0;
+        const passed = percentage >= passingScore;
+
+        setResult({
+          attemptId: `local-${Date.now()}`,
+          score,
+          total,
+          passed,
+        });
+        setStep("results");
+
+        if (passed) {
+          toast.success("Баяр хүргэе!", {
+            description: `Та ${score}/${total} оноо авч тэнцлээ!`,
+          });
+        } else {
+          toast.error("Тэнцээгүй", {
+            description: `Та ${score}/${total} оноо авсан байна. ${passingScore}% шаардлагатай.`,
+          });
+        }
+
+        // Try to submit to backend for history
+        try {
+          await fetch("/api/quiz", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${useAuthStore.getState().token}` },
+            body: JSON.stringify({ quizId: selectedQuiz.id, answers }),
+          });
+        } catch {}
+
+        setIsSubmitting(false);
+        return;
+      }
+
+      // 2. Fallback: backend grading
       try {
         const res = await fetch("/api/quiz", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${useAuthStore.getState().token}` },
           body: JSON.stringify({
             quizId: selectedQuiz.id,
             answers,

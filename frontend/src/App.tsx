@@ -110,6 +110,7 @@ export default function App() {
           useAuthStore.getState().logout();
           setCurrentPage("home");
         }}
+        token={token}
       />
       <main className="flex-1 pt-16 lg:pt-20">
         {renderPage()}

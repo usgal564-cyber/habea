@@ -1,6 +1,4 @@
-
 import {
-  Shield,
   Phone,
   Mail,
   MapPin,
@@ -39,9 +37,11 @@ export default function Footer({ onNavigate }: FooterProps) {
           {/* Brand */}
           <div className="sm:col-span-2 lg:col-span-1">
             <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-brand-400 to-brand-600 flex items-center justify-center">
-                <Shield className="w-6 h-6 text-white" />
-              </div>
+              <img
+                src="https://img.magnific.com/premium-vector/eqh-logo-design-initial-letter-eqh-monogram-logo-using-hexagon-shape_1101554-16445.jpg?semt=ais_test_b&w=740&q=80"
+                alt="ХАБЭА"
+                className="w-10 h-10 rounded-xl object-contain"
+              />
               <div>
                 <span className="text-lg font-bold text-white">
                   ХАБЭА

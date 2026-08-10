@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -22,6 +21,7 @@ import {
   Calendar, FileQuestion, Users, AlertTriangle, Trash2,
   Copy,
 } from "lucide-react";
+import { examTemplates } from "@/data/exam-templates";
 
 interface ExamAdminDetailPageProps {
   examId: string;
@@ -78,10 +78,39 @@ export default function ExamAdminDetailPage({ examId, onBack }: ExamAdminDetailP
   const [savingDate, setSavingDate] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
-  // Fetch exam info + questions
+  // Fetch exam info + questions (use hardcoded first)
   useEffect(() => {
     const fetchExamData = async () => {
       setLoading(true);
+
+      // 1. Check hardcoded templates first
+      const tpl = examTemplates.find(t => t.id === examId);
+      if (tpl) {
+        setExam({
+          id: tpl.id,
+          title: tpl.title,
+          code: tpl.code,
+          duration: tpl.duration,
+          questionCount: tpl.questions.length,
+          isActive: true,
+          endDate: null,
+          createdAt: new Date().toISOString(),
+        });
+        setQuestions(tpl.questions.map((q, i) => ({
+          id: `tpl-${i}`,
+          question: q.question,
+          optionA: q.optionA,
+          optionB: q.optionB,
+          optionC: q.optionC,
+          optionD: q.optionD,
+          correct: q.correct,
+          index: i,
+        })));
+        setLoading(false);
+        return;
+      }
+
+      // 2. Fallback to backend
       try {
         const res = await fetch(`/api/admin/exams/${examId}/questions`, {
           headers: { Authorization: `Bearer ${token}` },

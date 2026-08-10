@@ -1,5 +1,5 @@
-// Navbar component with dropdown menus
-import { useState, useEffect, useRef } from "react";
+// Navbar component with dropdown menus and admin notification bell
+import { useState, useEffect, useRef, useCallback } from "react";
 import {
   Menu,
   X,
@@ -15,10 +15,16 @@ import {
   Star,
   Briefcase,
   Info,
+  Bell,
+  Loader2,
+  Trash2,
+  CheckCircle,
+  Clock,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { PageId } from "@/App";
+import { toast } from "sonner";
 
 interface NavbarProps {
   currentPage: PageId;
@@ -26,10 +32,23 @@ interface NavbarProps {
   onAuthClick: () => void;
   user: { userId: string; email: string; role: string } | null;
   onLogout: () => void;
+  token?: string;
 }
 
 type NavItem = { id: PageId; label: string; icon?: React.ReactNode; adminOnly?: boolean; authOnly?: boolean };
 type NavGroup = { groupLabel: string; groupIcon: React.ReactNode; items: NavItem[] };
+
+interface ConsultationItem {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  company: string;
+  serviceType: string;
+  message: string;
+  status: string;
+  createdAt: string;
+}
 
 const mainLinks: NavItem[] = [
   { id: "home", label: "Нүүр", icon: <Shield className="w-4 h-4" /> },
@@ -145,9 +164,320 @@ function DropdownMenu({
   );
 }
 
-export function Navbar({ currentPage, onNavigate, onAuthClick, user, onLogout }: NavbarProps) {
+function AdminNotificationBell({ token }: { token: string }) {
+  const [open, setOpen] = useState(false);
+  const [consultations, setConsultations] = useState<ConsultationItem[]>([]);
+  const [enrollments, setEnrollments] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<"consultations" | "enollments">("consultations");
+  const dropdownRef = useRef<HTMLDivElement>(null);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const pendingCount = consultations.filter((c) => c.status === "pending").length;
+  const totalCount = pendingCount + enrollments.length;
+
+  const fetchNotifications = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [consRes, dashRes] = await Promise.all([
+        fetch("/api/admin/consultations", { headers: { Authorization: `Bearer ${token}` } }),
+        fetch("/api/admin/dashboard", { headers: { Authorization: `Bearer ${token}` } }),
+      ]);
+      if (consRes.ok) {
+        const data = await consRes.json();
+        setConsultations(data.consultations || []);
+      }
+      if (dashRes.ok) {
+        const data = await dashRes.json();
+        setEnrollments(data.recentEnrollments || []);
+      }
+    } catch {
+      // silent
+    } finally {
+      setLoading(false);
+    }
+  }, [token]);
+
+  useEffect(() => {
+    fetchNotifications();
+    const interval = setInterval(fetchNotifications, 30000);
+    return () => clearInterval(interval);
+  }, [fetchNotifications]);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    if (open) document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [open]);
+
+  const handleMouseEnter = () => {
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+  };
+
+  const handleMouseLeave = () => {
+    timeoutRef.current = setTimeout(() => setOpen(false), 200);
+  };
+
+  const updateStatus = async (id: string, status: string) => {
+    setActionLoading(id);
+    try {
+      const res = await fetch(`/api/admin/consultations/${id}/status`, {
+        method: "PUT",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ status }),
+      });
+      if (res.ok) {
+        toast.success(status === "completed" ? "Амжилттай хийгдлээ" : "Шинэчлэгдлээ");
+        fetchNotifications();
+      }
+    } catch {
+      toast.error("Алдаа гарлаа");
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const deleteConsultation = async (id: string) => {
+    setActionLoading(id);
+    try {
+      const res = await fetch(`/api/admin/consultations/${id}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        toast.success("Устгагдлаа");
+        fetchNotifications();
+      }
+    } catch {
+      toast.error("Алдаа гарлаа");
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const formatDate = (dateStr: string) => {
+    try {
+      const d = new Date(dateStr);
+      const now = new Date();
+      const diffMs = now.getTime() - d.getTime();
+      const diffMin = Math.floor(diffMs / 60000);
+      if (diffMin < 1) return "Саяхан";
+      if (diffMin < 60) return `${diffMin} мин`;
+      const diffHr = Math.floor(diffMin / 60);
+      if (diffHr < 24) return `${diffHr} цаг`;
+      return d.toLocaleDateString("mn-MN", { month: "short", day: "numeric" });
+    } catch {
+      return "";
+    }
+  };
+
+  const statusLabel = (s: string) => {
+    switch (s) {
+      case "pending": return "Хүлээгдэж байна";
+      case "in_progress": return "Боловсруулж байна";
+      case "completed": return "Хийгдсэн";
+      default: return s;
+    }
+  };
+
+  const statusColor = (s: string) => {
+    switch (s) {
+      case "pending": return "bg-amber-100 text-amber-700";
+      case "in_progress": return "bg-blue-100 text-blue-700";
+      case "completed": return "bg-green-100 text-green-700";
+      default: return "bg-gray-100 text-gray-700";
+    }
+  };
+
+  return (
+    <div className="relative" ref={dropdownRef} onMouseEnter={handleMouseEnter} onMouseLeave={handleMouseLeave}>
+      <button
+        onClick={() => setOpen(!open)}
+        className="relative flex items-center justify-center w-10 h-10 rounded-xl text-brand-200 hover:text-white hover:bg-brand-800/40 transition-all duration-200"
+      >
+        <Bell className="w-5 h-5" />
+        {totalCount > 0 && (
+          <span className="absolute -top-0.5 -right-0.5 w-5 h-5 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center animate-pulse shadow-sm">
+            {totalCount > 9 ? "9+" : totalCount}
+          </span>
+        )}
+      </button>
+
+      {open && (
+        <div className="absolute right-0 top-full mt-2 w-[420px] bg-white rounded-2xl shadow-2xl shadow-black/20 border border-gray-100 z-50 overflow-hidden">
+          {/* Header */}
+          <div className="bg-gradient-to-r from-brand-600 to-brand-700 px-5 py-3.5">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Bell className="w-5 h-5 text-white" />
+                <span className="font-semibold text-white text-sm">Мэдэгдэл</span>
+              </div>
+              {totalCount > 0 && (
+                <span className="bg-white/20 text-white text-xs font-medium px-2.5 py-0.5 rounded-full">
+                  {totalCount} шинэ
+                </span>
+              )}
+            </div>
+            {/* Tab buttons */}
+            <div className="flex gap-1 mt-3">
+              <button
+                onClick={() => setActiveTab("consultations")}
+                className={cn("flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors",
+                  activeTab === "consultations" ? "bg-white/20 text-white" : "text-white/60 hover:text-white/80"
+                )}
+              >
+                Зөвлөгөө
+                {pendingCount > 0 && (
+                  <span className="w-4 h-4 rounded-full bg-red-500 text-[9px] flex items-center justify-center text-white">{pendingCount}</span>
+                )}
+              </button>
+              <button
+                onClick={() => setActiveTab("eollments")}
+                className={cn("flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors",
+                  activeTab === "eollments" ? "bg-white/20 text-white" : "text-white/60 hover:text-white/80"
+                )}
+              >
+                Сургалт бүртгэл
+                {enrollments.length > 0 && (
+                  <span className="w-4 h-4 rounded-full bg-emerald-500 text-[9px] flex items-center justify-center text-white">{enrollments.length}</span>
+                )}
+              </button>
+            </div>
+          </div>
+
+          {/* List */}
+          <div className="max-h-80 overflow-y-auto">
+            {loading ? (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="w-6 h-6 text-brand-400 animate-spin" />
+              </div>
+            ) : activeTab === "consultations" ? (
+              consultations.length === 0 ? (
+                <div className="text-center py-12 px-4">
+                  <div className="w-12 h-12 rounded-full bg-gray-50 flex items-center justify-center mx-auto mb-3">
+                    <Bell className="w-6 h-6 text-gray-300" />
+                  </div>
+                  <p className="text-sm text-gray-500">Зөвлөгөөний хүсэлт байхгүй</p>
+                </div>
+              ) : (
+                <div className="divide-y divide-gray-50">
+                  {consultations.slice(0, 10).map((c) => (
+                    <div key={c.id} className="px-4 py-3 hover:bg-gray-50/80 transition-colors">
+                      <div className="flex items-start justify-between gap-2 mb-1.5">
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <p className="font-medium text-sm text-gray-900 truncate">{c.name}</p>
+                            <span className={cn("text-[10px] font-medium px-1.5 py-0.5 rounded-full shrink-0", statusColor(c.status))}>
+                              {statusLabel(c.status)}
+                            </span>
+                          </div>
+                          <p className="text-xs text-gray-400 mt-0.5">
+                            {c.company && `${c.company} · `}{c.phone}
+                          </p>
+                        </div>
+                        <span className="text-[11px] text-gray-400 shrink-0 whitespace-nowrap">{formatDate(c.createdAt)}</span>
+                      </div>
+                      <p className="text-xs text-gray-600 line-clamp-2 mb-2">{c.message}</p>
+                      {c.status === "pending" && (
+                        <div className="flex items-center gap-1.5">
+                          <button onClick={() => updateStatus(c.id, "in_progress")} disabled={actionLoading === c.id} className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 text-[11px] font-medium transition-colors disabled:opacity-50">
+                            {actionLoading === c.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Clock className="w-3 h-3" />}
+                            Хүлээх
+                          </button>
+                          <button onClick={() => updateStatus(c.id, "completed")} disabled={actionLoading === c.id} className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-green-50 text-green-600 hover:bg-green-100 text-[11px] font-medium transition-colors disabled:opacity-50">
+                            {actionLoading === c.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <CheckCircle className="w-3 h-3" />}
+                            Хийсэн
+                          </button>
+                          <button onClick={() => deleteConsultation(c.id)} disabled={actionLoading === c.id} className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-red-50 text-red-500 hover:bg-red-100 text-[11px] font-medium transition-colors disabled:opacity-50">
+                            {actionLoading === c.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Trash2 className="w-3 h-3" />}
+                            Устгах
+                          </button>
+                        </div>
+                      )}
+                      {c.status === "in_progress" && (
+                        <div className="flex items-center gap-1.5">
+                          <button onClick={() => updateStatus(c.id, "completed")} disabled={actionLoading === c.id} className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-green-50 text-green-600 hover:bg-green-100 text-[11px] font-medium transition-colors disabled:opacity-50">
+                            {actionLoading === c.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <CheckCircle className="w-3 h-3" />}
+                            Хийсэн
+                          </button>
+                          <button onClick={() => deleteConsultation(c.id)} disabled={actionLoading === c.id} className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-red-50 text-red-500 hover:bg-red-100 text-[11px] font-medium transition-colors disabled:opacity-50">
+                            {actionLoading === c.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Trash2 className="w-3 h-3" />}
+                            Устгах
+                          </button>
+                        </div>
+                      )}
+                      {c.status === "completed" && (
+                        <div className="flex items-center gap-1.5">
+                          <button onClick={() => deleteConsultation(c.id)} disabled={actionLoading === c.id} className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-red-50 text-red-500 hover:bg-red-100 text-[11px] font-medium transition-colors disabled:opacity-50">
+                            {actionLoading === c.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Trash2 className="w-3 h-3" />}
+                            Устгах
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )
+            ) : activeTab === "eollments" ? (
+              enrollments.length === 0 ? (
+                <div className="text-center py-12 px-4">
+                  <div className="w-12 h-12 rounded-full bg-gray-50 flex items-center justify-center mx-auto mb-3">
+                    <BookOpen className="w-6 h-6 text-gray-300" />
+                  </div>
+                  <p className="text-sm text-gray-500">Сургалтын бүртгэл байхгүй</p>
+                </div>
+              ) : (
+                <div className="divide-y divide-gray-50">
+                  {enrollments.map((en: any, i: number) => (
+                    <div key={i} className="px-4 py-3 hover:bg-emerald-50/50 transition-colors">
+                      <div className="flex items-start justify-between gap-2 mb-1">
+                        <div className="min-w-0">
+                          <p className="font-medium text-sm text-gray-900 truncate">{en.userName}</p>
+                          <p className="text-xs text-gray-400 mt-0.5">{en.userEmail}</p>
+                        </div>
+                        <span className="text-[11px] text-gray-400 shrink-0 whitespace-nowrap">{formatDate(en.createdAt)}</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-1.5">
+                          <BookOpen className="w-3 h-3 text-emerald-500" />
+                          <p className="text-xs text-emerald-700 font-medium">{en.courseTitle}</p>
+                        </div>
+                        <span className={cn("text-[10px] font-medium px-1.5 py-0.5 rounded-full", en.paid ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700")}>
+                          {en.paid ? "Төлсөн" : "Төлөөгүй"}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )
+            ) : null}
+          </div>
+
+          {/* Footer */}
+          <div className="border-t border-gray-100 px-4 py-2.5 bg-gray-50/50">
+            <button
+              onClick={() => { setOpen(false); }}
+              className="w-full text-center text-xs text-brand-600 hover:text-brand-700 font-medium transition-colors"
+            >
+              Админ хэсгээс харах
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function Navbar({ currentPage, onNavigate, onAuthClick, user, onLogout, token }: NavbarProps) {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+  const isAdmin = user?.role === "ADMIN" || user?.role === "MANAGER" || user?.role === "TEACHER";
 
   useEffect(() => {
     const handleScroll = () => {
@@ -159,7 +489,7 @@ export function Navbar({ currentPage, onNavigate, onAuthClick, user, onLogout }:
 
   const filterVisible = (items: NavItem[]): NavItem[] =>
     items.filter((item) => {
-      if (item.adminOnly && (!user || user.role !== "ADMIN")) return false;
+      if (item.adminOnly && !isAdmin) return false;
       if (item.authOnly && !user) return false;
       return true;
     });
@@ -191,9 +521,11 @@ export function Navbar({ currentPage, onNavigate, onAuthClick, user, onLogout }:
           <div className="flex items-center justify-between h-16 lg:h-20">
             {/* Logo */}
             <button onClick={() => handleNavClick("home")} className="flex items-center gap-3 group">
-              <div className="w-10 h-10 lg:w-12 lg:h-12 rounded-xl bg-gradient-to-br from-brand-400 to-brand-600 flex items-center justify-center shadow-lg group-hover:shadow-brand-500/30 transition-shadow">
-                <Shield className="w-6 h-6 lg:w-7 lg:h-7 text-white" />
-              </div>
+              <img
+                src="https://img.magnific.com/premium-vector/eqh-logo-design-initial-letter-eqh-monogram-logo-using-hexagon-shape_1101554-16445.jpg?semt=ais_test_b&w=740&q=80"
+                alt="ХАБЭА"
+                className="w-10 h-10 lg:w-12 lg:h-12 rounded-xl object-contain shadow-lg group-hover:shadow-brand-500/30 transition-shadow"
+              />
               <div className="flex flex-col">
                 <span className="text-lg lg:text-xl font-bold text-white tracking-tight">ХАБЭА</span>
                 <span className="text-[10px] lg:text-xs text-brand-200 font-medium -mt-1">Бага дунд аж ахуйн нэгж</span>
@@ -277,8 +609,13 @@ export function Navbar({ currentPage, onNavigate, onAuthClick, user, onLogout }:
               })}
             </nav>
 
-            {/* Auth button */}
+            {/* Auth button + Notification bell */}
             <div className="flex items-center gap-2">
+              {/* Admin notification bell */}
+              {isAdmin && token && (
+                <AdminNotificationBell token={token} />
+              )}
+
               {!user && (
                 <Button
                   variant="ghost"

@@ -20,11 +20,12 @@ import {
   Eye, AlertTriangle, FileEdit, Award, Scale, Flame, Heart, ClipboardList,
   Zap, Calendar,
 } from "lucide-react";
-import { examTemplates, type ExamTemplate } from "@/data/exam-templates";
+import { examTemplates, getExamByCode, type ExamTemplate } from "@/data/exam-templates";
+import { quizTemplates, type QuizTemplate } from "@/data/quiz-templates";
 
 interface Question {
   id: string;
-  questionText: string;
+  question: string;
   optionA: string;
   optionB: string;
   optionC: string;
@@ -101,6 +102,10 @@ export default function ExamPage() {
   const [expandedQuestionsLoading, setExpandedQuestionsLoading] = useState(false);
   const [showExpandedQuestions, setShowExpandedQuestions] = useState(false);
 
+  // Hardcoded template state for exam taking
+  const [examTemplate, setExamTemplate] = useState<ExamTemplate | null>(null);
+  const [correctAnswers, setCorrectAnswers] = useState<number[]>([]);
+
   const safeQuestions = questions || [];
   const totalPages = Math.ceil(safeQuestions.length / QUESTIONS_PER_PAGE);
   const currentQuestions = safeQuestions.slice((currentPage - 1) * QUESTIONS_PER_PAGE, currentPage * QUESTIONS_PER_PAGE);
@@ -146,10 +151,30 @@ export default function ExamPage() {
 
   useEffect(() => { fetchAdminItems(); }, [fetchAdminItems]);
 
-  // Admin: Fetch exam questions for expanded detail
+  // Admin: Fetch exam questions for expanded detail (use hardcoded first, then backend)
   const handleFetchExamQuestions = async (examId: string) => {
-    if (!token) return;
     setExpandedQuestionsLoading(true);
+
+    // Try hardcoded templates first
+    const tpl = examTemplates.find(t => t.id === examId);
+    if (tpl) {
+      const mapped: ExamDetailQuestion[] = tpl.questions.map((q, i) => ({
+        id: `tpl-${i}`,
+        question: q.question,
+        optionA: q.optionA,
+        optionB: q.optionB,
+        optionC: q.optionC,
+        optionD: q.optionD,
+        correct: q.correct,
+        index: i,
+      }));
+      setExpandedQuestions(mapped);
+      setExpandedQuestionsLoading(false);
+      return;
+    }
+
+    // Fallback to backend
+    if (!token) { setExpandedQuestionsLoading(false); return; }
     try {
       const res = await fetch(`/api/admin/exams/${examId}/questions`, {
         headers: { Authorization: `Bearer ${token}` },
@@ -224,19 +249,60 @@ export default function ExamPage() {
 
   const handleVerifyCode = async () => {
     if (!code.trim()) { toast.error("Код оруулна уу"); return; }
+    const upperCode = code.trim().toUpperCase();
+
+    // 1. First check hardcoded templates (EXAM001, EXAM002, EXAM003)
+    const template = getExamByCode(upperCode);
+    if (template) {
+      setExamInfo({
+        id: template.id,
+        title: template.title,
+        duration: template.duration,
+        questionCount: template.questions.length,
+      });
+      setExamTemplate(template);
+      setState("exam-info");
+      return;
+    }
+
+    // 2. Fallback to backend API
     setLoading(true);
     try {
-      const res = await fetch("/api/exam", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "verify", code: code.trim() }) });
+      const res = await fetch("/api/exam", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "verify", code: upperCode }) });
       const data = await res.json();
-      if (!res.ok) { toast.error(data.error); return; }
+      if (!res.ok) { toast.error(data.error || "Код олдсонгүй"); return; }
       setExamInfo(data.exam);
+      setExamTemplate(null);
       setState("exam-info");
     } catch { toast.error("Холболтын алдаа"); }
     finally { setLoading(false); }
   };
 
   const handleStartExam = async () => {
-    if (!examInfo || !token) { if (!token) toast.error("Шалгалт өгөхийн тулд нэвтрэх шаардлагатай"); return; }
+    if (!examInfo) return;
+    if (!token) { toast.error("Шалгалт өгөхийн тулд нэвтрэх шаардлагатай"); return; }
+
+    // 1. If we have a hardcoded template, use its questions directly
+    if (examTemplate) {
+      const q = examTemplate.questions.map((tq, i) => ({
+        id: `q-${i}`,
+        question: tq.question,
+        optionA: tq.optionA,
+        optionB: tq.optionB,
+        optionC: tq.optionC,
+        optionD: tq.optionD,
+      }));
+      setQuestions(q);
+      setCorrectAnswers(examTemplate.questions.map(tq => tq.correct));
+      setTimeLeft(examTemplate.duration * 60);
+      examStartTimeRef.current = Date.now();
+      setElapsedTime(0);
+      setTimerActive(true);
+      setState("taking");
+      return;
+    }
+
+    // 2. Fallback to backend
     setLoading(true);
     try {
       const res = await fetch(`/api/exam?examId=${examInfo.id}`, { headers: { Authorization: `Bearer ${token}` } });
@@ -244,6 +310,7 @@ export default function ExamPage() {
       if (!res.ok) { toast.error(data.error); setState("enter-code"); return; }
       const q = data.questions || [];
       setQuestions(q);
+      setCorrectAnswers([]);
       setTimeLeft((q.length > 0 ? examInfo.duration : 30) * 60);
       examStartTimeRef.current = Date.now();
       setElapsedTime(0);
@@ -254,10 +321,38 @@ export default function ExamPage() {
   };
 
   const handleSubmitExam = useCallback(async () => {
-    if (!examInfo || !token || !(questions || []).length) return;
+    if (!examInfo || !(questions || []).length) return;
     setTimerActive(false); setLoading(true);
+    const timeSpent = Math.floor((Date.now() - examStartTimeRef.current) / 1000);
+
+    // 1. If we have correct answers from template, grade on frontend
+    if (correctAnswers.length > 0) {
+      const answerArray = (questions || []).map((q) => answers[q.id] ?? -1);
+      const score = answerArray.reduce((sum, ans, i) => sum + (ans === correctAnswers[i] ? 1 : 0), 0);
+      const total = correctAnswers.length;
+      const template = examTemplates.find(t => t.id === examInfo!.id);
+      const passingScore = template?.passingScore || 70;
+      const percentage = total > 0 ? (score / total) * 100 : 0;
+      const passed = percentage >= passingScore;
+
+      setResult({ score, total, passed, timeSpent });
+      setState("result");
+
+      // Try to submit to backend for history (optional)
+ if (token) {
+        try {
+          const answerArray2 = (questions || []).map((q) => answers[q.id] ?? -1);
+          await fetch("/api/exam", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }, body: JSON.stringify({ action: "submit", examId: examInfo.id, answers: answerArray2, timeSpent }) });
+        } catch {}
+        fetch("/api/exam/history", { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()).then(d => setExamHistory(d.history || [])).catch(() => {});
+      }
+      setLoading(false);
+      return;
+    }
+
+    // 2. Fallback: backend grading
+    if (!token) { toast.error("Нэвтрэх шаардлагатай"); setLoading(false); return; }
     try {
-      const timeSpent = Math.floor((Date.now() - examStartTimeRef.current) / 1000);
       const answerArray = (questions || []).map((q) => answers[q.id] ?? -1);
       const res = await fetch("/api/exam", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }, body: JSON.stringify({ action: "submit", examId: examInfo.id, answers: answerArray, timeSpent }) });
       const data = await res.json();
@@ -267,35 +362,21 @@ export default function ExamPage() {
       fetch("/api/exam/history", { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()).then(d => setExamHistory(d.history || [])).catch(() => {});
     } catch { toast.error("Алдаа"); }
     finally { setLoading(false); }
-  }, [examInfo, token, questions, answers]);
+  }, [examInfo, token, questions, answers, correctAnswers]);
 
   handleSubmitRef.current = handleSubmitExam;
 
-  const resetExam = () => { setState("enter-code"); setCode(""); setExamInfo(null); setQuestions([]); setAnswers({}); setCurrentPage(1); setResult(null); setTimeLeft(0); setTimerActive(false); setElapsedTime(0); examStartTimeRef.current = 0; };
+  const resetExam = () => { setState("enter-code"); setCode(""); setExamInfo(null); setExamTemplate(null); setCorrectAnswers([]); setQuestions([]); setAnswers({}); setCurrentPage(1); setResult(null); setTimeLeft(0); setTimerActive(false); setElapsedTime(0); examStartTimeRef.current = 0; };
 
   const formatTime = (s: number) => { const m = Math.floor(s / 60); return `${m.toString().padStart(2, "0")}:${(s % 60).toString().padStart(2, "0")}`; };
   const formatTimeSpent = (s: number) => { const mins = Math.floor(s / 60); const secs = s % 60; return `${mins} мин ${secs} сек`; };
   const answeredCount = Object.keys(answers).length;
 
-  // Admin: Create exam/quiz from template
+  // Admin: Create exam from template
   const handleCreateFromTemplate = async (template: ExamTemplate) => {
     setCreatingFromTemplate(template.id);
     try {
-      const isQuiz = template.type === "quiz";
-      const endpoint = isQuiz ? "/api/admin/quizzes" : "/api/admin/exams";
-      const body = isQuiz ? {
-        title: template.title,
-        description: template.description,
-        category: "general",
-        questions: template.questions.map(q => ({
-          question: q.question,
-          optionA: q.optionA,
-          optionB: q.optionB,
-          optionC: q.optionC,
-          optionD: q.optionD,
-          correct: q.correct,
-        })),
-      } : {
+      const body = {
         title: template.title,
         duration: template.duration,
         questions: template.questions.map(q => ({
@@ -307,21 +388,48 @@ export default function ExamPage() {
           correct: q.correct,
         })),
       };
-      const res = await fetch(endpoint, {
+      const res = await fetch("/api/admin/exams", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify(body),
       });
       const data = await res.json();
       if (!res.ok) { toast.error(data.error || "Алдаа"); setCreatingFromTemplate(null); return; }
-      if (isQuiz) {
-        setCreatedCode("QUIZ");
-        toast.success(`Сорил үүссэн: ${template.title}`);
-      } else {
-        setCreatedCode(data.exam.code);
-        setCreatedTitle(template.title);
-        toast.success(`Шалгалт үүссэн! Код: ${data.exam.code}`);
-      }
+      setCreatedCode(data.exam?.code || "EXAM");
+      setCreatedTitle(template.title);
+      toast.success(`Шалгалт үүссэн! Код: ${data.exam?.code || "EXAM"}`);
+      fetchAdminItems();
+      setTimeout(() => { setCreatingFromTemplate(null); setCreatedCode(""); setCreatedTitle(""); }, 5000);
+    } catch { toast.error("Алдаа"); setCreatingFromTemplate(null); }
+  };
+
+  // Admin: Create quiz from template
+  const handleCreateQuizFromTemplate = async (template: QuizTemplate) => {
+    setCreatingFromTemplate(template.id);
+    try {
+      const body = {
+        title: template.title,
+        description: template.description,
+        category: template.category,
+        questions: template.questions.map(q => ({
+          question: q.question,
+          optionA: q.optionA,
+          optionB: q.optionB,
+          optionC: q.optionC,
+          optionD: q.optionD,
+          correct: q.correct,
+        })),
+      };
+      const res = await fetch("/api/admin/quizzes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json();
+      if (!res.ok) { toast.error(data.error || "Алдаа"); setCreatingFromTemplate(null); return; }
+      setCreatedCode("QUIZ");
+      setCreatedTitle(template.title);
+      toast.success(`Сорил үүссэн: ${template.title}`);
       fetchAdminItems();
       setTimeout(() => { setCreatingFromTemplate(null); setCreatedCode(""); setCreatedTitle(""); }, 5000);
     } catch { toast.error("Алдаа"); setCreatingFromTemplate(null); }
@@ -463,7 +571,7 @@ export default function ExamPage() {
                   {/* Шалгалт Templates */}
                   <TabsContent value="exam">
                     <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                      {examTemplates.filter(t => t.type === "exam").map((template) => (
+                      {examTemplates.map((template) => (
                         <motion.div key={template.id} whileHover={{ y: -2 }}>
                           <Card className="h-full border-2 hover:border-brand-400 transition-all group cursor-pointer" style={{ borderColor: creatingFromTemplate === template.id ? "#124D1C" : undefined }}>
                             <CardContent className="p-5 flex flex-col h-full">
@@ -506,7 +614,7 @@ export default function ExamPage() {
                   {/* Мэдлэг сорих Templates */}
                   <TabsContent value="quiz">
                     <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                      {examTemplates.filter(t => t.type === "quiz").map((template) => (
+                      {quizTemplates.map((template) => (
                         <motion.div key={template.id} whileHover={{ y: -2 }}>
                           <Card className="h-full border-2 hover:border-amber-400 transition-all group cursor-pointer" style={{ borderColor: creatingFromTemplate === template.id ? "#d97706" : undefined }}>
                             <CardContent className="p-5 flex flex-col h-full">
@@ -529,7 +637,7 @@ export default function ExamPage() {
                                 </div>
                               </div>
                               <Button
-                                onClick={() => handleCreateFromTemplate(template)}
+                                onClick={() => handleCreateQuizFromTemplate(template)}
                                 disabled={creatingFromTemplate === template.id}
                                 className="w-full bg-amber-600 hover:bg-amber-700 text-white"
                               >
@@ -598,12 +706,10 @@ export default function ExamPage() {
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2.5">
                           <Label className="text-base font-semibold">Асуултууд</Label>
-                          <Badge variant={adminQuestions.length >= 5 ? "default" : "secondary"} className={adminQuestions.length >= 5 ? "bg-brand-600 text-white" : "bg-amber-100 text-amber-700"}>
+                          <Badge variant={adminQuestions.length >= 1 ? "default" : "secondary"} className={adminQuestions.length >= 1 ? "bg-brand-600 text-white" : "bg-amber-100 text-amber-700"}>
                             {adminQuestions.length} / 100
                           </Badge>
-                          {adminQuestions.length > 0 && adminQuestions.length < 5 && (
-                            <span className="text-xs text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full">Хамгийн багадаа 5</span>
-                          )}
+
                         </div>
                         <Button type="button" size="sm" onClick={() => setShowQuestionDialog(true)} disabled={adminQuestions.length >= 100} className="bg-brand-600 hover:bg-brand-700 text-white">
                           <Plus className="w-4 h-4 mr-1" /> Асуулт нэмэх
@@ -640,7 +746,7 @@ export default function ExamPage() {
                       )}
                     </div>
 
-                    <Button onClick={handleCustomCreate} disabled={customCreating || !examTitle.trim() || adminQuestions.length < 5} className="w-full mt-4 bg-brand-600 hover:bg-brand-700">
+                    <Button onClick={handleCustomCreate} disabled={customCreating || !examTitle.trim() || adminQuestions.length < 1} className="w-full mt-4 bg-brand-600 hover:bg-brand-700">
                       {customCreating ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Үүсгэж байна...</> : <><Plus className="w-4 h-4 mr-2" />{activeCreateType === "exam" ? "Шалгалт" : "Сорил"} үүсгэх ({adminQuestions.length} асуулт)</>}
                     </Button>
 
@@ -950,6 +1056,30 @@ export default function ExamPage() {
                       <Button onClick={handleVerifyCode} className="w-full bg-brand-600 hover:bg-brand-700 h-11 text-base font-medium" disabled={loading || !code.trim()}>
                         {loading ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Шалгаж байна...</> : "Шалгалт орох"}
                       </Button>
+                      {/* Quick exam codes */}
+                      <div className="pt-3 border-t">
+                        <p className="text-xs text-muted-foreground text-center mb-2">Бэлэн шалгалтууд:</p>
+                        <div className="flex gap-2 justify-center">
+                          {[
+                            { code: "EXAM001", title: "ХАБЭА үндсэн" },
+                            { code: "EXAM002", title: "Эрсдлийн үнэлгээ" },
+                            { code: "EXAM003", title: "ХАБЭА хууль" },
+                          ].map((e) => (
+                            <button
+                              key={e.code}
+                              onClick={() => { setCode(e.code); }}
+                              className={`px-3 py-1.5 rounded-lg border text-xs font-mono font-medium transition-all ${
+                                code === e.code
+                                  ? "bg-brand-600 text-white border-brand-600"
+                                  : "bg-gray-50 text-gray-600 border-gray-200 hover:bg-brand-50 hover:border-brand-300"
+                              }`}
+                              title={e.title}
+                            >
+                              {e.code}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </CardContent>
@@ -1041,7 +1171,7 @@ export default function ExamPage() {
                         const gi = (currentPage - 1) * QUESTIONS_PER_PAGE + idx;
                         return (
                           <motion.div key={q.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: idx * 0.03 }} className="bg-gray-50 rounded-xl p-4">
-                            <p className="font-medium text-brand-900 mb-3">{gi + 1}. {q.questionText}</p>
+                            <p className="font-medium text-brand-900 mb-3">{gi + 1}. {q.question}</p>
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                               {[{ key: 0, label: "A", text: q.optionA }, { key: 1, label: "B", text: q.optionB }, { key: 2, label: "C", text: q.optionC }, { key: 3, label: "D", text: q.optionD }].map((opt) => (
                                 <button key={opt.key} onClick={() => setAnswers({ ...answers, [q.id]: opt.key })}
@@ -1054,14 +1184,14 @@ export default function ExamPage() {
                         );
                       })}
                       <div className="flex items-center justify-between pt-4 border-t">
-                        <Button variant="outline" onClick={() => setCurrentPage(Math.max(1, currentPage - 1))} disabled={currentPage === 1}><ChevronLeft className="w-4 h-4 mr-1" /> Өмнөх</Button>
+                        <Button variant="outline" onClick={() => { setCurrentPage(Math.max(1, currentPage - 1)); window.scrollTo({ top: 0, behavior: 'smooth' }); }} disabled={currentPage === 1}><ChevronLeft className="w-4 h-4 mr-1" /> Өмнөх</Button>
                         <div className="flex gap-1 flex-wrap justify-center">
                           {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => (
-                            <button key={p} onClick={() => setCurrentPage(p)} className={`w-8 h-8 rounded-lg text-sm font-medium transition-all ${p === currentPage ? "bg-brand-600 text-white" : "bg-gray-100 hover:bg-brand-100 text-gray-700"}`}>{p}</button>
+                            <button key={p} onClick={() => { setCurrentPage(p); window.scrollTo({ top: 0, behavior: 'smooth' }); }} className={`w-8 h-8 rounded-lg text-sm font-medium transition-all ${p === currentPage ? "bg-brand-600 text-white" : "bg-gray-100 hover:bg-brand-100 text-gray-700"}`}>{p}</button>
                           ))}
                         </div>
                         {currentPage < totalPages ? (
-                          <Button onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}>Дараах <ChevronRight className="w-4 h-4 ml-1" /></Button>
+                          <Button onClick={() => { setCurrentPage(Math.min(totalPages, currentPage + 1)); window.scrollTo({ top: 0, behavior: 'smooth' }); }}>Дараах <ChevronRight className="w-4 h-4 ml-1" /></Button>
                         ) : (
                           <Button onClick={handleSubmitExam} className="bg-brand-600 hover:bg-brand-700" disabled={loading}>{loading ? "Илгээж байна..." : "Дуусгах"}</Button>
                         )}
