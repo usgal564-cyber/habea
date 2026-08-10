@@ -66,6 +66,13 @@ func main() {
 	r.GET("/api/courses", GetCoursesHandler)
 	r.POST("/api/courses/payment", AuthMiddleware(), CoursePaymentHandler)
 	r.POST("/api/courses/:id/register", AuthMiddleware(), RegisterCourseHandler)
+	r.GET("/api/courses", func(c *gin.Context) {
+		c.JSON(200, gin.H{"courses": []string{}})
+	})
+
+	r.GET("/api/exam/history", AuthMiddleware(), func(c *gin.Context) {
+		c.JSON(200, gin.H{"history": []string{}})
+	})
 
 	// ============================================================
 	// Profile routes
