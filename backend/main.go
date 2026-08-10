@@ -15,7 +15,7 @@ func main() {
 
 	r := gin.Default()
 
-	// CORS middleware (Давхардсан тохиргоог нэгтгэв)
+	// CORS middleware
 	r.Use(func(c *gin.Context) {
 		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
 		c.Writer.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
@@ -94,13 +94,6 @@ func main() {
 	// ============================================================
 	adminGroup := r.Group("/api/admin", AuthMiddleware(), AdminMiddleware())
 	{
-		// Энд админ маршрутуудаа бичнэ (жишээ нь: adminGroup.GET("/users", GetUsersHandler))
-		_ = adminGroup
-	}
-
-	// Серверийг асаах (Хамгийн төгсгөлд байх ёстой)
-	r.Run(":8080")
-	{
 		// Dashboard
 		adminGroup.GET("/dashboard", DashboardHandler)
 
@@ -146,6 +139,9 @@ func main() {
 		adminGroup.GET("/export", AdminExportHandler)
 	}
 
+	// ============================================================
+	// Server Start (Бүх замуудыг бүртгэж дууссаны дараа асаана)
+	// ============================================================
 	log.Println("Server starting on port 8080")
 	if err := r.Run(":8080"); err != nil {
 		log.Fatalf("Failed to start server: %v", err)
