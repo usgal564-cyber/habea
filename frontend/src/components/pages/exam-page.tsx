@@ -1057,29 +1057,7 @@ export default function ExamPage() {
                         {loading ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Шалгаж байна...</> : "Шалгалт орох"}
                       </Button>
                       {/* Quick exam codes */}
-                      <div className="pt-3 border-t">
-                        <p className="text-xs text-muted-foreground text-center mb-2">Бэлэн шалгалтууд:</p>
-                        <div className="flex gap-2 justify-center">
-                          {[
-                            { code: "EXAM001", title: "ХАБЭА үндсэн" },
-                            { code: "EXAM002", title: "Эрсдлийн үнэлгээ" },
-                            { code: "EXAM003", title: "ХАБЭА хууль" },
-                          ].map((e) => (
-                            <button
-                              key={e.code}
-                              onClick={() => { setCode(e.code); }}
-                              className={`px-3 py-1.5 rounded-lg border text-xs font-mono font-medium transition-all ${
-                                code === e.code
-                                  ? "bg-brand-600 text-white border-brand-600"
-                                  : "bg-gray-50 text-gray-600 border-gray-200 hover:bg-brand-50 hover:border-brand-300"
-                              }`}
-                              title={e.title}
-                            >
-                              {e.code}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
+                      
                     </div>
                   </div>
                 </CardContent>
