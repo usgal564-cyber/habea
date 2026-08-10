@@ -47,7 +47,7 @@ export default function App() {
 
   useEffect(() => {
     if (!token) return;
-    fetch("/api/auth/me", {
+    fetch("https://habea.onrender.com/api/auth/me", {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then((res) => {

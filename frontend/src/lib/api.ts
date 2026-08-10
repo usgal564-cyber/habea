@@ -1,9 +1,22 @@
+const BASE_URL = "https://habea.onrender.com";
+
 export async function apiFetch(url: string, options?: RequestInit) {
   try {
-    const res = await fetch(url, options);
+    // URL-ийн урд Render backend-ийн линкийг автоматаар залгана
+    const fullUrl = url.startsWith("http") ? url : `${BASE_URL}${url.startsWith("/") ? "" : "/"}${url}`;
+
+    const res = await fetch(fullUrl, {
+      ...options,
+      headers: {
+        "Content-Type": "application/json",
+        ...(options?.headers || {}),
+      },
+    });
+
     if (!res.ok) return null;
     return res.json();
-  } catch {
+  } catch (error) {
+    console.error("API Error:", error);
     return null;
   }
 }
