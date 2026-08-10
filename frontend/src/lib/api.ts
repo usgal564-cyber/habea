@@ -2,7 +2,6 @@ const BASE_URL = "https://habea.onrender.com";
 
 export async function apiFetch(url: string, options?: RequestInit) {
   try {
-    // URL-ийн урд Render backend-ийн линкийг автоматаар залгана
     const fullUrl = url.startsWith("http") ? url : `${BASE_URL}${url.startsWith("/") ? "" : "/"}${url}`;
 
     const res = await fetch(fullUrl, {

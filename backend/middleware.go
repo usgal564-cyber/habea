@@ -36,6 +36,21 @@ func GenerateToken(userID, email, role, name string) (string, error) {
 	return token.SignedString([]byte(JWTSecret))
 }
 
+func enableCORS(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "*") // Бүх доменыг зөвшөөрнө
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+
+		if r.Method == "OPTIONS" {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+
+		next.ServeHTTP(w, r)
+	})
+}
+
 // AuthMiddleware validates the JWT token and sets userId, email, role, name in context
 func AuthMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
