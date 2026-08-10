@@ -14,9 +14,8 @@ func main() {
 	gin.SetMode(gin.ReleaseMode)
 
 	r := gin.Default()
-	r.Use(CORSMiddleware())
 
-	// CORS middleware
+	// CORS middleware (Давхардсан тохиргоог нэгтгэв)
 	r.Use(func(c *gin.Context) {
 		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
 		c.Writer.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
@@ -66,13 +65,6 @@ func main() {
 	r.GET("/api/courses", GetCoursesHandler)
 	r.POST("/api/courses/payment", AuthMiddleware(), CoursePaymentHandler)
 	r.POST("/api/courses/:id/register", AuthMiddleware(), RegisterCourseHandler)
-	r.GET("/api/courses", func(c *gin.Context) {
-		c.JSON(200, gin.H{"courses": []string{}})
-	})
-
-	r.GET("/api/exam/history", AuthMiddleware(), func(c *gin.Context) {
-		c.JSON(200, gin.H{"history": []string{}})
-	})
 
 	// ============================================================
 	// Profile routes
@@ -101,6 +93,12 @@ func main() {
 	// Admin routes (ADMIN, MANAGER, TEACHER)
 	// ============================================================
 	adminGroup := r.Group("/api/admin", AuthMiddleware(), AdminMiddleware())
+	{
+		// Энд админ маршрутуудаа бичнэ (жишээ нь: adminGroup.GET("/users", GetUsersHandler))
+		_ = adminGroup
+	}
+
+	// Серверийг асаах (Хамгийн төгсгөлд байх ёстой)
 	r.Run(":8080")
 	{
 		// Dashboard
