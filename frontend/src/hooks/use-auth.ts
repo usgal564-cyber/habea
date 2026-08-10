@@ -1,6 +1,7 @@
 import { create } from "zustand";
+import { persist, createJSONStorage } from "zustand/middleware";
 
-interface JWTPayload {
+export interface JWTPayload {
   userId: string;
   email: string;
   role: string;
@@ -22,13 +23,15 @@ function decodeJWT(token: string): JWTPayload | null {
         .join("")
     );
     const payload = JSON.parse(jsonPayload);
+    
+    // JWT доторх key-нүүд өөр байж магадгүй тул fallback хийж өгөв
     return {
-      userId: payload.userId,
+      userId: payload.userId || payload.user_id || payload.sub,
       email: payload.email,
-      role: payload.role,
+      role: payload.role || "user",
       name: payload.name,
-      firstName: payload.firstName,
-      lastName: payload.lastName,
+      firstName: payload.firstName || payload.first_name,
+      lastName: payload.lastName || payload.last_name,
       phone: payload.phone,
     };
   } catch {
@@ -45,25 +48,29 @@ interface AuthState {
   setLoading: (loading: boolean) => void;
 }
 
-const storedToken = typeof window !== "undefined" ? localStorage.getItem("habea_token") : null;
+export const useAuthStore = create<AuthState>()(
+  persist(
+    (set) => ({
+      user: null,
+      token: null,
+      isLoading: false,
 
-export const useAuthStore = create<AuthState>((set) => ({
-  user: storedToken ? decodeJWT(storedToken) : null,
-  token: storedToken,
-  isLoading: false,
-  setAuth: (user, token) => {
-    if (token && typeof window !== "undefined") {
-      localStorage.setItem("habea_token", token);
-    } else if (typeof window !== "undefined") {
-      localStorage.removeItem("habea_token");
+      setAuth: (user, token) => {
+        // Хэрэв user ирээгүй ч token ирсэн бол token-оосоо decode хийж авна
+        const decodedUser = user || (token ? decodeJWT(token) : null);
+        set({ user: decodedUser, token });
+      },
+
+      logout: () => {
+        set({ user: null, token: null });
+      },
+
+      setLoading: (loading) => set({ isLoading: loading }),
+    }),
+    {
+      name: "habea_auth_store", // Storage-ийн нэр
+      storage: createJSONStorage(() => localStorage),
+      partialize: (state) => ({ user: state.user, token: state.token }), // Зөвхөн user, token хоёрыг л хадгална
     }
-    set({ user, token });
-  },
-  logout: () => {
-    if (typeof window !== "undefined") {
-      localStorage.removeItem("habea_token");
-    }
-    set({ user: null, token: null });
-  },
-  setLoading: (loading) => set({ isLoading: loading }),
-}));
+  )
+);

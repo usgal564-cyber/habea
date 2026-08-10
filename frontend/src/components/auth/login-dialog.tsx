@@ -62,7 +62,8 @@ export function LoginDialog({ open, onOpenChange }: LoginDialogProps) {
         return;
       }
 
-      setAuth(data.user, data.token);
+      // Нэвтрэх эсвэл бүртгүүлэх үед:
+setAuth(data.user || null, data.token);
       toast.success("Амжилттай нэвтэрлээ!");
       resetForms();
       onOpenChange(false);
