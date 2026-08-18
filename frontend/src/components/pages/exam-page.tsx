@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -18,7 +17,7 @@ import {
   Shield, Lock, Clock, ChevronRight, ChevronLeft, ChevronDown, ChevronUp,
   CheckCircle, XCircle, ArrowLeft, Loader2, Plus, Trash2, Copy, Download,
   Eye, AlertTriangle, FileEdit, Award, Scale, Flame, Heart, ClipboardList,
-  Zap, Calendar,
+  Zap, Calendar, TrendingUp, TrendingDown, BarChart3, Timer, Target,
 } from "lucide-react";
 import { examTemplates, getExamByCode, type ExamTemplate } from "@/data/exam-templates";
 import { quizTemplates, type QuizTemplate } from "@/data/quiz-templates";
@@ -71,6 +70,7 @@ export default function ExamPage() {
   const [timeLeft, setTimeLeft] = useState(0);
   const [timerActive, setTimerActive] = useState(false);
   const [examHistory, setExamHistory] = useState<any[]>([]);
+  const [historySort, setHistorySort] = useState<"newest" | "highest" | "lowest" | "avg">("newest");
   const [elapsedTime, setElapsedTime] = useState(0);
   const examStartTimeRef = useRef<number>(0);
   const handleSubmitRef = useRef<() => void>(() => {});
@@ -105,6 +105,48 @@ export default function ExamPage() {
   // Hardcoded template state for exam taking
   const [examTemplate, setExamTemplate] = useState<ExamTemplate | null>(null);
   const [correctAnswers, setCorrectAnswers] = useState<number[]>([]);
+
+  // Group exam history by exam, compute stats
+  const groupedHistory = (() => {
+    const groups: Record<string, { examTitle: string; examId: string; attempts: any[] }> = {};
+    (examHistory || []).forEach((h: any) => {
+      const key = h.examId || h.examTitle || "unknown";
+      if (!groups[key]) groups[key] = { examTitle: h.examTitle || "Шалгалт", examId: h.examId || key, attempts: [] };
+      groups[key].attempts.push(h);
+    });
+    return Object.values(groups);
+  })();
+
+  const sortedGroupedHistory = (() => {
+    const sorted = [...groupedHistory];
+    switch (historySort) {
+      case "highest":
+        sorted.sort((a, b) => {
+          const aMax = Math.max(...a.attempts.map(at => at.total > 0 ? (at.score / at.total) * 100 : 0));
+          const bMax = Math.max(...b.attempts.map(at => at.total > 0 ? (at.score / at.total) * 100 : 0));
+          return bMax - aMax;
+        });
+        break;
+      case "lowest":
+        sorted.sort((a, b) => {
+          const aMin = Math.min(...a.attempts.map(at => at.total > 0 ? (at.score / at.total) * 100 : 100));
+          const bMin = Math.min(...b.attempts.map(at => at.total > 0 ? (at.score / at.total) * 100 : 100));
+          return aMin - bMin;
+        });
+        break;
+      case "avg":
+        sorted.sort((a, b) => {
+          const aAvg = a.attempts.reduce((s, at) => s + (at.total > 0 ? (at.score / at.total) * 100 : 0), 0) / a.attempts.length;
+          const bAvg = b.attempts.reduce((s, at) => s + (at.total > 0 ? (at.score / at.total) * 100 : 0), 0) / b.attempts.length;
+          return bAvg - aAvg;
+        });
+        break;
+      default:
+        // newest - keep original order (already sorted by date desc)
+        break;
+    }
+    return sorted;
+  })();
 
   const safeQuestions = questions || [];
   const totalPages = Math.ceil(safeQuestions.length / QUESTIONS_PER_PAGE);
@@ -522,7 +564,7 @@ export default function ExamPage() {
         </div>
       </section>
 
-      <div className="max-w-5xl mx-auto px-4 -mt-6 pb-12">
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-16">
         {/* ─── Admin: Template Selection + Custom Create ─── */}
         {isAdmin && state === "enter-code" && (
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="mb-8">
@@ -1038,7 +1080,7 @@ export default function ExamPage() {
           {/* Enter Code */}
           {state === "enter-code" && (
             <motion.div key="enter-code" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}>
-              <Card className="shadow-xl">
+              <Card className="border-0 shadow-sm">
                 <CardContent className="p-6 sm:p-8">
                   <div className="max-w-md mx-auto">
                     <div className="text-center mb-6">
@@ -1063,34 +1105,120 @@ export default function ExamPage() {
                 </CardContent>
               </Card>
 
-              {/* Exam History */}
+              {/* Exam History - Grouped by Exam */}
               {(examHistory || []).length > 0 && (
                 <div className="mt-8">
-                  <h3 className="text-lg font-bold text-brand-900 mb-4 flex items-center gap-2">
-                    <Eye className="w-5 h-5" /> Шалгалтын түүх
-                  </h3>
-                  <div className="space-y-3">
-                    {examHistory.map((h: any) => (
-                      <Card key={h.id} className="overflow-hidden">
-                        <CardContent className="p-4">
-                          <div className="flex items-center justify-between flex-wrap gap-2">
-                            <div>
-                              <p className="font-medium text-brand-900">{h.examTitle || "Шалгалт"}</p>
-                              <p className="text-sm text-muted-foreground">{new Date(h.createdAt).toLocaleDateString("mn-MN")}</p>
-                            </div>
-                            <div className="flex items-center gap-3">
-                              <Badge variant={h.passed ? "default" : "destructive"} className={h.passed ? "bg-green-100 text-green-800" : ""}>
-                                {h.passed ? "Тэнсэв" : "Амжилтгүй"}
+                  <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+                    <h3 className="text-lg font-bold text-brand-900 flex items-center gap-2">
+                      <Eye className="w-5 h-5" /> Шалгалтын түүх
+                      <Badge variant="secondary" className="bg-brand-100 text-brand-700 ml-1">{examHistory.length} оролдлог</Badge>
+                    </h3>
+                    <div className="flex gap-1 flex-wrap">
+                      {[
+                        { key: "newest" as const, label: "Шинэ", icon: <Clock className="w-3 h-3" /> },
+                        { key: "highest" as const, label: "Хамгийн их", icon: <TrendingUp className="w-3 h-3" /> },
+                        { key: "lowest" as const, label: "Хамгийн бага", icon: <TrendingDown className="w-3 h-3" /> },
+                        { key: "avg" as const, label: "Дундаж", icon: <BarChart3 className="w-3 h-3" /> },
+                      ].map((s) => (
+                        <button
+                          key={s.key}
+                          onClick={() => setHistorySort(s.key)}
+                          className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                            historySort === s.key
+                              ? "bg-brand-600 text-white"
+                              : "bg-gray-100 text-gray-600 hover:bg-brand-50 hover:text-brand-700"
+                          }`}
+                        >
+                          {s.icon}
+                          {s.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="space-y-4">
+                    {sortedGroupedHistory.map((group) => {
+                      const avgScore = group.attempts.reduce((s, a) => s + (a.total > 0 ? (a.score / a.total) * 100 : 0), 0) / group.attempts.length;
+                      const bestScore = Math.max(...group.attempts.map(a => a.total > 0 ? (a.score / a.total) * 100 : 0));
+                      const worstScore = Math.min(...group.attempts.map(a => a.total > 0 ? (a.score / a.total) * 100 : 100));
+                      const passedCount = group.attempts.filter(a => a.passed).length;
+                      return (
+                        <Card key={group.examId} className="border-0 shadow-sm overflow-hidden">
+                          <CardContent className="p-4">
+                            <div className="flex items-center justify-between mb-3">
+                              <div className="flex items-center gap-2.5">
+                                <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${passedCount > 0 ? "bg-green-100" : "bg-red-100"}`}>
+                                  {passedCount > 0 ? <CheckCircle className="w-5 h-5 text-green-600" /> : <XCircle className="w-5 h-5 text-red-500" />}
+                                </div>
+                                <div>
+                                  <p className="font-medium text-brand-900 text-sm">{group.examTitle}</p>
+                                  <p className="text-xs text-muted-foreground">{group.attempts.length} оролдлого</p>
+                                </div>
+                              </div>
+                              <Badge variant={passedCount > 0 ? "default" : "destructive"} className={passedCount > 0 ? "bg-green-100 text-green-800" : ""}>
+                                {passedCount}/{group.attempts.length} тэнцэв
                               </Badge>
-                              <span className="text-lg font-bold">{h.score}/{h.total}</span>
-                              <a href={`/api/exam/export/${h.id}`} target="_blank" rel="noopener">
-                                <Button size="sm" variant="outline"><Download className="w-4 h-4" /></Button>
-                              </a>
                             </div>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    ))}
+                            <div className="grid grid-cols-3 gap-2 mb-3">
+                              <div className="bg-green-50 rounded-lg p-2 text-center">
+                                <TrendingUp className="w-3.5 h-3.5 text-green-600 mx-auto mb-0.5" />
+                                <p className="text-sm font-bold text-green-700">{Math.round(bestScore)}%</p>
+                                <p className="text-[10px] text-green-600">Дээд</p>
+                              </div>
+                              <div className="bg-red-50 rounded-lg p-2 text-center">
+                                <TrendingDown className="w-3.5 h-3.5 text-red-500 mx-auto mb-0.5" />
+                                <p className="text-sm font-bold text-red-600">{Math.round(worstScore)}%</p>
+                                <p className="text-[10px] text-red-500">Доод</p>
+                              </div>
+                              <div className="bg-brand-50 rounded-lg p-2 text-center">
+                                <BarChart3 className="w-3.5 h-3.5 text-brand-600 mx-auto mb-0.5" />
+                                <p className="text-sm font-bold text-brand-700">{Math.round(avgScore)}%</p>
+                                <p className="text-[10px] text-brand-600">Дундаж</p>
+                              </div>
+                            </div>
+                            <div className="space-y-2">
+                              {group.attempts.map((h: any, idx: number) => {
+                                const pct = h.total > 0 ? (h.score / h.total) * 100 : 0;
+                                return (
+                                  <div key={h.id} className="flex items-center gap-3 p-2.5 rounded-lg bg-gray-50 hover:bg-brand-50/50 transition-colors">
+                                    <span className="w-6 h-6 rounded-md bg-brand-100 text-brand-700 flex items-center justify-center text-xs font-bold shrink-0">
+                                      {idx + 1}
+                                    </span>
+                                    <div className="flex-1 min-w-0">
+                                      <div className="flex items-center gap-2 mb-1">
+                                        <div className="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
+                                          <motion.div
+                                            initial={{ width: 0 }}
+                                            animate={{ width: `${pct}%` }}
+                                            transition={{ duration: 0.5, delay: idx * 0.1 }}
+                                            className={`h-full rounded-full ${pct >= 70 ? "bg-green-500" : pct >= 50 ? "bg-amber-500" : "bg-red-500"}`}
+                                          />
+                                        </div>
+                                        <span className={`text-sm font-bold shrink-0 ${pct >= 70 ? "text-green-700" : pct >= 50 ? "text-amber-700" : "text-red-600"}`}>
+                                          {Math.round(pct)}%
+                                        </span>
+                                      </div>
+                                      <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                                        <span>{h.score}/{h.total} зөв</span>
+                                        <span>{new Date(h.createdAt).toLocaleDateString("mn-MN")}</span>
+                                        {h.timeSpent > 0 && (
+                                          <span className="flex items-center gap-0.5"><Timer className="w-3 h-3" />{Math.floor(h.timeSpent / 60)}м {(h.timeSpent % 60)}с</span>
+                                        )}
+                                      </div>
+                                    </div>
+                                    <Badge variant={h.passed ? "default" : "destructive"} className={`text-[10px] shrink-0 ${h.passed ? "bg-green-100 text-green-800" : ""}`}>
+                                      {h.passed ? "Тэнсэв" : "Амжилтгүй"}
+                                    </Badge>
+                                    <a href={`/api/exam/export/${h.id}`} target="_blank" rel="noopener">
+                                      <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-muted-foreground hover:text-brand-600"><Download className="w-3.5 h-3.5" /></Button>
+                                    </a>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </CardContent>
+                        </Card>
+                      );
+                    })}
                   </div>
                 </div>
               )}
@@ -1100,7 +1228,7 @@ export default function ExamPage() {
           {/* Exam Info */}
           {state === "exam-info" && examInfo && (
             <motion.div key="exam-info" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}>
-              <Card className="shadow-xl">
+              <Card className="border-0 shadow-sm">
                 <CardHeader><CardTitle className="text-xl text-brand-900">{examInfo.title}</CardTitle></CardHeader>
                 <CardContent className="space-y-6">
                   <div className="grid grid-cols-2 gap-4">
@@ -1127,14 +1255,14 @@ export default function ExamPage() {
           {/* Taking Exam */}
           {state === "taking" && (
             <motion.div key="taking" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-              <Card className="shadow-xl">
+              <Card className="border-0 shadow-sm">
                 <CardHeader className="pb-2">
                   <div className="flex items-center justify-between mb-2">
                     <h2 className="text-lg font-semibold text-brand-900">{examInfo?.title}</h2>
-                    <div className="flex items-center gap-3">
-                      <Badge variant="secondary" className="text-sm bg-brand-50 text-brand-700 border-brand-200"><Clock className="w-4 h-4 mr-1" />{formatTime(elapsedTime)}</Badge>
-                      <Badge variant={timeLeft < 300 ? "destructive" : "secondary"} className="text-sm"><Clock className="w-4 h-4 mr-1" />{formatTime(timeLeft)}</Badge>
-                      <span className="text-sm text-muted-foreground">Хуудас {currentPage}/{totalPages}</span>
+                    <div className="flex items-center gap-2">
+                      <Badge variant="secondary" className="text-sm bg-brand-50 text-brand-700 border-brand-200"><Timer className="w-3.5 h-3.5 mr-1" />Зарцуулсан: {formatTime(elapsedTime)}</Badge>
+                      <Badge variant={timeLeft < 300 ? "destructive" : "secondary"} className="text-sm"><Clock className="w-3.5 h-3.5 mr-1" />Үлдсэн: {formatTime(timeLeft)}</Badge>
+                      <span className="text-xs text-muted-foreground">{currentPage}/{totalPages}</span>
                     </div>
                   </div>
                   <Progress value={(answeredCount / (questions || []).length) * 100} className="h-2" />
@@ -1182,30 +1310,57 @@ export default function ExamPage() {
           )}
 
           {/* Result */}
-          {state === "result" && result && (
-            <motion.div key="result" initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }}>
-              <Card className="shadow-xl text-center">
-                <CardContent className="py-12">
-                  <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: "spring", delay: 0.2 }}
-                    className="w-24 h-24 rounded-full mx-auto mb-6 flex items-center justify-center"
-                    style={{ backgroundColor: result.passed ? "#dcfce7" : "#fef2f2" }}>
-                    {result.passed ? <CheckCircle className="w-12 h-12 text-green-600" /> : <XCircle className="w-12 h-12 text-red-500" />}
-                  </motion.div>
-                  <h2 className="text-2xl font-bold mb-2">{result.passed ? "Тэнсэв!" : "Амжилтгүй"}</h2>
-                  <p className="text-muted-foreground mb-2">{result.passed ? "Баяр хүргэж байна! Та шалгалтыг тэнцэв." : "Дахин оролдохыг зөвлөж байна."}</p>
-                  <p className="text-sm text-muted-foreground mb-6 flex items-center justify-center gap-1.5"><Clock className="w-4 h-4" /> Цаг зарцуулсан: {formatTimeSpent(result.timeSpent)}</p>
-                  <div className="flex justify-center gap-8 mb-8">
-                    <div><p className="text-3xl font-bold text-brand-600">{result.score}</p><p className="text-sm text-muted-foreground">Зөв</p></div>
-                    <div><p className="text-3xl font-bold text-red-500">{result.total - result.score}</p><p className="text-sm text-muted-foreground">Буруу</p></div>
-                    <div><p className="text-3xl font-bold text-brand-900">{result.total}</p><p className="text-sm text-muted-foreground">Нийт</p></div>
-                  </div>
-                  <div className="flex justify-center gap-3">
-                    <Button variant="outline" onClick={resetExam}><ArrowLeft className="w-4 h-4 mr-2" /> Буцах</Button>
-                  </div>
-                </CardContent>
-              </Card>
-            </motion.div>
-          )}
+          {state === "result" && result && (() => {
+            const pct = result.total > 0 ? (result.score / result.total) * 100 : 0;
+            return (
+              <motion.div key="result" initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }}>
+                <Card className="border-0 shadow-sm text-center">
+                  <CardContent className="py-12">
+                    <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: "spring", delay: 0.2 }}
+                      className="w-24 h-24 rounded-full mx-auto mb-6 flex items-center justify-center"
+                      style={{ backgroundColor: result.passed ? "#dcfce7" : "#fef2f2" }}>
+                      {result.passed ? <CheckCircle className="w-12 h-12 text-green-600" /> : <XCircle className="w-12 h-12 text-red-500" />}
+                    </motion.div>
+                    <h2 className="text-2xl font-bold mb-2">{result.passed ? "Тэнсэв!" : "Амжилтгүй"}</h2>
+                    <p className="text-muted-foreground mb-6">{result.passed ? "Баяр хүргэж байна! Та шалгалтыг тэнцэв." : "Дахин оролдохыг зөвлөж байна."}</p>
+                    <div className="max-w-xs mx-auto mb-6">
+                      <div className="flex items-center justify-between mb-1.5">
+                        <span className={`text-3xl font-bold ${pct >= 70 ? "text-green-600" : pct >= 50 ? "text-amber-600" : "text-red-500"}`}>
+                          {Math.round(pct)}%
+                        </span>
+                        <span className="text-sm text-muted-foreground">{result.score}/{result.total}</span>
+                      </div>
+                      <div className="h-3 bg-gray-200 rounded-full overflow-hidden">
+                        <motion.div
+                          initial={{ width: 0 }}
+                          animate={{ width: `${pct}%` }}
+                          transition={{ duration: 0.8, delay: 0.3 }}
+                          className={`h-full rounded-full ${pct >= 70 ? "bg-green-500" : pct >= 50 ? "bg-amber-500" : "bg-red-500"}`}
+                        />
+                      </div>
+                    </div>
+                    <div className="flex justify-center gap-6 mb-6">
+                      <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                        <Target className="w-4 h-4 text-green-600" />
+                        <span>Зөв: <strong className="text-green-700">{result.score}</strong></span>
+                      </div>
+                      <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                        <XCircle className="w-4 h-4 text-red-400" />
+                        <span>Буруу: <strong className="text-red-500">{result.total - result.score}</strong></span>
+                      </div>
+                      <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                        <Timer className="w-4 h-4 text-brand-600" />
+                        <span>{formatTimeSpent(result.timeSpent)}</span>
+                      </div>
+                    </div>
+                    <div className="flex justify-center gap-3">
+                      <Button variant="outline" onClick={resetExam}><ArrowLeft className="w-4 h-4 mr-2" /> Буцах</Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              </motion.div>
+            );
+          })()}
         </AnimatePresence>
       </div>
     </div>

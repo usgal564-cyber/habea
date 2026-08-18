@@ -270,7 +270,8 @@ func GetProfileHandler(c *gin.Context) {
 			var exam Exam
 			DB.Where("id = ?", a.ExamID).First(&exam)
 			results = append(results, gin.H{
-				"id": a.ID, "examId": a.ExamID, "title": exam.Title,
+				"id": a.ID, "examId": a.ExamID,
+				"exam":  gin.H{"id": exam.ID, "title": exam.Title, "code": exam.Code, "duration": exam.Duration, "questionCount": exam.QuestionCount},
 				"score": a.Score, "total": a.Total, "passed": a.Passed,
 				"timeSpent": a.TimeSpent, "createdAt": a.CreatedAt,
 			})
@@ -286,8 +287,9 @@ func GetProfileHandler(c *gin.Context) {
 			var quiz Quiz
 			DB.Where("id = ?", a.QuizID).First(&quiz)
 			results = append(results, gin.H{
-				"id": a.ID, "quizId": a.QuizID, "title": quiz.Title,
-				"score": a.Score, "total": a.Total, "createdAt": a.CreatedAt,
+				"id": a.ID, "quizId": a.QuizID,
+				"quiz":  gin.H{"id": quiz.ID, "title": quiz.Title},
+				"score": a.Score, "total": a.Total, "passed": a.Passed, "createdAt": a.CreatedAt,
 			})
 		}
 		c.JSON(200, gin.H{"results": results})
@@ -414,7 +416,8 @@ func QuizSubmitHandler(c *gin.Context) {
 	}
 
 	ansJSON, _ := json.Marshal(req.Answers)
-	attempt := QuizAttempt{ID: uuid.New().String(), UserID: userID.(string), QuizID: req.QuizID, Score: score, Total: len(questions), Answers: string(ansJSON)}
+	passed := score >= int(float64(len(questions))*0.8)
+	attempt := QuizAttempt{ID: uuid.New().String(), UserID: userID.(string), QuizID: req.QuizID, Score: score, Total: len(questions), Passed: passed, Answers: string(ansJSON)}
 	DB.Create(&attempt)
 
 	c.JSON(200, gin.H{"score": score, "total": len(questions), "passed": score >= int(float64(len(questions))*0.8), "attemptId": attempt.ID})
@@ -1150,6 +1153,37 @@ func AdminDeleteConsultationHandler(c *gin.Context) {
 	id := c.Param("id")
 	DB.Where("id = ?", id).Delete(&Consultation{})
 	c.JSON(200, gin.H{"message": "Зөвлөгөөний хүсэлт устгагдлаа"})
+}
+
+func AdminReplyConsultationHandler(c *gin.Context) {
+	id := c.Param("id")
+	var req struct {
+		Response string `json:"response"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(400, gin.H{"error": err.Error()})
+		return
+	}
+	if req.Response == "" {
+		c.JSON(400, gin.H{"error": "Хариулт хоосон байна"})
+		return
+	}
+	DB.Model(&Consultation{}).Where("id = ?", id).Updates(map[string]interface{}{"admin_response": req.Response, "status": "completed"})
+	c.JSON(200, gin.H{"message": "Зөвлөмж амжилттай илгээгдлээ"})
+}
+
+func MarkConsultationReadHandler(c *gin.Context) {
+	id := c.Param("id")
+	userID, _ := c.Get("userId")
+	DB.Model(&Consultation{}).Where("id = ? AND user_id = ?", id, userID).Update("user_read", true)
+	c.JSON(200, gin.H{"message": "Уншсан боллоо"})
+}
+
+func GetUnreadConsultationsCountHandler(c *gin.Context) {
+	userID, _ := c.Get("userId")
+	var count int64
+	DB.Model(&Consultation{}).Where("user_id = ? AND admin_response != '' AND user_read = ?", userID, false).Count(&count)
+	c.JSON(200, gin.H{"unreadCount": count})
 }
 
 // ── Admin Contact Form Handlers ────────────────────────────────

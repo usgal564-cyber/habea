@@ -32,15 +32,15 @@ export default function Footer({ onNavigate }: FooterProps) {
 
   return (
     <footer className="bg-brand-950 text-brand-200 mt-auto">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 lg:py-16">
-        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-8 lg:gap-12">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-14 lg:py-20">
+        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-10 lg:gap-12">
           {/* Brand */}
           <div className="sm:col-span-2 lg:col-span-1">
-            <div className="flex items-center gap-3 mb-4">
+            <div className="flex items-center gap-3 mb-5">
               <img
-                src="https://img.magnific.com/premium-vector/eqh-logo-design-initial-letter-eqh-monogram-logo-using-hexagon-shape_1101554-16445.jpg?semt=ais_test_b&w=740&q=80"
+                src="/logo.png"
                 alt="ХАБЭА"
-                className="w-10 h-10 rounded-xl object-contain"
+                className="w-10 h-10 rounded-xl object-contain shadow-lg"
               />
               <div>
                 <span className="text-lg font-bold text-white">
@@ -51,7 +51,7 @@ export default function Footer({ onNavigate }: FooterProps) {
                 </span>
               </div>
             </div>
-            <p className="text-brand-300/70 text-sm leading-relaxed">
+            <p className="text-brand-300/70 text-sm leading-relaxed mb-6">
               Ажлын байраны аюулгүй байдал, эрүүл мэнд,
               байгаль орчны талаар сургалт, зөвлөгөө
               үзүүлдэг мэргэжлийн байгууллага.
@@ -60,15 +60,15 @@ export default function Footer({ onNavigate }: FooterProps) {
 
           {/* Quick Links */}
           <div>
-            <h4 className="text-white font-semibold mb-4">
+            <h4 className="text-white font-semibold mb-5">
               Цахим холбоос
             </h4>
-            <ul className="space-y-2.5">
+            <ul className="space-y-3">
               {quickLinks.map((link) => (
                 <li key={link.id}>
                   <button
                     onClick={() => onNavigate(link.id)}
-                    className="text-brand-300/70 hover:text-brand-200 text-sm transition-colors"
+                    className="text-brand-300/70 hover:text-brand-200 text-sm transition-colors hover:translate-x-1 inline-block"
                   >
                     {link.label}
                   </button>
@@ -79,13 +79,13 @@ export default function Footer({ onNavigate }: FooterProps) {
 
           {/* Services Links */}
           <div>
-            <h4 className="text-white font-semibold mb-4">Үйлчилгээ</h4>
-            <ul className="space-y-2.5">
+            <h4 className="text-white font-semibold mb-5">Үйлчилгээ</h4>
+            <ul className="space-y-3">
               {serviceLinks.map((link) => (
                 <li key={link.id}>
                   <button
                     onClick={() => onNavigate(link.id)}
-                    className="text-brand-300/70 hover:text-brand-200 text-sm transition-colors"
+                    className="text-brand-300/70 hover:text-brand-200 text-sm transition-colors hover:translate-x-1 inline-block"
                   >
                     {link.label}
                   </button>
@@ -96,8 +96,8 @@ export default function Footer({ onNavigate }: FooterProps) {
 
           {/* Contact Info */}
           <div>
-            <h4 className="text-white font-semibold mb-4">Холбоо барих</h4>
-            <ul className="space-y-3">
+            <h4 className="text-white font-semibold mb-5">Холбоо барих</h4>
+            <ul className="space-y-3.5">
               <li className="flex items-start gap-3 text-sm text-brand-300/70">
                 <MapPin className="w-4 h-4 text-brand-400 shrink-0 mt-0.5" />
                 <span>
@@ -115,17 +115,17 @@ export default function Footer({ onNavigate }: FooterProps) {
             </ul>
 
             {/* Social Media Icons */}
-            <div className="flex gap-3 mt-5">
+            <div className="flex gap-3 mt-6">
               <a
                 href="#"
-                className="w-9 h-9 rounded-lg bg-brand-800/60 flex items-center justify-center text-brand-300 hover:bg-brand-700 hover:text-white transition-all duration-200"
+                className="w-9 h-9 rounded-lg bg-brand-800/60 flex items-center justify-center text-brand-300 hover:bg-brand-700 hover:text-white transition-all duration-200 hover:scale-110"
                 aria-label="Facebook"
               >
                 <Facebook className="w-4 h-4" />
               </a>
               <a
                 href="#"
-                className="w-9 h-9 rounded-lg bg-brand-800/60 flex items-center justify-center text-brand-300 hover:bg-brand-700 hover:text-white transition-all duration-200"
+                className="w-9 h-9 rounded-lg bg-brand-800/60 flex items-center justify-center text-brand-300 hover:bg-brand-700 hover:text-white transition-all duration-200 hover:scale-110"
                 aria-label="Instagram"
               >
                 <Instagram className="w-4 h-4" />
@@ -135,7 +135,7 @@ export default function Footer({ onNavigate }: FooterProps) {
         </div>
 
         {/* Bottom Bar */}
-        <div className="mt-12 pt-8 border-t border-brand-800/50 flex flex-col sm:flex-row justify-between items-center gap-4">
+        <div className="mt-14 pt-8 border-t border-brand-800/50 flex flex-col sm:flex-row justify-between items-center gap-4">
           <p className="text-brand-400/60 text-sm">
             © 2025 ХАБЭА Бага Дунд Аж Ахуйн Нэгж. Бүх
             эрх хуулиар хамгаалагдсан.
@@ -144,7 +144,7 @@ export default function Footer({ onNavigate }: FooterProps) {
             variant="ghost"
             size="sm"
             onClick={scrollToTop}
-            className="text-brand-400 hover:text-brand-200 hover:bg-brand-800/40"
+            className="text-brand-400 hover:text-brand-200 hover:bg-brand-800/40 hover:scale-105 transition-all"
           >
             <ArrowUp className="w-4 h-4 mr-1" />
             Дээш очих

@@ -26,7 +26,6 @@ import { Input } from "@/components/ui/input";
 import { useAuthStore } from "@/hooks/use-auth";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { quizTemplates, getQuizById } from "@/data/quiz-templates";
-import { apiFetch } from "@/lib/api";
 
 /* ─── Types ─────────────────────────────────────────────── */
 
@@ -116,11 +115,6 @@ function QuizSelection({ onSelect }: { onSelect: (quiz: QuizListItem) => void })
       .catch(() => {});
   }, []);
 
-  useEffect(() => {
-  apiFetch("/api/quiz").then((data) => {
-    if (data) setQuizzes(data);
-  });
-}, []);
   useEffect(() => {
     async function fetchQuizzes() {
       try {

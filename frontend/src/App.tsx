@@ -45,18 +45,22 @@ export default function App() {
   const [authOpen, setAuthOpen] = useState(false);
   const { user, setAuth, token } = useAuthStore();
 
-useEffect(() => {
-  if (!token) return;
-
-  apiFetch("/api/auth/me", {
-    headers: { Authorization: `Bearer ${token}` },
-  }).then((data) => {
-    if (!data) {
-      // Token хүчингүй болсон эсвэл алдаа гарсан үед
-      setAuth(null, null);
-    }
-  });
-}, []);
+  useEffect(() => {
+    if (!token) return;
+    fetch("/api/auth/me", {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((res) => {
+        if (res.status === 401 || res.status === 403) {
+          // Token expired or invalid — clear auth
+          setAuth(null, null);
+        }
+        // Other errors (500, 502, network) → keep token, backend may be down
+      })
+      .catch(() => {
+        // Network error — keep token, do NOT log out
+      });
+  }, []);
 
   const handleNavigate = (pageId: PageId, params?: { examId?: string }) => {
     if (params?.examId) {
@@ -83,7 +87,7 @@ useEffect(() => {
       case "feedback": return <FeedbackPage />;
       case "survey": return <SurveyPage />;
       case "admin": return <AdminPage onNavigate={handleNavigate} />;
-      case "profile": return <ProfilePage />;
+      case "profile": return <ProfilePage key={currentPage + "-" + Date.now()} />;
       case "exam-admin-detail":
         return (
           <ExamAdminDetailPage
@@ -111,7 +115,9 @@ useEffect(() => {
       <main className="flex-1 pt-16 lg:pt-20">
         {renderPage()}
       </main>
-      <Footer onNavigate={handleNavigate} />
+      {(currentPage === "home" || currentPage === "about") && (
+        <Footer onNavigate={handleNavigate} />
+      )}
       <LoginDialog
         open={authOpen}
         onOpenChange={setAuthOpen}

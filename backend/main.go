@@ -2,7 +2,6 @@ package main
 
 import (
 	"log"
-	"os"
 
 	"github.com/gin-gonic/gin"
 )
@@ -34,11 +33,6 @@ func main() {
 	// ============================================================
 	// Auth routes (public)
 	// ============================================================
-	r.GET("/", func(c *gin.Context) {
-		c.JSON(200, gin.H{
-			"message": "Backend API is running successfully!",
-		})
-	})
 	r.POST("/api/auth/register", RegisterHandler)
 	r.POST("/api/auth/login", LoginHandler)
 	r.GET("/api/auth/me", AuthMiddleware(), MeHandler)
@@ -87,6 +81,8 @@ func main() {
 
 	r.POST("/api/consultations", AuthMiddleware(), ConsultationHandler)
 	r.GET("/api/consultations", AuthMiddleware(), GetConsultationsHandler)
+	r.GET("/api/consultations/unread-count", AuthMiddleware(), GetUnreadConsultationsCountHandler)
+	r.PUT("/api/consultations/:id/read", AuthMiddleware(), MarkConsultationReadHandler)
 
 	r.POST("/api/service-order", ServiceOrderHandler)
 
@@ -127,6 +123,7 @@ func main() {
 		// Consultation management
 		adminGroup.GET("/consultations", AdminGetConsultationsHandler)
 		adminGroup.PUT("/consultations/:id/status", AdminUpdateConsultationStatusHandler)
+		adminGroup.PUT("/consultations/:id/response", AdminReplyConsultationHandler)
 		adminGroup.DELETE("/consultations/:id", AdminDeleteConsultationHandler)
 
 		// Contact forms management
@@ -140,16 +137,8 @@ func main() {
 		adminGroup.GET("/export", AdminExportHandler)
 	}
 
-	// ============================================================
-	// Server Start (Бүх замуудыг бүртгэж дууссаны дараа асаана)
-	// ============================================================
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "8080" // Local дээр ажиллах порт
-	}
-
-	log.Println("Server starting on port " + port)
-	if err := r.Run(":" + port); err != nil {
+	log.Println("Server starting on port 8080")
+	if err := r.Run(":8080"); err != nil {
 		log.Fatalf("Failed to start server: %v", err)
 	}
 }

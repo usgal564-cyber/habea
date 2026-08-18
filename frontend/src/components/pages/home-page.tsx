@@ -1,4 +1,3 @@
-
 import { motion } from "framer-motion";
 import {
   Shield,
@@ -146,10 +145,10 @@ export default function HomePage({ onNavigate }: HomePageProps) {
             variants={fadeUp}
             initial="hidden"
             animate="visible"
-            className="inline-flex items-center gap-2 bg-white/10 backdrop-blur-sm border border-white/20 rounded-full px-4 py-2 mb-8"
+            className="inline-flex items-center gap-2 bg-white/10 backdrop-blur-md border border-white/20 rounded-full px-5 py-2.5 mb-8 shadow-lg"
           >
             <Shield className="w-4 h-4 text-brand-300" />
-            <span className="text-brand-200 text-sm font-medium">
+            <span className="text-brand-200 text-sm font-semibold tracking-wide">
               Бага дунд аж ахуйн нэгж
             </span>
           </motion.div>
@@ -160,7 +159,7 @@ export default function HomePage({ onNavigate }: HomePageProps) {
             variants={fadeUp}
             initial="hidden"
             animate="visible"
-            className="text-5xl sm:text-6xl lg:text-8xl font-extrabold text-white mb-6 tracking-tight"
+            className="text-5xl sm:text-6xl lg:text-8xl font-extrabold text-white mb-6 tracking-tight drop-shadow-2xl"
           >
             ХАБЭА
           </motion.h1>
@@ -171,7 +170,7 @@ export default function HomePage({ onNavigate }: HomePageProps) {
             variants={fadeUp}
             initial="hidden"
             animate="visible"
-            className="text-lg sm:text-xl lg:text-2xl text-brand-100 max-w-2xl mx-auto mb-4 font-light leading-relaxed"
+            className="text-lg sm:text-xl lg:text-2xl text-brand-100 max-w-2xl mx-auto mb-4 font-light leading-relaxed drop-shadow-sm"
           >
             Ажилтны аюулгүй байдал, эрүүл ахуйн ажлыг
             <span className="text-brand-300 font-semibold"> мэргэжлийн түвшинд</span>{" "}
@@ -183,7 +182,7 @@ export default function HomePage({ onNavigate }: HomePageProps) {
             variants={fadeUp}
             initial="hidden"
             animate="visible"
-            className="text-base text-brand-200/80 max-w-xl mx-auto mb-10"
+            className="text-base text-brand-200/80 max-w-xl mx-auto mb-10 leading-relaxed"
           >
             Бага дунд аж ахуйн нэгжүүдэд зориулсан цогц ХАБЭА сургалт, шалгалт, зөвлөх үйлчилгээ
           </motion.p>
@@ -199,7 +198,7 @@ export default function HomePage({ onNavigate }: HomePageProps) {
             <Button
               size="lg"
               onClick={() => onNavigate("training")}
-              className="bg-white text-brand-900 hover:bg-brand-50 font-semibold h-12 px-8 text-base rounded-xl shadow-lg shadow-black/10 hover:shadow-xl transition-all"
+              className="bg-white text-brand-900 hover:bg-brand-50 font-semibold h-12 px-8 text-base rounded-xl shadow-xl shadow-black/20 hover:shadow-2xl hover:scale-105 transition-all duration-300"
             >
               <GraduationCap className="w-5 h-5 mr-2" />
               Сургалт
@@ -208,7 +207,7 @@ export default function HomePage({ onNavigate }: HomePageProps) {
             <Button
               size="lg"
               onClick={() => onNavigate("quiz")}
-              className="bg-white text-brand-900 hover:bg-brand-50 font-semibold h-12 px-8 text-base rounded-xl shadow-lg shadow-black/10 hover:shadow-xl transition-all"
+              className="bg-white text-brand-900 hover:bg-brand-50 font-semibold h-12 px-8 text-base rounded-xl shadow-xl shadow-black/20 hover:shadow-2xl hover:scale-105 transition-all duration-300"
             >
               <Brain className="w-5 h-5 mr-2" />
               Мэдлэг сорих
@@ -217,7 +216,7 @@ export default function HomePage({ onNavigate }: HomePageProps) {
             <Button
               size="lg"
               onClick={() => onNavigate("exam")}
-              className="bg-white text-brand-900 hover:bg-brand-50 font-semibold h-12 px-8 text-base rounded-xl shadow-lg shadow-black/10 hover:shadow-xl transition-all"
+              className="bg-white text-brand-900 hover:bg-brand-50 font-semibold h-12 px-8 text-base rounded-xl shadow-xl shadow-black/20 hover:shadow-2xl hover:scale-105 transition-all duration-300"
             >
               <ClipboardCheck className="w-5 h-5 mr-2" />
               Шалгалт
@@ -243,9 +242,9 @@ export default function HomePage({ onNavigate }: HomePageProps) {
             const Icon = stat.icon;
             return (
               <motion.div key={stat.label} variants={staggerItem}>
-                <Card className="border-brand-100 shadow-lg shadow-brand-900/5 hover:shadow-xl hover:shadow-brand-900/10 transition-all duration-300 hover:-translate-y-1">
+                <Card className="border-brand-100 shadow-lg shadow-brand-900/5 hover:shadow-xl hover:shadow-brand-900/10 transition-all duration-300 hover:-translate-y-1 group cursor-default">
                   <CardContent className="p-4 sm:p-6 flex flex-col items-center text-center gap-2">
-                    <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-brand-100 flex items-center justify-center">
+                    <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-brand-100 flex items-center justify-center group-hover:bg-brand-200 transition-colors duration-300">
                       <Icon className="w-5 h-5 sm:w-6 sm:h-6 text-brand-700" />
                     </div>
                     <span className="text-2xl sm:text-3xl font-extrabold text-brand-900">
@@ -305,13 +304,13 @@ export default function HomePage({ onNavigate }: HomePageProps) {
               const Icon = feature.icon;
               return (
                 <motion.div key={feature.title} variants={staggerItem}>
-                  <Card className="group h-full border-brand-100 hover:border-brand-200 shadow-sm hover:shadow-lg hover:shadow-brand-900/8 transition-all duration-300 hover:-translate-y-1 cursor-pointer overflow-hidden"
+                  <Card className="group h-full border-brand-100 hover:border-brand-300 shadow-sm hover:shadow-xl hover:shadow-brand-900/12 transition-all duration-300 hover:-translate-y-1 cursor-pointer overflow-hidden"
                     onClick={() => onNavigate(feature.pageId)}
                   >
                     {/* Gradient top bar */}
-                    <div className={`h-1.5 bg-gradient-to-r ${feature.color}`} />
+                    <div className={`h-1.5 bg-gradient-to-r ${feature.color} group-hover:h-2 transition-all duration-300`} />
                     <CardContent className="p-6 sm:p-8 flex flex-col gap-5">
-                      <div className={`w-14 h-14 rounded-2xl ${feature.bgColor} flex items-center justify-center group-hover:scale-110 transition-transform duration-300`}>
+                      <div className={`w-14 h-14 rounded-2xl ${feature.bgColor} flex items-center justify-center group-hover:scale-110 group-hover:rotate-3 transition-all duration-300`}>
                         <Icon className={`w-7 h-7 ${feature.iconColor}`} />
                       </div>
                       <div>
@@ -323,9 +322,9 @@ export default function HomePage({ onNavigate }: HomePageProps) {
                         </p>
                       </div>
                       <div className="mt-auto pt-2">
-                        <span className="inline-flex items-center gap-1.5 text-brand-600 text-sm font-medium group-hover:gap-2.5 transition-all">
+                        <span className="inline-flex items-center gap-1.5 text-brand-600 text-sm font-medium group-hover:gap-2.5 group-hover:text-brand-700 transition-all">
                           Дэлгэрэнгүй
-                          <ArrowRight className="w-4 h-4" />
+                          <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
                         </span>
                       </div>
                     </CardContent>
@@ -421,12 +420,12 @@ export default function HomePage({ onNavigate }: HomePageProps) {
                     variants={staggerItem}
                     className={i === 0 ? "sm:col-span-2" : ""}
                   >
-                    <Card className="h-full border-brand-100 hover:border-brand-200 shadow-sm hover:shadow-md transition-all duration-300">
+                    <Card className="h-full border-brand-100 hover:border-brand-300 shadow-sm hover:shadow-lg hover:shadow-brand-900/8 transition-all duration-300 hover:-translate-y-1 group">
                       <CardContent className="p-6">
-                        <div className="w-12 h-12 rounded-xl bg-brand-100 flex items-center justify-center mb-4">
+                        <div className="w-12 h-12 rounded-xl bg-brand-100 flex items-center justify-center mb-4 group-hover:bg-brand-200 transition-colors duration-300">
                           <Icon className="w-6 h-6 text-brand-700" />
                         </div>
-                        <h3 className="text-lg font-bold text-foreground mb-2">
+                        <h3 className="text-lg font-bold text-foreground mb-2 group-hover:text-brand-700 transition-colors">
                           {item.title}
                         </h3>
                         <p className="text-sm text-muted-foreground leading-relaxed">

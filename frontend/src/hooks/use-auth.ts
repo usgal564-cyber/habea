@@ -1,7 +1,6 @@
 import { create } from "zustand";
-import { persist, createJSONStorage } from "zustand/middleware";
 
-export interface JWTPayload {
+interface JWTPayload {
   userId: string;
   email: string;
   role: string;
@@ -23,15 +22,13 @@ function decodeJWT(token: string): JWTPayload | null {
         .join("")
     );
     const payload = JSON.parse(jsonPayload);
-    
-    // JWT доторх key-нүүд өөр байж магадгүй тул fallback хийж өгөв
     return {
-      userId: payload.userId || payload.user_id || payload.sub,
+      userId: payload.userId,
       email: payload.email,
-      role: payload.role || "user",
+      role: payload.role,
       name: payload.name,
-      firstName: payload.firstName || payload.first_name,
-      lastName: payload.lastName || payload.last_name,
+      firstName: payload.firstName,
+      lastName: payload.lastName,
       phone: payload.phone,
     };
   } catch {
@@ -48,29 +45,25 @@ interface AuthState {
   setLoading: (loading: boolean) => void;
 }
 
-export const useAuthStore = create<AuthState>()(
-  persist(
-    (set) => ({
-      user: null,
-      token: null,
-      isLoading: false,
+const storedToken = typeof window !== "undefined" ? sessionStorage.getItem("habea_token") : null;
 
-      setAuth: (user, token) => {
-        // Хэрэв user ирээгүй ч token ирсэн бол token-оосоо decode хийж авна
-        const decodedUser = user || (token ? decodeJWT(token) : null);
-        set({ user: decodedUser, token });
-      },
-
-      logout: () => {
-        set({ user: null, token: null });
-      },
-
-      setLoading: (loading) => set({ isLoading: loading }),
-    }),
-    {
-      name: "habea_auth_store", // Storage-ийн нэр
-      storage: createJSONStorage(() => localStorage),
-      partialize: (state) => ({ user: state.user, token: state.token }), // Зөвхөн user, token хоёрыг л хадгална
+export const useAuthStore = create<AuthState>((set) => ({
+  user: storedToken ? decodeJWT(storedToken) : null,
+  token: storedToken,
+  isLoading: false,
+  setAuth: (user, token) => {
+    if (token && typeof window !== "undefined") {
+      sessionStorage.setItem("habea_token", token);
+    } else if (typeof window !== "undefined") {
+      sessionStorage.removeItem("habea_token");
     }
-  )
-);
+    set({ user, token });
+  },
+  logout: () => {
+    if (typeof window !== "undefined") {
+      sessionStorage.removeItem("habea_token");
+    }
+    set({ user: null, token: null });
+  },
+  setLoading: (loading) => set({ isLoading: loading }),
+}));

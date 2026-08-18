@@ -1,4 +1,3 @@
-
 import { useEffect, useState, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
@@ -221,12 +220,8 @@ const containerVariants = {
 
 const itemVariants = {
   hidden: { opacity: 0, y: 20 },
-  visible: {
-    opacity: 1,
-    y: 0,
-    transition: { duration: 0.3, ease: "easeOut" }
-  }
-} as const;
+  visible: { opacity: 1, y: 0, transition: { duration: 0.4, ease: "easeOut" } },
+};
 
 function CourseCardSkeleton() {
   return (
@@ -272,7 +267,7 @@ function CourseCard({
         <CardHeader className="pb-3">
           <div className="flex items-start justify-between gap-3">
             <div className="flex-1 space-y-1.5">
-              <CardTitle className="text-lg leading-tight text-brand-900 group-hovex  r:text-brand-700 transition-colors">
+              <CardTitle className="text-lg leading-tight text-brand-900 group-hover:text-brand-700 transition-colors">
                 {course.title}
               </CardTitle>
               <CardDescription className="line-clamp-2 text-sm leading-relaxed">

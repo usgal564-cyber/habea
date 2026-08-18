@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -216,7 +215,7 @@ export default function FeedbackPage() {
       {/* Content */}
       <section className="py-16 lg:py-20 bg-background">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid lg:grid-cols-2 gap-10">
+          <div className="grid lg:grid-cols-2 gap-10 items-start">
             {/* LEFT: Feedback List from Server */}
             <motion.div
               initial={{ opacity: 0, x: -20 }}

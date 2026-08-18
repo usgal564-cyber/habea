@@ -20,6 +20,7 @@ import {
   Trash2,
   CheckCircle,
   Clock,
+  Send,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -46,6 +47,7 @@ interface ConsultationItem {
   company: string;
   serviceType: string;
   message: string;
+  adminResponse: string;
   status: string;
   createdAt: string;
 }
@@ -164,6 +166,122 @@ function DropdownMenu({
   );
 }
 
+function UserNotificationBell({ token, onNavigate }: { token: string; onNavigate: (id: PageId) => void }) {
+  const [open, setOpen] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [unreadItems, setUnreadItems] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const fetchUnread = useCallback(async () => {
+    try {
+      const [countRes, consRes] = await Promise.all([
+        fetch("/api/consultations/unread-count", { headers: { Authorization: `Bearer ${token}` } }),
+        fetch("/api/consultations", { headers: { Authorization: `Bearer ${token}` } }),
+      ]);
+      if (countRes.ok) {
+        const data = await countRes.json();
+        setUnreadCount(data.unreadCount || 0);
+      }
+      if (consRes.ok) {
+        const data = await consRes.json();
+        const unread = (data.consultations || []).filter((c: any) => c.adminResponse && !c.userRead);
+        setUnreadItems(unread);
+      }
+    } catch { /* silent */ }
+  }, [token]);
+
+  useEffect(() => {
+    fetchUnread();
+    const interval = setInterval(fetchUnread, 30000);
+    return () => clearInterval(interval);
+  }, [fetchUnread]);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    if (open) document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [open]);
+
+  const handleMouseEnter = () => { if (timeoutRef.current) clearTimeout(timeoutRef.current); };
+  const handleMouseLeave = () => { timeoutRef.current = setTimeout(() => setOpen(false), 200); };
+
+  const handleViewDetail = async (id: string) => {
+    try {
+      await fetch(`/api/consultations/${id}/read`, {
+        method: "PUT",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+    } catch { /* silent */ }
+    setOpen(false);
+    onNavigate("consulting");
+  };
+
+  if (unreadCount === 0) return null;
+
+  return (
+    <div className="relative" ref={dropdownRef} onMouseEnter={handleMouseEnter} onMouseLeave={handleMouseLeave}>
+      <button
+        onClick={() => setOpen(!open)}
+        className="relative flex items-center justify-center w-10 h-10 rounded-xl text-amber-300 hover:text-amber-200 hover:bg-amber-900/30 transition-all duration-200"
+      >
+        <Bell className="w-5 h-5" />
+        <span className="absolute -top-0.5 -right-0.5 w-5 h-5 bg-amber-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center animate-pulse shadow-sm">
+          {unreadCount > 9 ? "9+" : unreadCount}
+        </span>
+      </button>
+      {open && (
+        <div className="absolute right-0 top-full mt-2 w-[360px] bg-white rounded-2xl shadow-2xl shadow-black/20 border border-gray-100 z-50 overflow-hidden">
+          <div className="bg-gradient-to-r from-amber-500 to-amber-600 px-5 py-3.5">
+            <div className="flex items-center gap-2">
+              <Bell className="w-5 h-5 text-white" />
+              <span className="font-semibold text-white text-sm">Шинэ зөвлөмж</span>
+              {unreadCount > 0 && (
+                <span className="bg-white/20 text-white text-xs font-medium px-2.5 py-0.5 rounded-full ml-auto">{unreadCount}</span>
+              )}
+            </div>
+          </div>
+          <div className="max-h-72 overflow-y-auto">
+            {loading ? (
+              <div className="flex items-center justify-center py-10">
+                <Loader2 className="w-5 h-5 text-amber-400 animate-spin" />
+              </div>
+            ) : unreadItems.length === 0 ? (
+              <div className="text-center py-10 px-4">
+                <CheckCircle className="w-8 h-8 text-green-300 mx-auto mb-2" />
+                <p className="text-sm text-gray-500">Бүх зөвлөмж уншсан</p>
+              </div>
+            ) : (
+              <div className="divide-y divide-gray-50">
+                {unreadItems.map((c: any) => (
+                  <div key={c.id} className="px-4 py-3 hover:bg-amber-50/50 transition-colors">
+                    <div className="flex items-start justify-between gap-2 mb-1">
+                      <p className="font-medium text-sm text-gray-900 truncate">Зөвлөгөөний хариу</p>
+                      <span className="bg-amber-100 text-amber-700 text-[10px] font-medium px-1.5 py-0.5 rounded-full shrink-0 whitespace-nowrap">Шинэ</span>
+                    </div>
+                    <p className="text-xs text-gray-600 line-clamp-2 mb-2">{c.adminResponse}</p>
+                    <button
+                      onClick={() => handleViewDetail(c.id)}
+                      className="text-xs text-amber-600 hover:text-amber-700 font-medium transition-colors"
+                    >
+                      Дэлгэрэнгүй харах →
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function AdminNotificationBell({ token }: { token: string }) {
   const [open, setOpen] = useState(false);
   const [consultations, setConsultations] = useState<ConsultationItem[]>([]);
@@ -171,6 +289,9 @@ function AdminNotificationBell({ token }: { token: string }) {
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"consultations" | "enollments">("consultations");
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [replyText, setReplyText] = useState<Record<string, string>>({});
+  const [replyLoading, setReplyLoading] = useState<string | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -257,6 +378,29 @@ function AdminNotificationBell({ token }: { token: string }) {
       toast.error("Алдаа гарлаа");
     } finally {
       setActionLoading(null);
+    }
+  };
+
+  const replyConsultation = async (id: string) => {
+    const text = replyText[id]?.trim();
+    if (!text) { toast.error("Зөвлөмж хоосон байна"); return; }
+    setReplyLoading(id);
+    try {
+      const res = await fetch(`/api/admin/consultations/${id}/response`, {
+        method: "PUT",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ response: text }),
+      });
+      if (res.ok) {
+        toast.success("Зөвлөмж амжилттай илгээгдлээ");
+        setReplyText((prev) => { const n = { ...prev }; delete n[id]; return n; });
+        setExpandedId(null);
+        fetchNotifications();
+      }
+    } catch {
+      toast.error("Алдаа гарлаа");
+    } finally {
+      setReplyLoading(null);
     }
   };
 
@@ -368,7 +512,7 @@ function AdminNotificationBell({ token }: { token: string }) {
                 <div className="divide-y divide-gray-50">
                   {consultations.slice(0, 10).map((c) => (
                     <div key={c.id} className="px-4 py-3 hover:bg-gray-50/80 transition-colors">
-                      <div className="flex items-start justify-between gap-2 mb-1.5">
+                      <div className="flex items-start justify-between gap-2 mb-1.5 cursor-pointer" onClick={() => setExpandedId(expandedId === c.id ? null : c.id)}>
                         <div className="min-w-0">
                           <div className="flex items-center gap-2">
                             <p className="font-medium text-sm text-gray-900 truncate">{c.name}</p>
@@ -380,10 +524,56 @@ function AdminNotificationBell({ token }: { token: string }) {
                             {c.company && `${c.company} · `}{c.phone}
                           </p>
                         </div>
-                        <span className="text-[11px] text-gray-400 shrink-0 whitespace-nowrap">{formatDate(c.createdAt)}</span>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <span className="text-[11px] text-gray-400 whitespace-nowrap">{formatDate(c.createdAt)}</span>
+                          <svg className={cn("w-3.5 h-3.5 text-gray-400 transition-transform", expandedId === c.id && "rotate-180")} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                        </div>
                       </div>
                       <p className="text-xs text-gray-600 line-clamp-2 mb-2">{c.message}</p>
-                      {c.status === "pending" && (
+                      {expandedId === c.id && (
+                        <div className="mt-2 space-y-2">
+                          {c.adminResponse && (
+                            <div className="bg-brand-50 border border-brand-100 rounded-lg p-3">
+                              <p className="text-[11px] font-medium text-brand-700 mb-1">Өмнөх зөвлөмж:</p>
+                              <p className="text-xs text-gray-700 whitespace-pre-wrap">{c.adminResponse}</p>
+                            </div>
+                          )}
+                          <div className="flex gap-1.5 flex-wrap">
+                            {c.status === "pending" && (
+                              <button onClick={() => updateStatus(c.id, "in_progress")} disabled={actionLoading === c.id} className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 text-[11px] font-medium transition-colors disabled:opacity-50">
+                                {actionLoading === c.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Clock className="w-3 h-3" />}
+                                Хүлээх
+                              </button>
+                            )}
+                            {(c.status === "pending" || c.status === "in_progress") && (
+                              <button onClick={() => updateStatus(c.id, "completed")} disabled={actionLoading === c.id} className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-green-50 text-green-600 hover:bg-green-100 text-[11px] font-medium transition-colors disabled:opacity-50">
+                                {actionLoading === c.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <CheckCircle className="w-3 h-3" />}
+                                Хийсэн
+                              </button>
+                            )}
+                            <button onClick={() => deleteConsultation(c.id)} disabled={actionLoading === c.id} className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-red-50 text-red-500 hover:bg-red-100 text-[11px] font-medium transition-colors disabled:opacity-50">
+                              {actionLoading === c.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Trash2 className="w-3 h-3" />}
+                              Устгах
+                            </button>
+                          </div>
+                          <textarea
+                            value={replyText[c.id] || ""}
+                            onChange={(e) => setReplyText((prev) => ({ ...prev, [c.id]: e.target.value }))}
+                            placeholder="Зөвлөмж/заавар бичих..."
+                            rows={2}
+                            className="w-full text-xs border border-gray-200 rounded-lg px-3 py-2 resize-none focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-300"
+                          />
+                          <button
+                            onClick={() => replyConsultation(c.id)}
+                            disabled={replyLoading === c.id || !replyText[c.id]?.trim()}
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-brand-600 text-white hover:bg-brand-700 text-[11px] font-medium transition-colors disabled:opacity-50"
+                          >
+                            {replyLoading === c.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Send className="w-3 h-3" />}
+                            Зөвлөмж илгээх
+                          </button>
+                        </div>
+                      )}
+                      {expandedId !== c.id && c.status === "pending" && (
                         <div className="flex items-center gap-1.5">
                           <button onClick={() => updateStatus(c.id, "in_progress")} disabled={actionLoading === c.id} className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 text-[11px] font-medium transition-colors disabled:opacity-50">
                             {actionLoading === c.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Clock className="w-3 h-3" />}
@@ -393,26 +583,6 @@ function AdminNotificationBell({ token }: { token: string }) {
                             {actionLoading === c.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <CheckCircle className="w-3 h-3" />}
                             Хийсэн
                           </button>
-                          <button onClick={() => deleteConsultation(c.id)} disabled={actionLoading === c.id} className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-red-50 text-red-500 hover:bg-red-100 text-[11px] font-medium transition-colors disabled:opacity-50">
-                            {actionLoading === c.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Trash2 className="w-3 h-3" />}
-                            Устгах
-                          </button>
-                        </div>
-                      )}
-                      {c.status === "in_progress" && (
-                        <div className="flex items-center gap-1.5">
-                          <button onClick={() => updateStatus(c.id, "completed")} disabled={actionLoading === c.id} className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-green-50 text-green-600 hover:bg-green-100 text-[11px] font-medium transition-colors disabled:opacity-50">
-                            {actionLoading === c.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <CheckCircle className="w-3 h-3" />}
-                            Хийсэн
-                          </button>
-                          <button onClick={() => deleteConsultation(c.id)} disabled={actionLoading === c.id} className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-red-50 text-red-500 hover:bg-red-100 text-[11px] font-medium transition-colors disabled:opacity-50">
-                            {actionLoading === c.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Trash2 className="w-3 h-3" />}
-                            Устгах
-                          </button>
-                        </div>
-                      )}
-                      {c.status === "completed" && (
-                        <div className="flex items-center gap-1.5">
                           <button onClick={() => deleteConsultation(c.id)} disabled={actionLoading === c.id} className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-red-50 text-red-500 hover:bg-red-100 text-[11px] font-medium transition-colors disabled:opacity-50">
                             {actionLoading === c.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Trash2 className="w-3 h-3" />}
                             Устгах
@@ -522,7 +692,7 @@ export function Navbar({ currentPage, onNavigate, onAuthClick, user, onLogout, t
             {/* Logo */}
             <button onClick={() => handleNavClick("home")} className="flex items-center gap-3 group">
               <img
-                src="https://img.magnific.com/premium-vector/eqh-logo-design-initial-letter-eqh-monogram-logo-using-hexagon-shape_1101554-16445.jpg?semt=ais_test_b&w=740&q=80"
+                src="/logo.png"
                 alt="ХАБЭА"
                 className="w-10 h-10 lg:w-12 lg:h-12 rounded-xl object-contain shadow-lg group-hover:shadow-brand-500/30 transition-shadow"
               />
@@ -614,6 +784,11 @@ export function Navbar({ currentPage, onNavigate, onAuthClick, user, onLogout, t
               {/* Admin notification bell */}
               {isAdmin && token && (
                 <AdminNotificationBell token={token} />
+              )}
+
+              {/* User notification bell (admin response) */}
+              {!isAdmin && user && token && (
+                <UserNotificationBell token={token} onNavigate={onNavigate} />
               )}
 
               {!user && (
@@ -821,3 +996,4 @@ export function Navbar({ currentPage, onNavigate, onAuthClick, user, onLogout, t
     </>
   );
 }
+  
