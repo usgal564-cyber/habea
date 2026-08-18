@@ -1,7 +1,9 @@
 package main
 
 import (
+	"fmt"
 	"log"
+	"os"
 
 	"github.com/gin-gonic/gin"
 )
@@ -28,6 +30,16 @@ func main() {
 		}
 
 		c.Next()
+	})
+
+	// ============================================================
+	// Root route (Render health check болон 404 засах)
+	// ============================================================
+	r.GET("/", func(c *gin.Context) {
+		c.JSON(200, gin.H{
+			"status":  "success",
+			"message": "Backend API is running successfully!",
+		})
 	})
 
 	// ============================================================
@@ -137,8 +149,14 @@ func main() {
 		adminGroup.GET("/export", AdminExportHandler)
 	}
 
-	log.Println("Server starting on port 8080")
-	if err := r.Run(":8080"); err != nil {
+	// Render-ийн PORT орчны хувьсагчийг унших (байхгүй бол 8080 ашиглана)
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
+	}
+
+	log.Printf("Server starting on port %s", port)
+	if err := r.Run(fmt.Sprintf(":%s", port)); err != nil {
 		log.Fatalf("Failed to start server: %v", err)
 	}
 }
