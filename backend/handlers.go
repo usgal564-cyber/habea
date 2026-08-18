@@ -190,55 +190,59 @@ func RegisterHandler(c *gin.Context) {
 	hash, _ := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
 	user := User{ID: uuid.New().String(), FirstName: req.FirstName, LastName: req.LastName, Email: req.Email, Phone: req.Phone, Password: string(hash), Address: req.Address, SecondaryPhone: req.SecondaryPhone, Role: "USER"}
 	if err := DB.Create(&user).Error; err != nil {
-		c.JSON(500, gin.H{"error": "Failed to create user"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create user"})
 		return
 	}
 	token, _ := GenerateToken(user.ID, user.Email, user.Role, user.FirstName+" "+user.LastName)
-	c.JSON(201, gin.H{"user": userResponse(user), "token": token})
+	c.JSON(http.StatusCreated, gin.H{"user": userResponse(user), "token": token})
 }
 
 func LoginHandler(c *gin.Context) {
 	var req LoginRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(400, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 	var user User
 	if err := DB.Where("email = ?", req.Email).First(&user).Error; err != nil {
-		c.JSON(401, gin.H{"error": "Бүртгэлтэй имэйл байна"})
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Бүртгэлгүй имэйл байна"})
 		return
 	}
 	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(req.Password)); err != nil {
-		c.JSON(401, gin.H{"error": "Нууц үг буруу"})
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Нууц үг буруу"})
 		return
 	}
 	token, _ := GenerateToken(user.ID, user.Email, user.Role, user.FirstName+" "+user.LastName)
-	c.JSON(200, gin.H{"user": userResponse(user), "token": token})
+	c.JSON(http.StatusOK, gin.H{"user": userResponse(user), "token": token})
 }
 
 func MeHandler(c *gin.Context) {
 	userID, _ := c.Get("userId")
 	var user User
 	if err := DB.Where("id = ?", userID).First(&user).Error; err != nil {
-		c.JSON(404, gin.H{"error": "User not found"})
+		c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
 		return
 	}
-	c.JSON(200, gin.H{"user": userResponse(user)})
+	c.JSON(http.StatusOK, gin.H{"user": userResponse(user)})
 }
 
 func AdminLoginHandler(c *gin.Context) {
 	var req AdminLoginRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(400, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Хүсэлт буруу байна: " + err.Error()})
 		return
 	}
 	var account AdminAccount
 	if err := DB.Where("code = ?", req.Code).First(&account).Error; err != nil {
-		c.JSON(401, gin.H{"error": "Буруу админ код"})
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Буруу админ код"})
 		return
 	}
-	token, _ := GenerateToken(account.ID, account.Email, account.Role, account.Name)
-	c.JSON(200, gin.H{
+	token, err := GenerateToken(account.ID, account.Email, account.Role, account.Name)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Токен үүсгэж чадсангүй"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
 		"user": gin.H{
 			"userId": account.ID,
 			"email":  account.Email,
@@ -257,7 +261,7 @@ func GetProfileHandler(c *gin.Context) {
 
 	var user User
 	if DB.Where("id = ?", userID).First(&user).Error != nil {
-		c.JSON(404, gin.H{"error": "User not found"})
+		c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
 		return
 	}
 
@@ -276,7 +280,7 @@ func GetProfileHandler(c *gin.Context) {
 				"timeSpent": a.TimeSpent, "createdAt": a.CreatedAt,
 			})
 		}
-		c.JSON(200, gin.H{"results": results})
+		c.JSON(http.StatusOK, gin.H{"results": results})
 		return
 
 	case "quizzes":
@@ -292,7 +296,7 @@ func GetProfileHandler(c *gin.Context) {
 				"score": a.Score, "total": a.Total, "passed": a.Passed, "createdAt": a.CreatedAt,
 			})
 		}
-		c.JSON(200, gin.H{"results": results})
+		c.JSON(http.StatusOK, gin.H{"results": results})
 		return
 
 	case "courses":
@@ -321,18 +325,18 @@ func GetProfileHandler(c *gin.Context) {
 				},
 			})
 		}
-		c.JSON(200, gin.H{"registrations": regs})
+		c.JSON(http.StatusOK, gin.H{"registrations": regs})
 		return
 	}
 
-	c.JSON(200, gin.H{"user": userResponse(user)})
+	c.JSON(http.StatusOK, gin.H{"user": userResponse(user)})
 }
 
 func UpdateProfileHandler(c *gin.Context) {
 	userID, _ := c.Get("userId")
 	var user User
 	if DB.Where("id = ?", userID).First(&user).Error != nil {
-		c.JSON(404, gin.H{"error": "User not found"})
+		c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
 		return
 	}
 	var req UpdateProfileRequest
@@ -355,7 +359,7 @@ func UpdateProfileHandler(c *gin.Context) {
 	}
 	DB.Model(&user).Updates(updates)
 	DB.Where("id = ?", userID).First(&user)
-	c.JSON(200, gin.H{"user": userResponse(user)})
+	c.JSON(http.StatusOK, gin.H{"user": userResponse(user)})
 }
 
 // ── Quiz Handlers ───────────────────────────────────────────
@@ -363,7 +367,7 @@ func UpdateProfileHandler(c *gin.Context) {
 func GetQuizzesHandler(c *gin.Context) {
 	var quizzes []Quiz
 	DB.Find(&quizzes)
-	c.JSON(200, gin.H{"quizzes": quizzes})
+	c.JSON(http.StatusOK, gin.H{"quizzes": quizzes})
 }
 
 func GetQuizQuestionsHandler(c *gin.Context) {
@@ -379,27 +383,27 @@ func GetQuizQuestionsHandler(c *gin.Context) {
 	if prevAttempt.ID != "" {
 		result["attempt"] = gin.H{"id": prevAttempt.ID, "score": prevAttempt.Score, "total": prevAttempt.Total}
 	}
-	c.JSON(200, result)
+	c.JSON(http.StatusOK, result)
 }
 
 func QuizPaymentHandler(c *gin.Context) {
 	var req QuizPaymentRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(400, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 	var quiz Quiz
 	if DB.Where("id = ?", req.QuizID).First(&quiz).Error != nil {
-		c.JSON(404, gin.H{"error": "Quiz not found"})
+		c.JSON(http.StatusNotFound, gin.H{"error": "Quiz not found"})
 		return
 	}
-	c.JSON(200, gin.H{"message": "Амжилттай", "paid": true})
+	c.JSON(http.StatusOK, gin.H{"message": "Амжилттай", "paid": true})
 }
 
 func QuizSubmitHandler(c *gin.Context) {
 	var req QuizSubmitRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(400, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 	userID, _ := c.Get("userId")
@@ -420,7 +424,7 @@ func QuizSubmitHandler(c *gin.Context) {
 	attempt := QuizAttempt{ID: uuid.New().String(), UserID: userID.(string), QuizID: req.QuizID, Score: score, Total: len(questions), Passed: passed, Answers: string(ansJSON)}
 	DB.Create(&attempt)
 
-	c.JSON(200, gin.H{"score": score, "total": len(questions), "passed": score >= int(float64(len(questions))*0.8), "attemptId": attempt.ID})
+	c.JSON(http.StatusOK, gin.H{"score": score, "total": len(questions), "passed": score >= int(float64(len(questions))*0.8), "attemptId": attempt.ID})
 }
 
 // ── Exam Handlers ────────────────────────────────────────────
@@ -428,30 +432,22 @@ func QuizSubmitHandler(c *gin.Context) {
 func ExamHandler(c *gin.Context) {
 	var req ExamActionRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(400, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
 	if req.Action == "verify" {
 		var exam Exam
 		if DB.Where("code = ? AND is_active = ?", req.Code, true).First(&exam).Error != nil {
-			c.JSON(404, gin.H{"error": "Идэвхтэй шалгалт олдсонгүй эсвэл код буруу байна"})
+			c.JSON(http.StatusNotFound, gin.H{"error": "Идэвхтэй шалгалт олдсонгүй эсвэл код буруу байна"})
 			return
 		}
-		c.JSON(200, gin.H{"exam": gin.H{"id": exam.ID, "title": exam.Title, "questionCount": exam.QuestionCount, "duration": exam.Duration}})
+		c.JSON(http.StatusOK, gin.H{"exam": gin.H{"id": exam.ID, "title": exam.Title, "questionCount": exam.QuestionCount, "duration": exam.Duration}})
 		return
 	}
 
 	if req.Action == "submit" {
 		userID, _ := c.Get("userId")
-		// Check if already took — allow retake for testing (comment out to restrict)
-		/*
-		   var existing ExamAttempt
-		   if DB.Where("exam_id = ? AND user_id = ?", req.ExamID, userID).First(&existing).Error == nil {
-		           c.JSON(403, gin.H{"error": "Та энэ шалгалтад өмнө нь орсон байна. Дахин өгөх боломжгүй."})
-		           return
-		   }
-		*/
 
 		var questions []ExamQuestion
 		DB.Where("exam_id = ?", req.ExamID).Order("index asc").Find(&questions)
@@ -468,29 +464,20 @@ func ExamHandler(c *gin.Context) {
 		attempt := ExamAttempt{ID: uuid.New().String(), UserID: userID.(string), ExamID: req.ExamID, Score: score, Total: len(questions), Passed: passed, Answers: string(ansJSON), TimeSpent: req.TimeSpent}
 		DB.Create(&attempt)
 
-		c.JSON(200, gin.H{"score": score, "total": len(questions), "passed": passed, "timeSpent": req.TimeSpent})
+		c.JSON(http.StatusOK, gin.H{"score": score, "total": len(questions), "passed": passed, "timeSpent": req.TimeSpent})
 		return
 	}
 
-	c.JSON(400, gin.H{"error": "Invalid action"})
+	c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid action"})
 }
 
 func GetExamQuestionsHandler(c *gin.Context) {
 	examID := c.Query("examId")
 	_, _ = c.Get("userId")
 
-	// Check if already took — allow retake for testing
-	/*
-	   var existing ExamAttempt
-	   if DB.Where("exam_id = ? AND user_id = ?", examID, userID).First(&existing).Error == nil {
-	           c.JSON(403, gin.H{"error": "Та энэ шалгалтад өмнө нь орсон байна. Дахин өгөх боломжгүй."})
-	           return
-	   }
-	*/
-
 	var questions []ExamQuestion
 	DB.Where("exam_id = ?", examID).Order("index asc").Find(&questions)
-	c.JSON(200, gin.H{"questions": questions})
+	c.JSON(http.StatusOK, gin.H{"questions": questions})
 }
 
 func GetExamHistoryHandler(c *gin.Context) {
@@ -507,14 +494,14 @@ func GetExamHistoryHandler(c *gin.Context) {
 			"score": a.Score, "total": a.Total, "passed": a.Passed, "timeSpent": a.TimeSpent, "createdAt": a.CreatedAt,
 		})
 	}
-	c.JSON(200, gin.H{"history": results})
+	c.JSON(http.StatusOK, gin.H{"history": results})
 }
 
 func ExportExamHandler(c *gin.Context) {
 	attemptID := c.Param("attemptId")
 	var attempt ExamAttempt
 	if DB.Where("id = ?", attemptID).First(&attempt).Error != nil {
-		c.JSON(404, gin.H{"error": "Not found"})
+		c.JSON(http.StatusNotFound, gin.H{"error": "Not found"})
 		return
 	}
 	var exam Exam
@@ -563,16 +550,16 @@ func GetCoursesHandler(c *gin.Context) {
 			"location": co.Location, "maxStudents": co.MaxStudents, "enrolled": count, "createdAt": co.CreatedAt,
 		})
 	}
-	c.JSON(200, gin.H{"courses": result})
+	c.JSON(http.StatusOK, gin.H{"courses": result})
 }
 
 func CoursePaymentHandler(c *gin.Context) {
 	var req CoursePaymentRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(400, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	c.JSON(200, gin.H{"message": "Амжилттай", "paid": true})
+	c.JSON(http.StatusOK, gin.H{"message": "Амжилттай", "paid": true})
 }
 
 func RegisterCourseHandler(c *gin.Context) {
@@ -581,13 +568,13 @@ func RegisterCourseHandler(c *gin.Context) {
 
 	var existing Enrollment
 	if DB.Where("course_id = ? AND user_id = ?", courseID, userID).First(&existing).Error == nil {
-		c.JSON(409, gin.H{"error": "Та энэ сургалтад бүртгэлтэй байна"})
+		c.JSON(http.StatusConflict, gin.H{"error": "Та энэ сургалтад бүртгэлтэй байна"})
 		return
 	}
 
 	enrollment := Enrollment{ID: uuid.New().String(), UserID: userID.(string), CourseID: courseID, Paid: true}
 	DB.Create(&enrollment)
-	c.JSON(200, gin.H{"message": "Амжилттай бүртгэгдлээ", "enrollmentId": enrollment.ID})
+	c.JSON(http.StatusOK, gin.H{"message": "Амжилттай бүртгэгдлээ", "enrollmentId": enrollment.ID})
 }
 
 // ── Form Handlers ────────────────────────────────────────────
@@ -595,37 +582,37 @@ func RegisterCourseHandler(c *gin.Context) {
 func FeedbackHandler(c *gin.Context) {
 	var req FeedbackRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(400, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 	fb := Feedback{ID: uuid.New().String(), Name: req.Name, Email: req.Email, Phone: req.Phone, Message: req.Message, Rating: req.Rating}
 	DB.Create(&fb)
-	c.JSON(201, gin.H{"message": "Амжилттай", "id": fb.ID})
+	c.JSON(http.StatusCreated, gin.H{"message": "Амжилттай", "id": fb.ID})
 }
 
 func GetFeedbackHandler(c *gin.Context) {
 	var feedbacks []Feedback
 	DB.Order("created_at desc").Find(&feedbacks)
-	c.JSON(200, gin.H{"feedback": feedbacks})
+	c.JSON(http.StatusOK, gin.H{"feedback": feedbacks})
 }
 
 func DeleteFeedbackHandler(c *gin.Context) {
 	id := c.Param("id")
 	DB.Where("id = ?", id).Delete(&Feedback{})
-	c.JSON(200, gin.H{"message": "Устгагдлаа"})
+	c.JSON(http.StatusOK, gin.H{"message": "Устгагдлаа"})
 }
 
 func SurveyHandler(c *gin.Context) {
 	var req SurveyRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(400, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 	userID, _ := c.Get("userId")
 	resp := SurveyResponse{ID: uuid.New().String(), Name: req.Name, Email: req.Email, Phone: req.Phone, Responses: req.Responses}
 	_ = userID
 	DB.Create(&resp)
-	c.JSON(201, gin.H{"message": "Амжилттай", "id": resp.ID})
+	c.JSON(http.StatusCreated, gin.H{"message": "Амжилттай", "id": resp.ID})
 }
 
 func GetSurveyResultsHandler(c *gin.Context) {
@@ -641,7 +628,6 @@ func GetSurveyResultsHandler(c *gin.Context) {
 		TextAnswers []string `json:"textAnswers"`
 	}
 
-	// Aggregate
 	questionStats := make(map[string]*Stat)
 	totalResponses := len(responses)
 
@@ -680,48 +666,48 @@ func GetSurveyResultsHandler(c *gin.Context) {
 		stats = append(stats, s)
 	}
 
-	c.JSON(200, gin.H{"totalResponses": totalResponses, "stats": stats, "responses": responses})
+	c.JSON(http.StatusOK, gin.H{"totalResponses": totalResponses, "stats": stats, "responses": responses})
 }
 
 func ContactHandler(c *gin.Context) {
 	var req ContactRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(400, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 	cf := ContactForm{ID: uuid.New().String(), Name: req.Name, Email: req.Email, Phone: req.Phone, Subject: req.Subject, Message: req.Message}
 	DB.Create(&cf)
-	c.JSON(201, gin.H{"message": "Амжилттай"})
+	c.JSON(http.StatusCreated, gin.H{"message": "Амжилттай"})
 }
 
 func ConsultationHandler(c *gin.Context) {
 	var req ConsultationRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(400, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 	userID, _ := c.Get("userId")
 	cons := Consultation{ID: uuid.New().String(), UserID: userID.(string), Name: req.Name, Email: req.Email, Phone: req.Phone, Company: req.Company, ServiceType: req.ServiceType, Message: req.Message, Status: "pending"}
 	DB.Create(&cons)
-	c.JSON(201, gin.H{"message": "Амжилттай"})
+	c.JSON(http.StatusCreated, gin.H{"message": "Амжилттай"})
 }
 
 func GetConsultationsHandler(c *gin.Context) {
 	userID, _ := c.Get("userId")
 	var consultations []Consultation
 	DB.Where("user_id = ?", userID).Order("created_at desc").Find(&consultations)
-	c.JSON(200, gin.H{"consultations": consultations})
+	c.JSON(http.StatusOK, gin.H{"consultations": consultations})
 }
 
 func ServiceOrderHandler(c *gin.Context) {
 	var req ServiceOrderRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(400, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 	so := ServiceOrder{ID: uuid.New().String(), Name: req.Name, Email: req.Email, Phone: req.Phone, Company: req.Company, ServiceType: req.ServiceType, Message: req.Message, Date: req.Date}
 	DB.Create(&so)
-	c.JSON(201, gin.H{"message": "Амжилттай"})
+	c.JSON(http.StatusCreated, gin.H{"message": "Амжилттай"})
 }
 
 // ── Admin Handlers ───────────────────────────────────────────
@@ -737,7 +723,6 @@ func DashboardHandler(c *gin.Context) {
 	DB.Model(&Consultation{}).Count(&totalConsultations)
 	DB.Model(&ContactForm{}).Count(&totalContactForms)
 
-	// Course enrollment breakdown
 	type CourseStat struct {
 		CourseID string `json:"courseId"`
 		Title    string `json:"title"`
@@ -752,7 +737,6 @@ func DashboardHandler(c *gin.Context) {
 		courseStats = append(courseStats, CourseStat{CourseID: co.ID, Title: co.Title, Enrolled: cnt})
 	}
 
-	// Recent quiz attempts
 	var recentQuizzes []QuizAttempt
 	DB.Order("created_at desc").Limit(10).Find(&recentQuizzes)
 	var quizResults []gin.H
@@ -767,7 +751,6 @@ func DashboardHandler(c *gin.Context) {
 		})
 	}
 
-	// Recent exam attempts
 	var recentExams []ExamAttempt
 	DB.Order("created_at desc").Limit(10).Find(&recentExams)
 	var examResults []gin.H
@@ -783,19 +766,15 @@ func DashboardHandler(c *gin.Context) {
 		})
 	}
 
-	// Recent feedback
 	var feedbacks []Feedback
 	DB.Order("created_at desc").Limit(10).Find(&feedbacks)
 
-	// Recent contact forms
 	var contactForms []ContactForm
 	DB.Order("created_at desc").Limit(10).Find(&contactForms)
 
-	// Recent surveys
 	var surveys []SurveyResponse
 	DB.Order("created_at desc").Limit(10).Find(&surveys)
 
-	// Recent enrollments
 	var recentEnrollments []Enrollment
 	DB.Order("created_at desc").Limit(10).Find(&recentEnrollments)
 	var enrollmentResults []gin.H
@@ -811,7 +790,7 @@ func DashboardHandler(c *gin.Context) {
 		})
 	}
 
-	c.JSON(200, gin.H{
+	c.JSON(http.StatusOK, gin.H{
 		"totalUsers": totalUsers, "totalEnrollments": totalEnrollments,
 		"totalQuizAttempts": totalQuizAttempts, "totalExamAttempts": totalExamAttempts,
 		"totalFeedback": totalFeedback, "totalSurveys": totalSurveys,
@@ -836,13 +815,13 @@ func AdminGetExamsHandler(c *gin.Context) {
 			"endDate": e.EndDate,
 		})
 	}
-	c.JSON(200, gin.H{"exams": result})
+	c.JSON(http.StatusOK, gin.H{"exams": result})
 }
 
 func AdminCreateExamHandler(c *gin.Context) {
 	var req AdminCreateExamRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(400, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 	code := generateCode()
@@ -868,7 +847,7 @@ func AdminCreateExamHandler(c *gin.Context) {
 
 	exam := Exam{ID: uuid.New().String(), Title: req.Title, Code: code, Duration: duration, QuestionCount: len(req.Questions), IsActive: true, EndDate: endDate}
 	if err := DB.Create(&exam).Error; err != nil {
-		c.JSON(500, gin.H{"error": "Failed to create exam"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create exam"})
 		return
 	}
 
@@ -878,7 +857,7 @@ func AdminCreateExamHandler(c *gin.Context) {
 	}
 
 	log.Printf("Exam created: %s (code: %s, questions: %d)", req.Title, code, len(req.Questions))
-	c.JSON(201, gin.H{"exam": gin.H{"id": exam.ID, "title": exam.Title, "code": code, "duration": duration, "questionCount": len(req.Questions), "isActive": true, "endDate": endDate}})
+	c.JSON(http.StatusCreated, gin.H{"exam": gin.H{"id": exam.ID, "title": exam.Title, "code": code, "duration": duration, "questionCount": len(req.Questions), "isActive": true, "endDate": endDate}})
 }
 
 func AdminGetExamAttemptsHandler(c *gin.Context) {
@@ -900,7 +879,7 @@ func AdminGetExamAttemptsHandler(c *gin.Context) {
 			"score": a.Score, "total": a.Total, "passed": a.Passed, "createdAt": a.CreatedAt,
 		})
 	}
-	c.JSON(200, gin.H{"attempts": result})
+	c.JSON(http.StatusOK, gin.H{"attempts": result})
 }
 
 func AdminExportExamAttemptsHandler(c *gin.Context) {
@@ -931,7 +910,7 @@ func AdminGetCoursesHandler(c *gin.Context) {
 		DB.Model(&Enrollment{}).Where("course_id = ?", co.ID).Count(&cnt)
 		result = append(result, gin.H{"id": co.ID, "title": co.Title, "category": co.Category, "description": co.Description, "duration": co.Duration, "price": co.Price, "schedule": co.Schedule, "location": co.Location, "maxStudents": co.MaxStudents, "enrolled": cnt})
 	}
-	c.JSON(200, gin.H{"courses": result})
+	c.JSON(http.StatusOK, gin.H{"courses": result})
 }
 
 func AdminGetCourseEnrollmentsHandler(c *gin.Context) {
@@ -954,13 +933,13 @@ func AdminGetCourseEnrollmentsHandler(c *gin.Context) {
 			"createdAt":    e.CreatedAt,
 		})
 	}
-	c.JSON(200, gin.H{"enrollments": result, "total": len(result)})
+	c.JSON(http.StatusOK, gin.H{"enrollments": result, "total": len(result)})
 }
 
 func AdminCreateCourseHandler(c *gin.Context) {
 	var req AdminCreateCourseRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(400, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 	max := 30
@@ -969,19 +948,19 @@ func AdminCreateCourseHandler(c *gin.Context) {
 	}
 	course := Course{ID: uuid.New().String(), Title: req.Title, Category: req.Category, Description: req.Description, Duration: req.Duration, Price: req.Price, Schedule: req.Schedule, Location: req.Location, StartDate: req.StartDate, MaxStudents: max}
 	DB.Create(&course)
-	c.JSON(201, gin.H{"course": course})
+	c.JSON(http.StatusCreated, gin.H{"course": course})
 }
 
 func AdminGetQuizzesHandler(c *gin.Context) {
 	var quizzes []Quiz
 	DB.Order("created_at desc").Find(&quizzes)
-	c.JSON(200, gin.H{"quizzes": quizzes})
+	c.JSON(http.StatusOK, gin.H{"quizzes": quizzes})
 }
 
 func AdminCreateQuizHandler(c *gin.Context) {
 	var req AdminCreateQuizRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(400, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 	quiz := Quiz{ID: uuid.New().String(), Title: req.Title, Description: req.Description, Category: req.Category, QuestionCount: len(req.Questions)}
@@ -990,7 +969,7 @@ func AdminCreateQuizHandler(c *gin.Context) {
 		qq := QuizQuestion{ID: uuid.New().String(), QuizID: quiz.ID, Question: q.Question, OptionA: q.OptionA, OptionB: q.OptionB, OptionC: q.OptionC, OptionD: q.OptionD, Correct: q.Correct, Index: i}
 		DB.Create(&qq)
 	}
-	c.JSON(201, gin.H{"quiz": quiz})
+	c.JSON(http.StatusCreated, gin.H{"quiz": quiz})
 }
 
 func AdminGetStudentsHandler(c *gin.Context) {
@@ -1006,13 +985,13 @@ func AdminGetStudentsHandler(c *gin.Context) {
 		DB.Model(&ExamAttempt{}).Where("user_id = ?", u.ID).Count(&examCount)
 		result = append(result, gin.H{"userId": u.ID, "name": u.FirstName + " " + u.LastName, "email": u.Email, "phone": u.Phone, "enrollments": enrollCount, "quizAttempts": quizCount, "examAttempts": examCount, "createdAt": u.CreatedAt})
 	}
-	c.JSON(200, gin.H{"students": result})
+	c.JSON(http.StatusOK, gin.H{"students": result})
 }
 
 func AdminGetFeedbackHandler(c *gin.Context) {
 	var feedbacks []Feedback
 	DB.Order("created_at desc").Find(&feedbacks)
-	c.JSON(200, gin.H{"feedback": feedbacks})
+	c.JSON(http.StatusOK, gin.H{"feedback": feedbacks})
 }
 
 func AdminGetSurveyResultsHandler(c *gin.Context) {
@@ -1033,7 +1012,7 @@ func AdminExportHandler(c *gin.Context) {
 	var surveys []SurveyResponse
 	DB.Find(&surveys)
 
-	c.JSON(200, gin.H{
+	c.JSON(http.StatusOK, gin.H{
 		"users": users, "enrollments": enrollments, "quizAttempts": quizAttempts,
 		"examAttempts": examAttempts, "feedback": feedbacks, "surveys": surveys,
 		"exportedAt": time.Now().Format(time.RFC3339),
@@ -1043,7 +1022,7 @@ func AdminExportHandler(c *gin.Context) {
 func AdminStartExamHandler(c *gin.Context) {
 	id := c.Param("id")
 	DB.Model(&Exam{}).Where("id = ?", id).Update("is_active", true)
-	c.JSON(200, gin.H{"message": "Шалгалт идэвхжлээ"})
+	c.JSON(http.StatusOK, gin.H{"message": "Шалгалт идэвхжлээ"})
 }
 
 func AdminGetExamDetailHandler(c *gin.Context) {
@@ -1051,7 +1030,7 @@ func AdminGetExamDetailHandler(c *gin.Context) {
 
 	var exam Exam
 	if DB.Where("id = ?", examID).First(&exam).Error != nil {
-		c.JSON(404, gin.H{"error": "Шалгалт олдсонгүй"})
+		c.JSON(http.StatusNotFound, gin.H{"error": "Шалгалт олдсонгүй"})
 		return
 	}
 
@@ -1083,7 +1062,7 @@ func AdminGetExamDetailHandler(c *gin.Context) {
 		averageScore = float64(totalScore) / float64(len(attempts))
 	}
 
-	c.JSON(200, gin.H{
+	c.JSON(http.StatusOK, gin.H{
 		"exam":          gin.H{"id": exam.ID, "title": exam.Title, "code": exam.Code, "duration": exam.Duration, "questionCount": exam.QuestionCount, "isActive": exam.IsActive, "endDate": exam.EndDate},
 		"students":      students,
 		"totalStudents": len(students),
@@ -1095,12 +1074,12 @@ func AdminGetExamQuestionsHandler(c *gin.Context) {
 	id := c.Param("id")
 	var exam Exam
 	if err := DB.Where("id = ?", id).First(&exam).Error; err != nil {
-		c.JSON(404, gin.H{"error": "Шалгалт олдсонгүй"})
+		c.JSON(http.StatusNotFound, gin.H{"error": "Шалгалт олдсонгүй"})
 		return
 	}
 	var questions []ExamQuestion
 	DB.Where("exam_id = ?", id).Order("index asc").Find(&questions)
-	c.JSON(200, gin.H{
+	c.JSON(http.StatusOK, gin.H{
 		"exam": gin.H{
 			"id": exam.ID, "title": exam.Title, "code": exam.Code,
 			"duration": exam.Duration, "questionCount": exam.QuestionCount,
@@ -1113,7 +1092,7 @@ func AdminGetExamQuestionsHandler(c *gin.Context) {
 func AdminStopExamHandler(c *gin.Context) {
 	id := c.Param("id")
 	DB.Model(&Exam{}).Where("id = ?", id).Update("is_active", false)
-	c.JSON(200, gin.H{"message": "Шалгалт зогссон"})
+	c.JSON(http.StatusOK, gin.H{"message": "Шалгалт зогссон"})
 }
 
 func AdminDeleteExamHandler(c *gin.Context) {
@@ -1121,7 +1100,7 @@ func AdminDeleteExamHandler(c *gin.Context) {
 	DB.Where("exam_id = ?", id).Delete(&ExamQuestion{})
 	DB.Where("exam_id = ?", id).Delete(&ExamAttempt{})
 	DB.Where("id = ?", id).Delete(&Exam{})
-	c.JSON(200, gin.H{"message": "Шалгалт устгагдлаа"})
+	c.JSON(http.StatusOK, gin.H{"message": "Шалгалт устгагдлаа"})
 }
 
 // ── Admin Consultation Handlers ────────────────────────────────
@@ -1129,7 +1108,7 @@ func AdminDeleteExamHandler(c *gin.Context) {
 func AdminGetConsultationsHandler(c *gin.Context) {
 	var consultations []Consultation
 	DB.Order("created_at desc").Find(&consultations)
-	c.JSON(200, gin.H{"consultations": consultations})
+	c.JSON(http.StatusOK, gin.H{"consultations": consultations})
 }
 
 func AdminUpdateConsultationStatusHandler(c *gin.Context) {
@@ -1138,21 +1117,21 @@ func AdminUpdateConsultationStatusHandler(c *gin.Context) {
 		Status string `json:"status"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(400, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 	if req.Status != "pending" && req.Status != "in_progress" && req.Status != "completed" {
-		c.JSON(400, gin.H{"error": "Invalid status"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid status"})
 		return
 	}
 	DB.Model(&Consultation{}).Where("id = ?", id).Update("status", req.Status)
-	c.JSON(200, gin.H{"message": "Төлөв амжилттай шинэчлэгдлээ"})
+	c.JSON(http.StatusOK, gin.H{"message": "Төлөв амжилттай шинэчлэгдлээ"})
 }
 
 func AdminDeleteConsultationHandler(c *gin.Context) {
 	id := c.Param("id")
 	DB.Where("id = ?", id).Delete(&Consultation{})
-	c.JSON(200, gin.H{"message": "Зөвлөгөөний хүсэлт устгагдлаа"})
+	c.JSON(http.StatusOK, gin.H{"message": "Зөвлөгөөний хүсэлт устгагдлаа"})
 }
 
 func AdminReplyConsultationHandler(c *gin.Context) {
@@ -1161,29 +1140,29 @@ func AdminReplyConsultationHandler(c *gin.Context) {
 		Response string `json:"response"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(400, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 	if req.Response == "" {
-		c.JSON(400, gin.H{"error": "Хариулт хоосон байна"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Хариулт хоосон байна"})
 		return
 	}
 	DB.Model(&Consultation{}).Where("id = ?", id).Updates(map[string]interface{}{"admin_response": req.Response, "status": "completed"})
-	c.JSON(200, gin.H{"message": "Зөвлөмж амжилттай илгээгдлээ"})
+	c.JSON(http.StatusOK, gin.H{"message": "Зөвлөмж амжилттай илгээгдлээ"})
 }
 
 func MarkConsultationReadHandler(c *gin.Context) {
 	id := c.Param("id")
 	userID, _ := c.Get("userId")
 	DB.Model(&Consultation{}).Where("id = ? AND user_id = ?", id, userID).Update("user_read", true)
-	c.JSON(200, gin.H{"message": "Уншсан боллоо"})
+	c.JSON(http.StatusOK, gin.H{"message": "Уншсан боллоо"})
 }
 
 func GetUnreadConsultationsCountHandler(c *gin.Context) {
 	userID, _ := c.Get("userId")
 	var count int64
 	DB.Model(&Consultation{}).Where("user_id = ? AND admin_response != '' AND user_read = ?", userID, false).Count(&count)
-	c.JSON(200, gin.H{"unreadCount": count})
+	c.JSON(http.StatusOK, gin.H{"unreadCount": count})
 }
 
 // ── Admin Contact Form Handlers ────────────────────────────────
@@ -1191,16 +1170,15 @@ func GetUnreadConsultationsCountHandler(c *gin.Context) {
 func AdminGetContactFormsHandler(c *gin.Context) {
 	var contactForms []ContactForm
 	DB.Order("created_at desc").Find(&contactForms)
-	c.JSON(200, gin.H{"contactForms": contactForms})
+	c.JSON(http.StatusOK, gin.H{"contactForms": contactForms})
 }
 
 func AdminDeleteContactFormHandler(c *gin.Context) {
 	id := c.Param("id")
 	DB.Where("id = ?", id).Delete(&ContactForm{})
-	c.JSON(200, gin.H{"message": "Холбогдох хүсэлт амжилттай устгагдлаа"})
+	c.JSON(http.StatusOK, gin.H{"message": "Холбогдох хүсэлт амжилттай устгагдлаа"})
 }
 
-// Keep backward compatibility for unused old routes
 func SeedQuizzesHandler(c *gin.Context) {
-	c.JSON(200, gin.H{"message": "Quizzes already seeded from database"})
+	c.JSON(http.StatusOK, gin.H{"message": "Quizzes already seeded from database"})
 }
