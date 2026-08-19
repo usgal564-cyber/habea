@@ -9,18 +9,24 @@ import (
 )
 
 func main() {
-	// Initialize database (includes migration and seeding)
+	// Database эхлүүлэх (migration болон seeding)
 	InitDB()
 
-	// Set gin to release mode
+	// Release mode тохируулах
 	gin.SetMode(gin.ReleaseMode)
 
 	r := gin.Default()
 
-	// Enhanced CORS middleware
+	// Robust CORS Middleware (Vercel & Local cross-origin хүсэлтүүдэд зориулсан)
 	r.Use(func(c *gin.Context) {
-		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
-		c.Writer.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+		origin := c.Request.Header.Get("Origin")
+		if origin != "" {
+			c.Writer.Header().Set("Access-Control-Allow-Origin", origin)
+		} else {
+			c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
+		}
+		c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
+		c.Writer.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS, PATCH")
 		c.Writer.Header().Set("Access-Control-Allow-Headers", "Origin, Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization")
 		c.Writer.Header().Set("Access-Control-Max-Age", "86400")
 
@@ -33,7 +39,7 @@ func main() {
 	})
 
 	// ============================================================
-	// Root route (Render health check болон 404 засах)
+	// Root & Health Check routes
 	// ============================================================
 	r.GET("/", func(c *gin.Context) {
 		c.JSON(200, gin.H{
@@ -42,12 +48,21 @@ func main() {
 		})
 	})
 
+	r.GET("/api", func(c *gin.Context) {
+		c.JSON(200, gin.H{
+			"status":  "success",
+			"message": "API endpoint target reach",
+		})
+	})
+
 	// ============================================================
-	// Auth routes (public)
+	// Public Auth routes (Нэвтрэх, Бүртгүүлэх)
 	// ============================================================
 	r.POST("/api/auth/register", RegisterHandler)
 	r.POST("/api/auth/login", LoginHandler)
 	r.GET("/api/auth/me", AuthMiddleware(), MeHandler)
+
+	// Админ нэвтрэх endpoint (Нийтийн буюу middleware-гүй хэсэгт байх ёстой)
 	r.POST("/api/admin/login", AdminLoginHandler)
 
 	// ============================================================
@@ -61,10 +76,10 @@ func main() {
 	// ============================================================
 	// Exam routes (Шалгалт)
 	// ============================================================
-	r.POST("/api/exam", ExamHandler)                                          // verify + submit actions
-	r.GET("/api/exam", AuthMiddleware(), GetExamQuestionsHandler)             // get questions by examId
-	r.GET("/api/exam/history", AuthMiddleware(), GetExamHistoryHandler)       // user exam history
-	r.GET("/api/exam/export/:attemptId", AuthMiddleware(), ExportExamHandler) // export single attempt as CSV
+	r.POST("/api/exam", ExamHandler)
+	r.GET("/api/exam", AuthMiddleware(), GetExamQuestionsHandler)
+	r.GET("/api/exam/history", AuthMiddleware(), GetExamHistoryHandler)
+	r.GET("/api/exam/export/:attemptId", AuthMiddleware(), ExportExamHandler)
 
 	// ============================================================
 	// Course routes (Сургалт)
@@ -99,7 +114,7 @@ func main() {
 	r.POST("/api/service-order", ServiceOrderHandler)
 
 	// ============================================================
-	// Admin routes (ADMIN, MANAGER, TEACHER)
+	// Protected Admin routes (зөвхөн Токентой + Админ эрхтэй хэрэглэгчид)
 	// ============================================================
 	adminGroup := r.Group("/api/admin", AuthMiddleware(), AdminMiddleware())
 	{
@@ -149,13 +164,13 @@ func main() {
 		adminGroup.GET("/export", AdminExportHandler)
 	}
 
-	// Render-ийн PORT орчны хувьсагчийг унших (байхгүй бол 8080 ашиглана)
+	// Port тохиргоо
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8080"
 	}
 
-	log.Printf("Server starting on port %s", port)
+	log.Printf("Server running on port %s", port)
 	if err := r.Run(fmt.Sprintf(":%s", port)); err != nil {
 		log.Fatalf("Failed to start server: %v", err)
 	}
