@@ -36,6 +36,14 @@ func GenerateToken(userID, email, role, name string) (string, error) {
 	return token.SignedString([]byte(JWTSecret))
 }
 
+// CSPMiddleware sets the Content Security Policy header to allow eval and inline resources
+func CSPMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		c.Writer.Header().Set("Content-Security-Policy", "default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob:; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline';")
+		c.Next()
+	}
+}
+
 // CORSMiddleware handles CORS preflight requests correctly for Gin
 func CORSMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
