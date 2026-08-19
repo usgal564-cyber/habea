@@ -1,8 +1,6 @@
 import axios from 'axios';
 
-const API = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || 'https://habea.onrender.com',
-});
+   const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8080";
 
 // Хүсэлт явуулах бүрт JWT Token залгах middleware
 API.interceptors.request.use((req) => {

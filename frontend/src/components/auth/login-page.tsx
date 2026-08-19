@@ -8,6 +8,8 @@ import { useAuthStore } from "@/hooks/use-auth";
 import { toast } from "sonner";
 import { LogIn, UserPlus, Shield, Eye, EyeOff, Loader2, ArrowRight } from "lucide-react";
 
+const BASE_URL = import.meta.env.VITE_API_URL || "https://habea.onrender.com";
+ 
 export default function LoginPage() {
   const [activeTab, setActiveTab] = useState("login");
   const [loading, setLoading] = useState(false);
@@ -60,7 +62,7 @@ export default function LoginPage() {
     if (!isValidEmail(loginEmail)) { toast.error("Зөв имэйл хаяг оруулна уу"); return; }
     setLoading(true);
     try {
-      const res = await fetch("/api/auth/login", {
+      const res = await fetch(`${BASE_URL}/api/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: loginEmail, password: loginPassword }),
@@ -85,7 +87,7 @@ export default function LoginPage() {
     if (regPassword !== regConfirmPassword) { toast.error("Нууц үг хоорондоо таарахгүй байна"); return; }
     setLoading(true);
     try {
-      const res = await fetch("/api/auth/register", {
+      const res = await fetch(`${BASE_URL}/api/auth/register`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -107,7 +109,7 @@ export default function LoginPage() {
     if (!adminCode.trim()) { toast.error("Админ код оруулна уу"); return; }
     setLoading(true);
     try {
-      const res = await fetch("/api/admin/login", {
+      const res = await fetch(`${BASE_URL}/api/admin/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ code: adminCode.trim() }),
@@ -359,3 +361,4 @@ export default function LoginPage() {
     </div>
   );
 }
+ 

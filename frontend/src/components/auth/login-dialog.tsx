@@ -7,19 +7,21 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuthStore } from "@/hooks/use-auth";
 import { toast } from "sonner";
 import { LogIn, UserPlus, Shield } from "lucide-react";
-
+ 
+const BASE_URL = import.meta.env.VITE_API_URL || "https://habea.onrender.com";
+ 
 interface LoginDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
-
+ 
 export function LoginDialog({ open, onOpenChange }: LoginDialogProps) {
   const [activeTab, setActiveTab] = useState("login");
   const [loading, setLoading] = useState(false);
-
+ 
   const [loginEmail, setLoginEmail] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
-
+ 
   const [regFirstName, setRegFirstName] = useState("");
   const [regLastName, setRegLastName] = useState("");
   const [regEmail, setRegEmail] = useState("");
@@ -28,11 +30,11 @@ export function LoginDialog({ open, onOpenChange }: LoginDialogProps) {
   const [regSecondaryPhone, setRegSecondaryPhone] = useState("");
   const [regPassword, setRegPassword] = useState("");
   const [regConfirmPassword, setRegConfirmPassword] = useState("");
-
+ 
   const [adminCode, setAdminCode] = useState("");
-
+ 
   const { setAuth } = useAuthStore();
-
+ 
   const resetForms = () => {
     setLoginEmail("");
     setLoginPassword("");
@@ -46,12 +48,12 @@ export function LoginDialog({ open, onOpenChange }: LoginDialogProps) {
     setRegConfirmPassword("");
     setAdminCode("");
   };
-
+ 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     try {
-      const res = await fetch("/api/auth/login", {
+      const res = await fetch(`${BASE_URL}/api/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: loginEmail, password: loginPassword }),
@@ -65,14 +67,14 @@ export function LoginDialog({ open, onOpenChange }: LoginDialogProps) {
     } catch { toast.error("Алдаа гарлаа"); }
     finally { setLoading(false); }
   };
-
+ 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     if (regPassword !== regConfirmPassword) { toast.error("Нууц үг таарахгүй байна"); return; }
     if (regPassword.length < 6) { toast.error("Нууц үг дор хаяж 6 тэмдэгт байх ёстой"); return; }
     setLoading(true);
     try {
-      const res = await fetch("/api/auth/register", {
+      const res = await fetch(`${BASE_URL}/api/auth/register`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -89,7 +91,7 @@ export function LoginDialog({ open, onOpenChange }: LoginDialogProps) {
     } catch { toast.error("Алдаа гарлаа"); }
     finally { setLoading(false); }
   };
-
+ 
   const handleAdminLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!adminCode.trim()) {
@@ -98,7 +100,7 @@ export function LoginDialog({ open, onOpenChange }: LoginDialogProps) {
     }
     setLoading(true);
     try {
-      const res = await fetch("/api/admin/login", {
+      const res = await fetch(`${BASE_URL}/api/admin/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ code: adminCode.trim() }),
@@ -112,7 +114,7 @@ export function LoginDialog({ open, onOpenChange }: LoginDialogProps) {
     } catch { toast.error("Алдаа гарлаа"); }
     finally { setLoading(false); }
   };
-
+ 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md bg-white max-h-[90vh] overflow-y-auto">
@@ -136,7 +138,7 @@ export function LoginDialog({ open, onOpenChange }: LoginDialogProps) {
               Админ
             </TabsTrigger>
           </TabsList>
-
+ 
           {/* User Login */}
           <TabsContent value="login">
             <form onSubmit={handleLogin} className="space-y-4">
@@ -169,7 +171,7 @@ export function LoginDialog({ open, onOpenChange }: LoginDialogProps) {
               </Button>
             </form>
           </TabsContent>
-
+ 
           {/* Register */}
           <TabsContent value="register">
             <form onSubmit={handleRegister} className="space-y-3">
@@ -218,7 +220,7 @@ export function LoginDialog({ open, onOpenChange }: LoginDialogProps) {
               </Button>
             </form>
           </TabsContent>
-
+ 
           {/* Admin Login */}
           <TabsContent value="admin">
             <form onSubmit={handleAdminLogin} className="space-y-4">
@@ -257,3 +259,4 @@ export function LoginDialog({ open, onOpenChange }: LoginDialogProps) {
     </Dialog>
   );
 }
+ 
