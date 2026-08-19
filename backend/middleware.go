@@ -36,7 +36,7 @@ func GenerateToken(userID, email, role, name string) (string, error) {
 	return token.SignedString([]byte(JWTSecret))
 }
 
-// CSPMiddleware sets the Content Security Policy header to allow eval and inline resources
+// CSPMiddleware sets Content Security Policy
 func CSPMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		c.Writer.Header().Set("Content-Security-Policy", "default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob:; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline';")
@@ -44,16 +44,22 @@ func CSPMiddleware() gin.HandlerFunc {
 	}
 }
 
-// CORSMiddleware handles CORS preflight requests correctly for Gin
+// CORSMiddleware handles CORS preflight requests correctly for Gin & Vercel
 func CORSMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
+		origin := c.Request.Header.Get("Origin")
+		if origin != "" {
+			c.Writer.Header().Set("Access-Control-Allow-Origin", origin)
+		} else {
+			c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
+		}
+
 		c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
 		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, accept, origin, Cache-Control, X-Requested-With")
 		c.Writer.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS, GET, PUT, DELETE, PATCH")
 
 		if c.Request.Method == "OPTIONS" {
-			c.AbortWithStatus(http.StatusOK)
+			c.AbortWithStatus(http.StatusNoContent)
 			return
 		}
 
@@ -61,7 +67,7 @@ func CORSMiddleware() gin.HandlerFunc {
 	}
 }
 
-// AuthMiddleware validates the JWT token and sets userId, email, role, name in context
+// AuthMiddleware validates JWT token
 func AuthMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		authHeader := c.GetHeader("Authorization")
@@ -120,7 +126,6 @@ func AdminMiddleware() gin.HandlerFunc {
 	}
 }
 
-// isAdminRole checks if a role string is an admin-level role
 func isAdminRole(role string) bool {
 	return role == "ADMIN" || role == "MANAGER" || role == "TEACHER"
 }
